@@ -16,15 +16,15 @@ import os
 INP_FILE = "Hanoi.inp"
 
 # Genetic Algorithm Parameters
-POPULATION_SIZE = 200   
-GENERATIONS = 100       
+POPULATION_SIZE = 300   
+GENERATIONS = 200       
 
 # Constraints
 H_MIN = 30.0            # Minimum required pressure (meters)
 
-# Mutation Probabilities
-P_MUTATION_IND = 0.3    # Probability of mutating an individual
-P_MUTATION_GENE = 0.1   # Probability of mutating a specific gene (pipe)
+# Mutation Probabilities (Initial constraints, will be dynamic)
+MUTATION_START = 0.20   # High mutation at start (Exploration)
+MUTATION_END = 0.02     # Low mutation at end (Exploitation)
 
 # Pipe Database (Diameter in inches -> Cost in $/m)
 AVAILABLE_DIAMETERS = [12.0, 16.0, 20.0, 24.0, 30.0, 40.0]
@@ -94,7 +94,6 @@ def evaluate_network(individual, strategy="static", gen=0):
 def mutCreepInt(individual, low, up, indpb):
     """
     Custom Mutation: Changes the diameter index by +1 or -1.
-    Helps in fine-tuning the solution.
     """
     for i in range(len(individual)):
         if random.random() < indpb:
@@ -110,13 +109,12 @@ def mutCreepInt(individual, low, up, indpb):
             individual[i] = new_val
     return individual,
 
-def optimize_local_search(individual):
+def optimize_local_search(individual, verbose=True):
     """
     Advanced Local Search: Steepest Descent.
-    Iteratively finds the best single-pipe reduction that saves the most money
-    without violating pressure constraints.
+    Iteratively finds the best single-pipe reduction that saves the most money.
     """
-    print("   > Running Steepest Descent (Deep Optimization)...")
+    if verbose: print("   > Running Steepest Descent (Deep Optimization)...")
     
     current_ind = list(individual)
     
@@ -151,10 +149,10 @@ def optimize_local_search(individual):
         
         # Apply the best move found in this iteration
         if found_improvement:
-            print(f"      Improvement! Reduced pipe #{best_move_idx}. New Cost: {best_cost/1e6:.4f} M$")
+            if verbose: print(f"      Improvement! Reduced pipe #{best_move_idx}. New Cost: {best_cost/1e6:.4f} M$")
             current_ind[best_move_idx] -= 1
         else:
-            print("      Local minimum reached. No further improvements possible.")
+            if verbose: print("      Local minimum reached.")
             break
             
     return current_ind
@@ -165,8 +163,8 @@ def optimize_local_search(individual):
 
 def export_solution(individual, filename_prefix="final_solution"):
     """
-    Generates a CSV report and a visual map.
-    Style: Large black nodes with white numbers inside.
+    Generates report and map.
+    Style: Invisible WNTR nodes, Manual Text Labels with Black Background.
     """
     print(f"\n--- Generating Report ({filename_prefix}) ---")
     
@@ -174,7 +172,6 @@ def export_solution(individual, filename_prefix="final_solution"):
     pipe_data = []
     pipe_indices = {} 
     
-    # Apply diameters and collect data
     for i, pipe_name in enumerate(wn.pipe_name_list):
         idx = individual[i]
         diam_inch = AVAILABLE_DIAMETERS[idx]
@@ -204,54 +201,48 @@ def export_solution(individual, filename_prefix="final_solution"):
     # Generate Map
     try:
         plt.figure(figsize=(14, 10))
+        ax = plt.gca()
         
-        # Colormap setup
         N_diams = len(AVAILABLE_DIAMETERS)
         universal_cmap = plt.get_cmap("jet", N_diams)
         link_attributes = pd.Series(pipe_indices)
         
-        # 1. Plot Network (Pipes & Nodes background)
-        # Note: We set node_attribute=None to make them uniform color
+        # 1. Plot Pipes Only (Node size 0)
         wntr.graphics.plot_network(
             wn, 
-            node_attribute=None,      # Do not color nodes by elevation/pressure
-            node_size=400,            # BIG circles to fit text
-            node_alpha=1.0,           # Fully opaque to hide pipes behind
-            node_labels=False,        # We will add custom labels
+            node_size=0,              # INVISIBLE NODES
+            node_attribute=None,
             title=f"Optimized Network (Cost: {total_cost/1e6:.3f} M$)",
             link_attribute=link_attributes,
-            link_width=3.0,           # Slightly thicker pipes
+            link_width=2.5,
             link_cmap=universal_cmap,
             link_range=[0, N_diams-1],
-            add_colorbar=False
+            add_colorbar=False,
+            ax=ax
         )
         
-        # 2. Customize Nodes (Make them black for contrast)
-        # wntr returns axes, but it's easier to just plot over current axes
-        ax = plt.gca()
-        
-        # 3. Add Labels inside nodes
+        # 2. Add Smart Labels (Text with Background)
         for node_name in wn.node_name_list:
             node = wn.get_node(node_name)
             x, y = node.coordinates
             
-            # Draw the node circle manually to ensure color control (Black circle)
-            circle = mpatches.Circle((x, y), radius=0, color='black', zorder=2)
-            ax.add_patch(circle)
-            
-            # Draw white text inside
             plt.text(
                 x, y, 
                 s=node_name, 
-                color='white',      # High contrast
+                color='white',      
                 fontsize=8, 
                 fontweight='bold',
-                ha='center',        # Horizontal center
-                va='center',        # Vertical center
-                zorder=3            # Top layer
+                ha='center', va='center',
+                zorder=10,
+                bbox=dict(
+                    boxstyle="circle,pad=0.3", 
+                    fc="black", 
+                    ec="none", 
+                    alpha=0.8
+                )
             )
 
-        # 4. Legend
+        # 3. Legend
         legend_patches = []
         for i, diam in enumerate(AVAILABLE_DIAMETERS):
             color = universal_cmap(i / max(1, N_diams - 1)) if N_diams > 1 else universal_cmap(0)
@@ -271,7 +262,7 @@ def export_solution(individual, filename_prefix="final_solution"):
         map_filename = f"{filename_prefix}_map.png"
         plt.savefig(map_filename, dpi=300)
         print(f"Map saved: {map_filename}")
-        plt.close() 
+        plt.close() # Auto-close window
         
     except Exception as e:
         print(f"Error plotting map: {e}")
@@ -283,7 +274,7 @@ def export_solution(individual, filename_prefix="final_solution"):
 def run_ga(strategy_name):
     print(f"\n=== Running Strategy: {strategy_name.upper()} ===")
     
-    # DEAP Setup (re-defined here to be safe)
+    # DEAP Setup
     if hasattr(creator, "FitnessMin"): del creator.FitnessMin
     if hasattr(creator, "Individual"): del creator.Individual
     creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
@@ -298,7 +289,6 @@ def run_ga(strategy_name):
     toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_int, n=NUM_PIPES)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
     toolbox.register("mate", tools.cxTwoPoint)
-    toolbox.register("mutate", mutCreepInt, low=0, up=len(AVAILABLE_DIAMETERS)-1, indpb=P_MUTATION_GENE)
     toolbox.register("select", tools.selTournament, tournsize=2)
 
     # Initialization
@@ -306,61 +296,97 @@ def run_ga(strategy_name):
     pop = toolbox.population(n=POPULATION_SIZE)
     hof = tools.HallOfFame(1)
     
-    # Statistics
     stats = tools.Statistics(lambda ind: ind.fitness.values)
     stats.register("min", np.min)
+    stats.register("std", np.std) # Додаємо статистику розкиду (важливо для рестарту)
     logbook = tools.Logbook()
     
-    # Prepare CSV for convergence logging
     csv_filename = f"results_{strategy_name}.csv"
     
     with open(csv_filename, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(["Generation", "Min Cost (M$)", "Best Min Pressure (m)"])
 
-        # Main Evolution Loop
         for gen in range(GENERATIONS):
-            # Selection & Cloning
+            
+            # 1. DYNAMIC MUTATION RATE
+            current_gene_mut = MUTATION_START - (gen / GENERATIONS) * (MUTATION_START - MUTATION_END)
+            toolbox.register("mutate", mutCreepInt, low=0, up=len(AVAILABLE_DIAMETERS)-1, indpb=current_gene_mut)
+            
+            # 2. DIVERSITY CHECK & RESTART (APOCALYPSE)
+            # Перевіряємо різноманіття популяції перед еволюцією
+            if gen > 10: # Даємо трохи часу на розгін
+                fits = [ind.fitness.values[0] for ind in pop if ind.fitness.valid]
+                std_dev = np.std(fits)
+                
+                # Якщо розкид цін менше 1000$ (всі однакові) і ми ще не в кінці
+                if std_dev < 1000 and gen < GENERATIONS - 20:
+                    print(f"   [Diversity] Stagnation detected (std={std_dev:.2f}). Triggering APOCALYPSE!")
+                    
+                    # Зберігаємо еліту (топ-5)
+                    elite = tools.selBest(pop, 5)
+                    
+                    # Генеруємо нову "дику" популяцію
+                    new_blood = toolbox.population(n=POPULATION_SIZE - 5)
+                    
+                    # Об'єднуємо
+                    pop[:] = elite + new_blood
+                    
+                    # Оцінюємо новачків
+                    invalid_ind = [ind for ind in pop if not ind.fitness.valid]
+                    fitnesses = [evaluate_network(ind, strategy=strategy_name, gen=gen) for ind in invalid_ind]
+                    for ind, fit in zip(invalid_ind, fitnesses):
+                        ind.fitness.values = fit
+                        
+                    # Важливо: оновлюємо HOF, щоб не загубити лідера
+                    hof.update(pop)
+            
+            # Standard GA Steps
             offspring = toolbox.select(pop, len(pop))
             offspring = list(map(toolbox.clone, offspring))
             
-            # Crossover
             for child1, child2 in zip(offspring[::2], offspring[1::2]):
                 if random.random() < 0.9:
                     toolbox.mate(child1, child2)
                     del child1.fitness.values, child2.fitness.values
 
-            # Mutation
             for mutant in offspring:
-                if random.random() < P_MUTATION_IND:
+                if random.random() < 0.3: 
                     toolbox.mutate(mutant)
                     del mutant.fitness.values
 
-            # Evaluation
             invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
             fitnesses = [evaluate_network(ind, strategy=strategy_name, gen=gen) for ind in invalid_ind]
             for ind, fit in zip(invalid_ind, fitnesses):
                 ind.fitness.values = fit
             
-            # Update Population & Hall of Fame
             pop[:] = offspring
             hof.update(pop)
             
-            # Elitism: Ensure best solution stays
             if hof[0].fitness.values[0] < pop[0].fitness.values[0]:
                 pop[0] = hof[0]
+
+            # 3. MEMETIC STEP (Periodic Local Search)
+            if gen > 0 and gen % 20 == 0:
+                print(f"   [Memetic] Improving best individual at Gen {gen}...")
+                best_ind_copy = list(hof[0])
+                improved_ind_list = optimize_local_search(best_ind_copy, verbose=False)
+                
+                improved_ind = creator.Individual(improved_ind_list)
+                fit_val = evaluate_network(improved_ind, strategy=strategy_name, gen=gen)
+                improved_ind.fitness.values = fit_val
+                
+                pop[random.randint(1, len(pop)-1)] = improved_ind
+                hof.update([improved_ind])
 
             # Logging
             record = stats.compile(pop)
             logbook.record(gen=gen, **record)
-            
             best_val = hof[0].fitness.values[0] / 1e6
             
-            # Calculate pressure for the best individual to log it
             min_p = -1.0
             try:
                 best_ind = hof[0]
-                # Re-create model to check pressure
                 wn_check = wntr.network.WaterNetworkModel(INP_FILE)
                 for i, p_name in enumerate(wn_check.pipe_name_list):
                      wn_check.get_link(p_name).diameter = DIAMETERS_M[best_ind[i]]
@@ -373,13 +399,13 @@ def run_ga(strategy_name):
             writer.writerow([gen, f"{best_val:.6f}", f"{min_p:.4f}"])
             
             if gen % 10 == 0 or gen == GENERATIONS - 1:
-                print(f"Gen {gen:3d}: Cost = {best_val:.3f} M$ | Min Pressure = {min_p:.4f} m")
+                # Додаємо вивід std, щоб бачити, коли зближається популяція
+                std = record['std']
+                print(f"Gen {gen:3d}: Cost={best_val:.3f}M$ | P={min_p:.2f}m | Std={std:.1f}")
 
-    # Post-Processing: Local Search
-    print("\n--- Applying Local Search ---")
+    print("\n--- Applying Final Steepest Descent ---")
     refined_ind = optimize_local_search(hof[0])
     
-    # Final check
     wn_check = wntr.network.WaterNetworkModel(INP_FILE)
     for i, p_name in enumerate(wn_check.pipe_name_list):
          wn_check.get_link(p_name).diameter = DIAMETERS_M[refined_ind[i]]
@@ -388,12 +414,9 @@ def run_ga(strategy_name):
     final_p = res.node['pressure'].iloc[-1].loc[wn_check.junction_name_list].min()
     
     duration = time.time() - start_time
-    
     print(f"Final Pressure = {final_p:.3f} m")
     
-    # Export Report
     export_solution(refined_ind, filename_prefix=f"solution_{strategy_name}")
-    
     return logbook, duration
 
 # ==========================================
@@ -401,22 +424,17 @@ def run_ga(strategy_name):
 # ==========================================
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Water Network Optimization using Genetic Algorithm")
+    parser = argparse.ArgumentParser()
     parser.add_argument("strategy", choices=["death", "static", "adaptive", "all"], 
-                        default="static", nargs="?", help="Constraint handling strategy")
+                        default="static", nargs="?")
     args = parser.parse_args()
 
-    # Check input file
     if not os.path.exists(INP_FILE):
-        print(f"ERROR: File '{INP_FILE}' not found. Please ensure it is in the same directory.")
+        print(f"ERROR: File '{INP_FILE}' not found.")
         exit(1)
 
     strategies_to_run = ["death", "static", "adaptive"] if args.strategy == "all" else [args.strategy]
-
-    # Collect data for final plotting
     plot_data = []
-
-    # NO plt.figure() HERE! We wait until plotting.
 
     for strat in strategies_to_run:
         log, duration = run_ga(strat)
@@ -425,12 +443,9 @@ if __name__ == "__main__":
         plot_data.append((strat, gen, min_vals))
         print(f"Strategy {strat} completed in {duration:.2f} seconds.")
 
-    # Generate Convergence Plot (Only ONE window at the end)
+    # Generate Convergence Plot
     print("\n--- Generating Convergence Plot ---")
-    
-    # Now we create the figure for convergence
     plt.figure(figsize=(10, 6))
-
     for strat, gen, min_vals in plot_data:
         plt.plot(gen, min_vals, label=f"{strat.capitalize()}")
 
@@ -445,6 +460,4 @@ if __name__ == "__main__":
     plot_filename = f"plot_{args.strategy}.png"
     plt.savefig(plot_filename)
     print(f"Convergence plot saved as '{plot_filename}'")
-    
-    # Show the plot window only at the very end
     plt.show()
