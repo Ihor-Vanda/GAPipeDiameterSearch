@@ -80,7 +80,8 @@ def evaluate_network(individual, inp_file, strategy="static", gen=0, tolerance=0
     sim = wntr.sim.EpanetSimulator(wn)
     try:
         results = sim.run_sim()
-    except Exception:
+    except Exception as e:
+        print(f"\n[SIM ERROR] {e}")
         return 1e12, 
     
     pressures = results.node['pressure'].iloc[-1]
