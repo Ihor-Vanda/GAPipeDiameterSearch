@@ -15,13 +15,11 @@ import os
 # ==========================================
 INP_FILE = "Hanoi.inp"
 
-# --- ULTIMATE SETTINGS ---
 POPULATION_SIZE = 200   
-GENERATIONS = 100       
+GENERATIONS = 100 
 
 H_MIN = 30.0            
 
-# Mutation
 MUTATION_START = 0.25   
 MUTATION_END = 0.01     
 
@@ -94,9 +92,6 @@ def mutCreepInt(individual, low, up, indpb):
 # --- LOCAL SEARCH MODULE ---
 
 def simple_descent(individual):
-    """
-    Lightweight descent for use INSIDE the GA loop.
-    """
     curr = list(individual)
     while True:
         best_move_idx = -1
@@ -126,67 +121,68 @@ def simple_descent(individual):
     return curr
 
 def deep_local_search(individual):
-    """
-    BRUTE FORCE POLISHING (Fixed unpacking error).
-    Tries to force-reduce LARGE pipes (40", 30") and repair with others.
-    """
-    print("\n   > Running FINAL POLISHING (Aggressive Engineering)...")
+    print("\n   > Running FINAL POLISHING (Global Best Strategy)...")
     
     current_best = list(individual)
-    # [FIX 1] Беремо [0], бо функція повертає кортеж (val,)
-    current_cost = evaluate_network(current_best, "static", tolerance=0.0)[0]
+    cost_tuple = evaluate_network(current_best, "static", tolerance=0.0)
+    current_cost = cost_tuple[0]
     print(f"      Start Cost: {current_cost/1e6:.4f} M$")
     
     improved = True
+    iteration = 0
+    
     while improved:
         improved = False
+        iteration += 1
         
-        # Priority: Try reducing large pipes first (Index >= 2 means 20" and up)
+        best_move_candidate = None
+        best_move_cost = current_cost
+        
         for i in range(len(current_best)):
             original_diam_idx = current_best[i]
             
             if original_diam_idx >= 2: 
-                candidate = list(current_best)
-                candidate[i] -= 1 
+                candidate_reduction = list(current_best)
+                candidate_reduction[i] -= 1 
                 
-                # Check if lucky (valid immediately)
-                # [FIX 2] Правильне отримання значення
-                cost_tuple = evaluate_network(candidate, "static", tolerance=0.0)
-                cost = cost_tuple[0]
+                c_tuple = evaluate_network(candidate_reduction, "static", tolerance=0.0)
+                cost = c_tuple[0]
                 
-                if cost < 1e7 and cost < current_cost:
-                    print(f"      LUCKY STRIKE! Reduced pipe #{i}. Cost: {cost/1e6:.4f} M$")
-                    current_best = candidate
-                    current_cost = cost
-                    improved = True
-                    break 
+                if cost < 1e7:
+                    if cost < best_move_cost:
+                        best_move_cost = cost
+                        best_move_candidate = candidate_reduction
                 
-                # If not valid, try REPAIR by expanding another pipe
-                best_repair = None
-                best_repair_cost = float('inf')
-                
-                for j in range(len(candidate)):
-                    if i == j: continue 
-                    if candidate[j] < len(AVAILABLE_DIAMETERS) - 1: 
-                        repair_candidate = list(candidate)
-                        repair_candidate[j] += 1 
-                        
-                        # [FIX 3] Правильне отримання значення
-                        r_tuple = evaluate_network(repair_candidate, "static", tolerance=0.0)
-                        r_cost = r_tuple[0]
-                        
-                        if r_cost < 1e7 and r_cost < current_cost:
-                             if r_cost < best_repair_cost:
-                                 best_repair_cost = r_cost
-                                 best_repair = repair_candidate
-                
-                if best_repair is not None:
-                    print(f"      STRATEGY SUCCESS! Reduced pipe #{i}, expanded pipe (restored pressure).")
-                    print(f"      New Cost: {best_repair_cost/1e6:.4f} M$")
-                    current_best = best_repair
-                    current_cost = best_repair_cost
-                    improved = True
-                    break
+                else:
+                    best_repair_for_i = None
+                    best_repair_cost_for_i = float('inf')
+                    
+                    for j in range(len(candidate_reduction)):
+                        if i == j: continue 
+                        if candidate_reduction[j] < len(AVAILABLE_DIAMETERS) - 1: 
+                            repair_candidate = list(candidate_reduction)
+                            repair_candidate[j] += 1 
+                            
+                            r_tuple = evaluate_network(repair_candidate, "static", tolerance=0.0)
+                            r_cost = r_tuple[0]
+                            
+                            if r_cost < 1e7:
+                                 if r_cost < best_repair_cost_for_i:
+                                     best_repair_cost_for_i = r_cost
+                                     best_repair_for_i = repair_candidate
+                    
+                    if best_repair_for_i is not None:
+                        if best_repair_cost_for_i < best_move_cost:
+                            best_move_cost = best_repair_cost_for_i
+                            best_move_candidate = best_repair_for_i
+        
+        if best_move_candidate is not None and best_move_cost < current_cost - 0.0001:
+            print(f"      [Iter {iteration}] Improved! Cost: {current_cost/1e6:.4f} -> {best_move_cost/1e6:.4f} M$")
+            current_best = best_move_candidate
+            current_cost = best_move_cost
+            improved = True
+        else:
+            print("      No further improvements found.")
 
     return current_best
 
@@ -242,7 +238,6 @@ def export_solution(individual, filename_prefix="final_solution"):
 def run_ga(strategy_name):
     print(f"\n=== Running Strategy: {strategy_name.upper()} ===")
     
-    # 1. FIX: Initialize start_time properly
     start_time = time.time()
     
     if hasattr(creator, "FitnessMin"): del creator.FitnessMin
@@ -268,14 +263,13 @@ def run_ga(strategy_name):
     
     last_best_fitness = 1e9
     stagnation_counter = 0
-    RESTART_THRESHOLD = 20 # Трохи збільшимо поріг терпіння
+    RESTART_THRESHOLD = 10
     
     with open(f"results_{strategy_name}.csv", "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(["Generation", "Min Cost (M$)", "Pressure (m)", "Tol (m)"])
 
         for gen in range(GENERATIONS):
-            # 1. Tolerance logic
             if strategy_name == "epsilon":
                 if gen < GENERATIONS * 0.85: 
                     progress = gen / (GENERATIONS * 0.85)
@@ -283,11 +277,9 @@ def run_ga(strategy_name):
                 else: tol = 0.0
             else: tol = 0.0
 
-            # 2. Dynamic Mutation (Standard)
             mut_prob = MUTATION_START - (gen/GENERATIONS)*(MUTATION_START - MUTATION_END)
             toolbox.register("mutate", mutCreepInt, low=0, up=len(AVAILABLE_DIAMETERS)-1, indpb=mut_prob)
 
-            # 3. Evolution Cycle
             offspring = toolbox.select(pop, len(pop))
             offspring = list(map(toolbox.clone, offspring))
             
@@ -307,7 +299,6 @@ def run_ga(strategy_name):
             
             pop[:] = offspring
             
-            # 4. HOF Update
             best_cand = tools.selBest(pop, 1)[0]
             real_fit = evaluate_network(best_cand, "static", gen, 0.0) 
             if real_fit[0] < 1e7:
@@ -318,7 +309,6 @@ def run_ga(strategy_name):
                     hof.clear(); hof.update([nc])
             elif len(hof) == 0: hof.update(pop)
 
-            # --- CHECK STAGNATION ---
             current_best_val = hof[0].fitness.values[0] if len(hof) > 0 else 1e9
             if abs(current_best_val - last_best_fitness) < 1000:
                 stagnation_counter += 1
@@ -326,41 +316,31 @@ def run_ga(strategy_name):
                 stagnation_counter = 0
                 last_best_fitness = current_best_val
 
-            # 5. RESTART LOGIC: HYPER-MUTATION (The Fix)
             if stagnation_counter >= RESTART_THRESHOLD and gen < GENERATIONS - 20:
                 print(f"   [Diversity] Stagnation ({stagnation_counter} gens). HYPER-MUTATION triggered!")
                 
-                # Зберігаємо ТІЛЬКИ ОДНОГО найкращого
                 elite = tools.selBest(pop, 1)[0]
                 
-                # Всіх інших піддаємо сильній радіації
                 for i in range(len(pop)):
-                    if pop[i] == elite: continue # Еліту не чіпаємо
+                    if pop[i] == elite: continue 
                     
-                    # Гіпер-мутація: проходимо по кожній трубі
                     for gene_idx in range(len(pop[i])):
-                        # З ймовірністю 30% змінюємо кожну трубу на випадкову величину
                         if random.random() < 0.30:
-                            change = random.randint(-2, 2) # Стрибок на +/- 2 розміри
+                            change = random.randint(-2, 2)
                             new_val = pop[i][gene_idx] + change
-                            # Обмеження
                             if new_val < 0: new_val = 0
                             elif new_val >= len(AVAILABLE_DIAMETERS): new_val = len(AVAILABLE_DIAMETERS)-1
                             pop[i][gene_idx] = new_val
                     
-                    # Скидаємо фітнес, щоб перерахувати
                     del pop[i].fitness.values
 
-                # Переоцінка популяції
                 invalid_ind = [ind for ind in pop if not ind.fitness.valid]
                 fits = [evaluate_network(ind, strategy_name, gen, tol) for ind in invalid_ind]
                 for ind, f in zip(invalid_ind, fits): ind.fitness.values = f
                 
-                # Даємо час на відновлення (імунітет)
-                stagnation_counter = -20 
+                stagnation_counter = -10 
 
-            # 6. Memetic Step
-            if gen > 0 and gen % 20 == 0: 
+            if gen > 0 and gen % 5 == 0: 
                 if len(hof) > 0:
                     imp_ind_list = simple_descent(list(hof[0]))
                     imp_ind = creator.Individual(imp_ind_list)
@@ -376,13 +356,11 @@ def run_ga(strategy_name):
                     
                     pop[random.randint(0, len(pop)-1)] = imp_ind
 
-            # Logging
             record = stats.compile(pop)
             logbook.record(gen=gen, **record)
             
             try:
                 best_ind_log = hof[0]
-                # Quick recalc for display
                 cost_disp = evaluate_network(best_ind_log, "static", tolerance=0.0)[0]/1e6
                 wn_check = wntr.network.WaterNetworkModel(INP_FILE)
                 for i, p_name in enumerate(wn_check.pipe_name_list):
@@ -396,7 +374,7 @@ def run_ga(strategy_name):
             if gen % 10 == 0 or gen == GENERATIONS - 1:
                 print(f"Gen {gen:3d}: Cost={cost_disp:.3f}M$ | P={min_p:.2f}m | Tol={tol:.2f}m | Stag={stagnation_counter}")
 
-    print("\n--- Applying Final Deep Optimization (Brute Force Polish) ---")
+    print("\n--- Applying Final Deep Optimization (Global Best Strategy) ---")
     if len(hof) > 0:
         final_ind = deep_local_search(hof[0])
     else:
@@ -422,6 +400,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if args.strategy == "all":
-        for s in ["death", "static", "adaptive", "epsilon"]: run_ga(s)
+        for s in ["static", "adaptive", "epsilon"]: run_ga(s)
     else:
         run_ga(args.strategy)
