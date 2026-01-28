@@ -12,26 +12,41 @@ import os
 import sys
 
 # ==========================================
-#        DEFAULT CONFIGURATION (Fallback)
+#        DEFAULT CONFIGURATION
 # ==========================================
-DEFAULT_INP_FILE = "Hanoi.inp"
-DEFAULT_COST_FILE = "costs.csv"
-DEFAULT_POPSIZE = 200
-DEFAULT_GENS = 120
-DEFAULT_RUNS = 5
-DEFAULT_H_MIN = 30.0
+DEFAULT_INP_FILE = "EXNET_READY_TO_RUN.inp"
+DEFAULT_COST_FILE = "costsEXNET.csv"
+DEFAULT_POPSIZE = 100
+DEFAULT_GENS = 100
+DEFAULT_RUNS = 1
+DEFAULT_H_MIN = 20.0
 
-MUTATION_START = 0.35   
-MUTATION_END = 0.05     
-EPSILON_START = 5.0     
+MUTATION_START = 0.40   
+MUTATION_END = 0.10     
+EPSILON_START = 5.0    
 EPSILON_END = 0.0       
 
 CONFIG = {
     "diameters_in": [],
     "diameters_m": [],
     "costs": {},
-    "h_min": 30.0
+    "h_min": 20.0
 }
+
+# --- HELPER: Time Formatter (MOVED TO GLOBAL SCOPE) ---
+# Тепер ця функція доступна всюди
+def format_time(seconds):
+    if seconds < 60:
+        return f"{seconds:.1f} s"
+    elif seconds < 3600:
+        m = int(seconds // 60)
+        s = int(seconds % 60)
+        return f"{m} m {s} s"
+    else:
+        h = int(seconds // 3600)
+        m = int((seconds % 3600) // 60)
+        s = int(seconds % 60)
+        return f"{h} h {m} m {s} s"
 
 # ==========================================
 #           DATA MANAGEMENT
@@ -46,12 +61,11 @@ def load_config(cost_file, h_min):
         df = df.sort_values(by="Diameter")
         
         CONFIG["diameters_in"] = df["Diameter"].tolist()
-        CONFIG["diameters_m"] = [d * 0.0254 for d in df["Diameter"]] # Конвертація в метри
+        CONFIG["diameters_m"] = [d * 0.0254 for d in df["Diameter"]]
         CONFIG["costs"] = dict(zip(df["Diameter"], df["Cost"]))
         CONFIG["h_min"] = h_min
         
-        print(f"[Config] Loaded {len(CONFIG['diameters_in'])} pipe types from {cost_file}")
-        print(f"[Config] H_MIN set to {CONFIG['h_min']} m")
+        print(f"[Config] Loaded {len(CONFIG['diameters_in'])} pipe types.")
         
     except Exception as e:
         print(f"[Error] Failed to load config: {e}")
@@ -71,24 +85,27 @@ def evaluate_network(individual, inp_file, strategy="static", gen=0, tolerance=0
     diams_m = CONFIG["diameters_m"]
     h_min = CONFIG["h_min"]
 
+    # Optimised Loop
     for i, pipe_name in enumerate(pipe_names):
         idx = individual[i]
-        diam_val_in = diams_in[idx]
-        total_cost += wn.get_link(pipe_name).length * costs[diam_val_in]
+        total_cost += wn.get_link(pipe_name).length * costs[diams_in[idx]]
         wn.get_link(pipe_name).diameter = diams_m[idx]
 
     sim = wntr.sim.EpanetSimulator(wn)
     try:
         results = sim.run_sim()
-    except Exception as e:
-        return 1e14, 
+    except Exception:
+        return 1e15, # Crash Penalty
     
+    # Constraints Check
     pressures = results.node['pressure'].iloc[-1]
     junctions = wn.junction_name_list
     
     violation = 0.0
     effective_limit = h_min - tolerance
     
+    # Використовуємо суворий підхід для пошуку порушень
+    # (Можна оптимізувати через numpy, але для сумісності лишаємо цикл)
     for node in junctions:
         p = pressures[node]
         if p < effective_limit:
@@ -96,14 +113,12 @@ def evaluate_network(individual, inp_file, strategy="static", gen=0, tolerance=0
 
     penalty = 0.0
     if violation > 0:
-        penalty_base = 1e8
-        penalty_variable = 1e6 * violation
-        
-        if strategy == "adaptive":
-            factor = (gen / total_gens) * 5.0
-            penalty = penalty_base * factor + penalty_variable
-        else:
-            penalty = penalty_base + penalty_variable
+        # --- UPDATED PENALTY LOGIC ---
+        # Використовуємо "Deadly Penalty" (1 мільярд).
+        # Це гарантує, що будь-яке допустиме рішення (навіть найдорожче)
+        # буде кращим за недопустиме.
+        penalty_base = 1e9
+        penalty = penalty_base + (1e6 * violation)
 
     return total_cost + penalty,
 
@@ -111,16 +126,14 @@ def get_real_stats(individual, inp_file):
     wn = wntr.network.WaterNetworkModel(inp_file)
     total_cost = 0.0
     pipe_names = wn.pipe_name_list
-    
     costs = CONFIG["costs"]
     diams_in = CONFIG["diameters_in"]
     diams_m = CONFIG["diameters_m"]
     
     for i, pipe_name in enumerate(pipe_names):
         idx = individual[i]
-        diam_val_in = diams_in[idx]
+        total_cost += wn.get_link(pipe_name).length * costs[diams_in[idx]]
         wn.get_link(pipe_name).diameter = diams_m[idx]
-        total_cost += wn.get_link(pipe_name).length * costs[diam_val_in]
     
     try:
         sim = wntr.sim.EpanetSimulator(wn)
@@ -142,18 +155,21 @@ def mutCreepInt(individual, low, up, indpb):
             individual[i] = new_val
     return individual,
 
-# --- POPULATION INITIALIZATION ---
+# --- POPULATION INITIALIZATION (UPDATED) ---
 def create_mixed_population(n_pipes, n_diams, pop_size):
     pop = []
-    for _ in range(int(pop_size * 0.2)):
+    # 1. 25% Максимальні діаметри (Гарантовано робочі)
+    for _ in range(int(pop_size * 0.25)):
         ind = [n_diams - 1] * n_pipes 
         pop.append(creator.Individual(ind))
 
+    # 2. 25% Середні діаметри
     mid_idx = n_diams // 2
-    for _ in range(int(pop_size * 0.3)):
+    for _ in range(int(pop_size * 0.25)):
         ind = [mid_idx] * n_pipes
         pop.append(creator.Individual(ind))
         
+    # 3. 50% Повний рандом
     remaining = pop_size - len(pop)
     for _ in range(remaining):
         ind = [random.randint(0, n_diams-1) for _ in range(n_pipes)]
@@ -161,52 +177,60 @@ def create_mixed_population(n_pipes, n_diams, pop_size):
         
     return pop
 
-# --- LOCAL SEARCH MODULE ---
+# ==========================================
+#       LOCAL SEARCH MODULE (RESTORED)
+# ==========================================
 
+# <--- RESTORED: simple_descent ---
 def simple_descent(individual, inp_file):
+    """Швидкий спуск для покращення поточного рішення."""
     curr = list(individual)
-    while True:
-        best_move_idx = -1
-        best_cost = float('inf')
-        found = False
-        for i in range(len(curr)):
-            if curr[i] > 0: 
-                candidate = list(curr)
-                candidate[i] -= 1
-                res = evaluate_network(candidate, inp_file, "static", tolerance=0.0)
-                cost = res[0]
-                if cost < 1e7: 
-                    if not found or cost < best_cost:
-                        best_cost = cost
-                        best_move_idx = i
-                        found = True
-        if found:
-            curr_cost = evaluate_network(curr, inp_file, "static", tolerance=0.0)[0]
-            if best_cost < curr_cost:
-                 curr[best_move_idx] -= 1
-            else:
-                 break 
-        else:
-            break
+    
+    # Для великих мереж обмежуємо кількість спроб
+    max_checks = 100 if len(curr) > 300 else len(curr)
+    indices = random.sample(range(len(curr)), k=max_checks)
+    
+    improved = False
+    
+    for i in indices:
+        if curr[i] > 0:
+            candidate = list(curr)
+            candidate[i] -= 1
+            
+            # Перевіряємо, чи покращилось (вартість + штраф)
+            curr_score = evaluate_network(curr, inp_file, "static", tolerance=0.0)[0]
+            cand_score = evaluate_network(candidate, inp_file, "static", tolerance=0.0)[0]
+            
+            if cand_score < curr_score:
+                curr[i] -= 1
+                improved = True
+                
     return curr
 
+# <--- UPDATED: deep_local_search (Universal) ---
 def deep_local_search(individual, inp_file, run_id_label=""):
-    print(f"\n   > [Run {run_id_label}] Running Deep Local Search ...")
+    print(f"\n   > [Run {run_id_label}] Running Deep Local Search...")
     polish_start = time.time()
     
     current_best = list(individual)
     cost_tuple = evaluate_network(current_best, inp_file, "static", tolerance=0.0)
     current_cost = cost_tuple[0]
     
-    sample_size = min(200, len(current_best))
-    check_indices = random.sample(range(len(current_best)), k=sample_size)
+    n_pipes = len(current_best)
     
+    # --- UNIVERSAL ADAPTATION ---
+    # Якщо мережа мала (< 300 труб, як Hanoi), перевіряємо ВСІ труби.
+    # Якщо мережа велика (> 300 труб, як EXNET), перевіряємо вибірку (50 труб).
+    if n_pipes < 300:
+        check_indices = list(range(n_pipes))
+        print("     [Mode] Full Search (Small Network)")
+    else:
+        check_indices = random.sample(range(n_pipes), k=50)
+        print(f"     [Mode] Sampling Search (Large Network: 50/{n_pipes} pipes)")
+
     improved = True
-    iteration = 0
-    
     while improved:
         improved = False
-        iteration += 1
         best_move_candidate = None
         best_move_cost = current_cost
         
@@ -218,111 +242,55 @@ def deep_local_search(individual, inp_file, run_id_label=""):
                 c_tuple = evaluate_network(candidate, inp_file, "static", tolerance=0.0)
                 cost = c_tuple[0]
                 
+                # Допускаємо лише рішення без гігантського штрафу (тобто допустимі)
                 if cost < 1e13:
                     if cost < best_move_cost:
                         best_move_cost = cost
                         best_move_candidate = candidate
-        
+
         if best_move_candidate is not None and best_move_cost < current_cost - 0.1:
             current_best = best_move_candidate
             current_cost = best_move_cost
             improved = True
             
-    print(f"   > Polished in {time.time() - polish_start:.1f}s. Final: {current_cost/1e6:.4f} M$")
+    print(f"   > Polished in {format_time(time.time() - polish_start)}. Final: {current_cost/1e6:.4f} M$")
     return current_best
 
-# --- REPORTING & EXPORT ---
+# --- REPORTING ---
 
 def plot_convergence_universal(history, filename="convergence_plot.png"):
     if not history: return
     gens = [entry['gen'] for entry in history]
     costs = [entry['cost'] for entry in history]
-    
-    min_cost = min(costs)
-    view_ceiling = min_cost * 1.5
-    valid_plot_costs = [c for c in costs if c < view_ceiling]
-    
-    if len(valid_plot_costs) < 2: valid_plot_costs = costs 
-    
-    y_min_limit = min(valid_plot_costs) * 0.98
-    y_max_limit = max(valid_plot_costs) * 1.02
-    
     plt.figure(figsize=(12, 7))
     plt.plot(gens, costs, label='Best Cost', color='blue', linewidth=2)
-    plt.ylim(y_min_limit, y_max_limit)
     plt.title("Convergence Profile")
     plt.xlabel("Generation")
     plt.ylabel("Cost (M$)")
-    plt.grid(True, which='both', linestyle='--', alpha=0.5)
+    plt.grid(True)
     plt.legend()
     plt.tight_layout()
     plt.savefig(filename, dpi=300)
     plt.close()
 
 def export_solution(individual, history, inp_file, filename_prefix="final_solution"):
-    print(f"\n--- Generating Report ({filename_prefix}) ---")
+    print(f"\n--- Saving results to {filename_prefix}.csv ---")
     wn = wntr.network.WaterNetworkModel(inp_file)
     pipe_data = []
-    pipe_indices = {}
-    
+    costs = CONFIG["costs"]
     diams_in = CONFIG["diameters_in"]
     diams_m = CONFIG["diameters_m"]
-    costs = CONFIG["costs"]
     
     for i, pipe_name in enumerate(wn.pipe_name_list):
         idx = individual[i]
-        
         link = wn.get_link(pipe_name)
-        start_node = link.start_node_name
-        end_node = link.end_node_name
-        nodes_str = f"{start_node}-{end_node}"
-        
-        diam_m = diams_m[idx]
-        wn.get_link(pipe_name).diameter = diam_m
-        
         pipe_data.append({
             "Pipe ID": pipe_name,
-            "Nodes (From-To)": nodes_str,
             "Diameter (inch)": diams_in[idx],
-            "Cost ($)": wn.get_link(pipe_name).length * costs[diams_in[idx]]
+            "Cost": link.length * costs[diams_in[idx]]
         })
-        pipe_indices[pipe_name] = idx
-
-    df = pd.DataFrame(pipe_data)
-    total_cost = df["Cost ($)"].sum()
-    df.to_csv(f"{filename_prefix}.csv", index=False)
-    print(f"Table saved: {filename_prefix}.csv")
-    print(f"Total Cost: {total_cost/1e6:.6f} M$")
-    
-    try:
-        plt.figure(figsize=(14, 10))
-        ax = plt.gca()
-        N = len(diams_in)
-        cmap = plt.get_cmap("jet", N)
-        
-        wntr.graphics.plot_network(wn, node_size=0, node_attribute=None, 
-            link_attribute=pd.Series(pipe_indices), link_width=3.0, 
-            link_cmap=cmap, link_range=[0, N-1], add_colorbar=False, ax=ax,
-            title=f"Optimized Network (Cost: {total_cost/1e6:.3f} M$)")
-        
-        for n in wn.node_name_list:
-            x, y = wn.get_node(n).coordinates
-            plt.text(x, y, s=n, color='white', fontsize=8, fontweight='bold', 
-                     ha='center', va='center', zorder=10,
-                     bbox=dict(boxstyle="circle,pad=0.3", fc="black", ec="none", alpha=0.8))
-        
-        legend_patches = [mpatches.Patch(color=cmap(i/(N-1)), label=f'{d}"') for i,d in enumerate(diams_in)]
-        plt.legend(handles=legend_patches, title="Diameters", loc='upper left', bbox_to_anchor=(1.01, 1))
-        
-        plt.tight_layout()
-        plt.savefig(f"{filename_prefix}_map.png", dpi=300)
-        print(f"Map saved: {filename_prefix}_map.png")
-        plt.close()
-    except Exception as e:
-        print(f"Error plotting map: {e}")
-
-    if history:
-        plot_convergence_universal(history, f"{filename_prefix}_plot.png")
+    pd.DataFrame(pipe_data).to_csv(f"{filename_prefix}.csv", index=False)
+    if history: plot_convergence_universal(history, f"{filename_prefix}_plot.png")
 
 # ==========================================
 #           SINGLE TRIAL FUNCTION
@@ -340,15 +308,24 @@ def run_single_trial(run_id, args):
 
     toolbox = base.Toolbox()
     n_diams = len(CONFIG["diameters_in"])
-    toolbox.register("attr_int", random.randint, 0, n_diams-1)
-    
     wn_temp = wntr.network.WaterNetworkModel(args.inp)
     n_pipes = len(wn_temp.pipe_name_list)
     
     toolbox.register("mate", tools.cxTwoPoint)
     toolbox.register("select", tools.selTournament, tournsize=3)
+    toolbox.register("attr_int", random.randint, 0, n_diams-1)
 
+    # 1. СТВОРЕННЯ ПОПУЛЯЦІЇ (SMART)
     pop = create_mixed_population(n_pipes, n_diams, args.pop)
+    
+    # 2. PRE-FLIGHT CHECK (Тільки для Run #1)
+    if run_id == 0:
+        max_ind = [n_diams - 1] * n_pipes
+        _, max_p = get_real_stats(max_ind, args.inp)
+        print(f"    [INFO] Feasibility Check (All Max Pipes): P={max_p:.2f} m")
+        if max_p < args.hmin:
+            print(f"    [CRITICAL WARNING] Target {args.hmin}m is physically IMPOSSIBLE.")
+            print(f"    The best possible pressure is {max_p:.2f} m.")
     
     hof = tools.HallOfFame(1)
     history_log = [] 
@@ -358,8 +335,8 @@ def run_single_trial(run_id, args):
     hof.update(pop)
 
     for gen in range(args.gen):
-        if gen < args.gen * 0.85: 
-            progress = gen / (args.gen * 0.85)
+        if gen < args.gen * 0.75: 
+            progress = gen / (args.gen * 0.75)
             tol = EPSILON_START - progress * (EPSILON_START - EPSILON_END)
         else: tol = 0.0
 
@@ -369,9 +346,9 @@ def run_single_trial(run_id, args):
         offspring = toolbox.select(pop, len(pop))
         offspring = list(map(toolbox.clone, offspring))
         for child1, child2 in zip(offspring[::2], offspring[1::2]):
-            if random.random() < 0.9: toolbox.mate(child1, child2); del child1.fitness.values, child2.fitness.values
+            if random.random() < 0.8: toolbox.mate(child1, child2); del child1.fitness.values, child2.fitness.values
         for mutant in offspring:
-            if random.random() < 0.3: toolbox.mutate(mutant); del mutant.fitness.values
+            if random.random() < 0.35: toolbox.mutate(mutant); del mutant.fitness.values
         
         invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
         fitnesses = [evaluate_network(ind, args.inp, "epsilon", gen, tol, args.gen) for ind in invalid_ind]
@@ -379,19 +356,29 @@ def run_single_trial(run_id, args):
         
         pop[:] = offspring
         
+        # --- RESTORED: SIMPLE DESCENT CALL ---
+        # Викликаємо легкий пошук кожні 5 поколінь для найкращого індивіда
+        if gen > 0 and gen % 5 == 0 and len(hof) > 0:
+            imp_ind_list = simple_descent(list(hof[0]), args.inp)
+            imp_ind = creator.Individual(imp_ind_list)
+            # Переоцінюємо
+            imp_fit = evaluate_network(imp_ind, args.inp, "epsilon", gen, tol, args.gen)
+            imp_ind.fitness.values = imp_fit
+            # Якщо він кращий, додаємо в HOF
+            if imp_fit[0] < hof[0].fitness.values[0]:
+                hof[0] = imp_ind # Замінюємо лідера
+                # Також замінюємо випадкового в популяції
+                pop[random.randint(0, len(pop)-1)] = imp_ind
+
+        # Оновлення HOF (стандартне)
         best_cand = tools.selBest(pop, 1)[0]
         real_fit_tuple = evaluate_network(best_cand, args.inp, "static", gen, 0.0, args.gen) 
         
-        if len(hof) == 0:
-            hof.update([best_cand])
-            hof[0].fitness.values = real_fit_tuple
-        else:
-            curr_best = hof[0].fitness.values[0]
-            if real_fit_tuple[0] < curr_best:
-                 nc = toolbox.clone(best_cand)
-                 nc.fitness.values = real_fit_tuple
-                 hof.clear()
-                 hof.update([nc])
+        if real_fit_tuple[0] < hof[0].fitness.values[0]:
+            nc = toolbox.clone(best_cand)
+            nc.fitness.values = real_fit_tuple
+            hof.clear()
+            hof.update([nc])
 
         # --- LOGGING ---
         best_now = hof[0]
@@ -403,13 +390,14 @@ def run_single_trial(run_id, args):
                 cost_disp, p_disp = get_real_stats(best_now, args.inp)
                 elapsed = time.time() - run_start
                 status = "[OK]" if p_disp >= args.hmin else "[FAIL]"
-                print(f"    [Run {run_id+1}] Gen {gen:3d}: Cost={cost_disp/1e6:.2f}M$ | P={p_disp:.2f}m {status} | Time={elapsed:.0f}s")
+                # UPDATED: Time formatting usage
+                print(f"    [Run {run_id+1}] Gen {gen:3d}: Cost={cost_disp/1e6:.2f}M$ | P={p_disp:.2f}m {status} | Time={format_time(elapsed)}")
             except: pass
 
     best_ind = hof[0]
     real_cost, min_p = get_real_stats(best_ind, args.inp)
     run_time = time.time() - run_start
-    print(f"    >> Run #{run_id + 1} Done ({run_time:.0f}s). Final: {real_cost/1e6:.4f} M$ | P: {min_p:.2f} m")
+    print(f"    >> Run #{run_id + 1} Done ({format_time(run_time)}). Final: {real_cost/1e6:.4f} M$ | P: {min_p:.2f} m")
     
     return best_ind, real_cost, min_p, run_time, history_log
 
@@ -418,28 +406,13 @@ def run_single_trial(run_id, args):
 # ==========================================
 
 if __name__ == "__main__":
-    # --- Helper for time formatting ---
-    def format_time(seconds):
-        if seconds < 60:
-            return f"{seconds:.1f} s"
-        elif seconds < 3600:
-            m = int(seconds // 60)
-            s = int(seconds % 60)
-            return f"{m} m {s} s"
-        else:
-            h = int(seconds // 3600)
-            m = int((seconds % 3600) // 60)
-            s = int(seconds % 60)
-            return f"{h} h {m} m {s} s"
-
-    parser = argparse.ArgumentParser(description="Evolutionary Water Network Optimizer")
-    parser.add_argument("--inp", type=str, default=DEFAULT_INP_FILE, help="Path to .inp file")
-    parser.add_argument("--costs", type=str, default=DEFAULT_COST_FILE, help="Path to costs CSV file")
-    parser.add_argument("--runs", type=int, default=DEFAULT_RUNS, help="Number of Multi-Start runs")
-    parser.add_argument("--pop", type=int, default=DEFAULT_POPSIZE, help="Population size")
-    parser.add_argument("--gen", type=int, default=DEFAULT_GENS, help="Number of generations")
-    parser.add_argument("--hmin", type=float, default=DEFAULT_H_MIN, help="Minimum pressure (m)")
-    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--inp", type=str, default=DEFAULT_INP_FILE)
+    parser.add_argument("--costs", type=str, default=DEFAULT_COST_FILE)
+    parser.add_argument("--runs", type=int, default=DEFAULT_RUNS)
+    parser.add_argument("--pop", type=int, default=DEFAULT_POPSIZE)
+    parser.add_argument("--gen", type=int, default=DEFAULT_GENS)
+    parser.add_argument("--hmin", type=float, default=DEFAULT_H_MIN)
     args = parser.parse_args()
     
     if not os.path.exists(args.inp):
@@ -465,6 +438,7 @@ if __name__ == "__main__":
     for i in range(args.runs):
         ind, cost, pressure, duration, hist = run_single_trial(i, args)
         
+        # Polish (using Universal Deep Search)
         polished_ind = deep_local_search(ind, args.inp, run_id_label=str(i+1))
         cost_pol, pressure_pol = get_real_stats(polished_ind, args.inp)
         
