@@ -21,8 +21,8 @@ DEFAULT_GENS = 120
 DEFAULT_RUNS = 5
 DEFAULT_H_MIN = 30.0
 
-MUTATION_START = 0.25   
-MUTATION_END = 0.01     
+MUTATION_START = 0.35   
+MUTATION_END = 0.05     
 EPSILON_START = 5.0     
 EPSILON_END = 0.0       
 
@@ -74,15 +74,14 @@ def evaluate_network(individual, inp_file, strategy="static", gen=0, tolerance=0
     for i, pipe_name in enumerate(pipe_names):
         idx = individual[i]
         diam_val_in = diams_in[idx]
-        wn.get_link(pipe_name).diameter = diams_m[idx]
         total_cost += wn.get_link(pipe_name).length * costs[diam_val_in]
+        wn.get_link(pipe_name).diameter = diams_m[idx]
 
     sim = wntr.sim.EpanetSimulator(wn)
     try:
         results = sim.run_sim()
     except Exception as e:
-        print(f"\n[SIM ERROR] {e}")
-        return 1e12, 
+        return 1e14, 
     
     pressures = results.node['pressure'].iloc[-1]
     junctions = wn.junction_name_list
@@ -97,14 +96,14 @@ def evaluate_network(individual, inp_file, strategy="static", gen=0, tolerance=0
 
     penalty = 0.0
     if violation > 0:
-        if strategy in ["static", "epsilon"]:
-            penalty = 1e7 + (1e6 * violation)
-        elif strategy == "death":
-            penalty = 1e9
-        elif strategy == "adaptive":
-            base = 1e4 * (1.05 ** gen) 
-            penalty = base + (1e5 * violation)
-            if gen > total_gens * 0.75: penalty += 1e7 
+        penalty_base = 1e8
+        penalty_variable = 1e6 * violation
+        
+        if strategy == "adaptive":
+            factor = (gen / total_gens) * 5.0
+            penalty = penalty_base * factor + penalty_variable
+        else:
+            penalty = penalty_base + penalty_variable
 
     return total_cost + penalty,
 
@@ -135,12 +134,32 @@ def get_real_stats(individual, inp_file):
 def mutCreepInt(individual, low, up, indpb):
     for i in range(len(individual)):
         if random.random() < indpb:
-            change = 1 if random.random() < 0.5 else -1
+            step = random.randint(1, 3)
+            change = step if random.random() < 0.5 else -step
             new_val = individual[i] + change
             if new_val < low: new_val = low
             elif new_val > up: new_val = up
             individual[i] = new_val
     return individual,
+
+# --- POPULATION INITIALIZATION ---
+def create_mixed_population(n_pipes, n_diams, pop_size):
+    pop = []
+    for _ in range(int(pop_size * 0.2)):
+        ind = [n_diams - 1] * n_pipes 
+        pop.append(creator.Individual(ind))
+
+    mid_idx = n_diams // 2
+    for _ in range(int(pop_size * 0.3)):
+        ind = [mid_idx] * n_pipes
+        pop.append(creator.Individual(ind))
+        
+    remaining = pop_size - len(pop)
+    for _ in range(remaining):
+        ind = [random.randint(0, n_diams-1) for _ in range(n_pipes)]
+        pop.append(creator.Individual(ind))
+        
+    return pop
 
 # --- LOCAL SEARCH MODULE ---
 
@@ -172,14 +191,15 @@ def simple_descent(individual, inp_file):
     return curr
 
 def deep_local_search(individual, inp_file, run_id_label=""):
-    print(f"\n   > [Run {run_id_label}] Running Deep local search...")
+    print(f"\n   > [Run {run_id_label}] Running Deep Local Search ...")
     polish_start = time.time()
     
     current_best = list(individual)
     cost_tuple = evaluate_network(current_best, inp_file, "static", tolerance=0.0)
     current_cost = cost_tuple[0]
     
-    num_diams = len(CONFIG["diameters_in"])
+    sample_size = min(200, len(current_best))
+    check_indices = random.sample(range(len(current_best)), k=sample_size)
     
     improved = True
     iteration = 0
@@ -187,45 +207,23 @@ def deep_local_search(individual, inp_file, run_id_label=""):
     while improved:
         improved = False
         iteration += 1
-        
         best_move_candidate = None
         best_move_cost = current_cost
         
-        for i in range(len(current_best)):
-            original_diam_idx = current_best[i]
-            
-            if original_diam_idx > 0: 
-                candidate_reduction = list(current_best)
-                candidate_reduction[i] -= 1 
+        for i in check_indices: 
+            if current_best[i] > 0: 
+                candidate = list(current_best)
+                candidate[i] -= 1 
                 
-                c_tuple = evaluate_network(candidate_reduction, inp_file, "static", tolerance=0.0)
+                c_tuple = evaluate_network(candidate, inp_file, "static", tolerance=0.0)
                 cost = c_tuple[0]
                 
-                if cost < 1e7:
+                if cost < 1e13:
                     if cost < best_move_cost:
                         best_move_cost = cost
-                        best_move_candidate = candidate_reduction
-                else:
-                    # Ремонт
-                    best_repair_cost_for_i = float('inf')
-                    best_repair_for_i = None
-                    for j in range(len(candidate_reduction)):
-                        if i == j: continue 
-                        if candidate_reduction[j] < num_diams - 1: 
-                            repair_candidate = list(candidate_reduction)
-                            repair_candidate[j] += 1 
-                            r_tuple = evaluate_network(repair_candidate, inp_file, "static", tolerance=0.0)
-                            r_cost = r_tuple[0]
-                            if r_cost < 1e7:
-                                 if r_cost < best_repair_cost_for_i:
-                                     best_repair_cost_for_i = r_cost
-                                     best_repair_for_i = repair_candidate
-                    if best_repair_for_i is not None:
-                        if best_repair_cost_for_i < best_move_cost:
-                            best_move_cost = best_repair_cost_for_i
-                            best_move_candidate = best_repair_for_i
+                        best_move_candidate = candidate
         
-        if best_move_candidate is not None and best_move_cost < current_cost - 0.0001:
+        if best_move_candidate is not None and best_move_cost < current_cost - 0.1:
             current_best = best_move_candidate
             current_cost = best_move_cost
             improved = True
@@ -347,20 +345,18 @@ def run_single_trial(run_id, args):
     wn_temp = wntr.network.WaterNetworkModel(args.inp)
     n_pipes = len(wn_temp.pipe_name_list)
     
-    toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_int, n=n_pipes)
-    toolbox.register("population", tools.initRepeat, list, toolbox.individual)
     toolbox.register("mate", tools.cxTwoPoint)
-    toolbox.register("select", tools.selTournament, tournsize=2)
+    toolbox.register("select", tools.selTournament, tournsize=3)
 
-    pop = toolbox.population(n=args.pop)
+    pop = create_mixed_population(n_pipes, n_diams, args.pop)
+    
     hof = tools.HallOfFame(1)
-    
-    last_best_fitness = 1e9
-    stagnation_counter = 0
-    RESTART_THRESHOLD = 10 
-    
     history_log = [] 
     
+    fitnesses = [evaluate_network(ind, args.inp, "epsilon", 0, EPSILON_START, args.gen) for ind in pop]
+    for ind, fit in zip(pop, fitnesses): ind.fitness.values = fit
+    hof.update(pop)
+
     for gen in range(args.gen):
         if gen < args.gen * 0.85: 
             progress = gen / (args.gen * 0.85)
@@ -385,62 +381,35 @@ def run_single_trial(run_id, args):
         
         best_cand = tools.selBest(pop, 1)[0]
         real_fit_tuple = evaluate_network(best_cand, args.inp, "static", gen, 0.0, args.gen) 
-        if real_fit_tuple[0] < 1e7:
-            curr_best = evaluate_network(hof[0], args.inp, "static", tolerance=0.0)[0] if len(hof)>0 else 1e9
-            if real_fit_tuple[0] < curr_best:
-                nc = toolbox.clone(best_cand); nc.fitness.values = real_fit_tuple; hof.clear(); hof.update([nc])
-        elif len(hof) == 0: hof.update(pop)
-
-        current_best_val = hof[0].fitness.values[0] if len(hof) > 0 else 1e9
-        if abs(current_best_val - last_best_fitness) < 1000: stagnation_counter += 1
-        else: stagnation_counter = 0; last_best_fitness = current_best_val
-
-        if stagnation_counter >= RESTART_THRESHOLD and gen < args.gen - 20:
-            elite = tools.selBest(pop, 1)[0]
-            for i in range(len(pop)):
-                if pop[i] == elite: continue 
-                for gene_idx in range(len(pop[i])):
-                    if random.random() < 0.30:
-                        change = random.randint(-2, 2)
-                        new_val = pop[i][gene_idx] + change
-                        if new_val < 0: new_val = 0
-                        elif new_val >= n_diams-1: new_val = n_diams-1
-                        pop[i][gene_idx] = new_val
-                del pop[i].fitness.values
-            
-            invalid_ind = [ind for ind in pop if not ind.fitness.valid]
-            fits = [evaluate_network(ind, args.inp, "epsilon", gen, tol, args.gen) for ind in invalid_ind]
-            for ind, f in zip(invalid_ind, fits): ind.fitness.values = f
-            stagnation_counter = -10 
-
-        if gen > 0 and gen % 5 == 0 and len(hof) > 0:
-            imp_ind_list = simple_descent(list(hof[0]), args.inp)
-            imp_ind = creator.Individual(imp_ind_list)
-            imp_fit = evaluate_network(imp_ind, args.inp, "epsilon", gen, tol, args.gen)
-            imp_ind.fitness.values = imp_fit
-            real_imp = evaluate_network(imp_ind, args.inp, "static", tolerance=0.0)
-            if real_imp[0] < evaluate_network(hof[0], args.inp, "static", tolerance=0.0)[0]:
-                 nc = toolbox.clone(imp_ind); nc.fitness.values = real_imp; hof.clear(); hof.update([nc])
-            pop[random.randint(0, len(pop)-1)] = imp_ind
         
+        if len(hof) == 0:
+            hof.update([best_cand])
+            hof[0].fitness.values = real_fit_tuple
+        else:
+            curr_best = hof[0].fitness.values[0]
+            if real_fit_tuple[0] < curr_best:
+                 nc = toolbox.clone(best_cand)
+                 nc.fitness.values = real_fit_tuple
+                 hof.clear()
+                 hof.update([nc])
+
+        # --- LOGGING ---
         best_now = hof[0]
         raw_val = best_now.fitness.values[0]
         history_log.append({'gen': gen, 'cost': raw_val/1e6})
 
-        if gen % 20 == 0 or gen == args.gen - 1:
+        if gen % 10 == 0 or gen == args.gen - 1:
             try:
                 cost_disp, p_disp = get_real_stats(best_now, args.inp)
                 elapsed = time.time() - run_start
-                if p_disp != -999.0:
-                    print(f"    [Run {run_id+1}] Gen {gen:3d}: Cost={cost_disp/1e6:.4f}M$ | P={p_disp:.2f}m | Time={elapsed:.1f}s")
-                else:
-                    print(f"    [Run {run_id+1}] Gen {gen:3d}: Cost(Pen)={raw_val/1e6:.4f}M$ | Time={elapsed:.1f}s")
+                status = "[OK]" if p_disp >= args.hmin else "[FAIL]"
+                print(f"    [Run {run_id+1}] Gen {gen:3d}: Cost={cost_disp/1e6:.2f}M$ | P={p_disp:.2f}m {status} | Time={elapsed:.0f}s")
             except: pass
 
     best_ind = hof[0]
     real_cost, min_p = get_real_stats(best_ind, args.inp)
     run_time = time.time() - run_start
-    print(f"    >> Run #{run_id + 1} Done ({run_time:.1f}s). Final: {real_cost/1e6:.4f} M$ | P: {min_p:.2f} m")
+    print(f"    >> Run #{run_id + 1} Done ({run_time:.0f}s). Final: {real_cost/1e6:.4f} M$ | P: {min_p:.2f} m")
     
     return best_ind, real_cost, min_p, run_time, history_log
 
@@ -449,6 +418,20 @@ def run_single_trial(run_id, args):
 # ==========================================
 
 if __name__ == "__main__":
+    # --- Helper for time formatting ---
+    def format_time(seconds):
+        if seconds < 60:
+            return f"{seconds:.1f} s"
+        elif seconds < 3600:
+            m = int(seconds // 60)
+            s = int(seconds % 60)
+            return f"{m} m {s} s"
+        else:
+            h = int(seconds // 3600)
+            m = int((seconds % 3600) // 60)
+            s = int(seconds % 60)
+            return f"{h} h {m} m {s} s"
+
     parser = argparse.ArgumentParser(description="Evolutionary Water Network Optimizer")
     parser.add_argument("--inp", type=str, default=DEFAULT_INP_FILE, help="Path to .inp file")
     parser.add_argument("--costs", type=str, default=DEFAULT_COST_FILE, help="Path to costs CSV file")
@@ -497,29 +480,30 @@ if __name__ == "__main__":
             "history": hist
         })
 
-    # Leaderboard: Sort by Feasibility (True first), then Cost (Low first)
     sorted_results = sorted(results_summary, key=lambda x: (not x['feasible'], x['cost']))
     best_run = sorted_results[0]
     champion_ind = best_run['individual']
     champion_hist = best_run['history']
 
     print("\n\n=== FINAL TOURNAMENT LEADERBOARD ===")
-    print(f"{'Run':<4} {'Cost (M$)':<10} {'Pressure':<10} {'Time (s)':<8} {'Status':<6}")
-    print("-" * 55)
+    print(f"{'Run':<4} {'Cost (M$)':<10} {'Pressure':<10} {'Time':<18} {'Status':<6}")
+    print("-" * 65)
     
     for res in sorted_results:
         marker = "(*)" if res['run_id'] == best_run['run_id'] else ""
         status = "OK" if res['feasible'] else "FAIL"
-        print(f"{res['run_id']:<4} {res['cost']/1e6:<10.4f} {res['pressure']:<10.3f} {res['time']:<8.1f} {status:<6} {marker}")
+        time_str = format_time(res['time'])
+        print(f"{res['run_id']:<4} {res['cost']/1e6:<10.4f} {res['pressure']:<10.3f} {time_str:<18} {status:<6} {marker}")
     
     print(f"\nCHAMPION SELECTED: Run #{best_run['run_id']}")
     
     final_cost, final_p = get_real_stats(champion_ind, args.inp)
+    total_duration = time.time() - global_start_time
     
     print(f"\n=========================================")
     print(f"       FINAL OPTIMIZATION RESULTS        ")
     print(f"=========================================")
-    print(f"Total Execution Time: {time.time() - global_start_time:.2f} seconds")
+    print(f"Total Execution Time: {format_time(total_duration)}")
     print(f"Final Cost:           {final_cost/1e6:.6f} M$")
     print(f"Final Pressure:       {final_p:.3f} m")
     print(f"=========================================")
