@@ -49,16 +49,16 @@ CONFIG = {
 # --- HELPER: Time Formatter ---
 def format_time(seconds):
     if seconds < 60:
-        return f"{seconds:.1f} s"
+        return f"{seconds:.1f}s"
     elif seconds < 3600:
         m = int(seconds // 60)
         s = int(seconds % 60)
-        return f"{m} m {s} s"
+        return f"{m}m {s}s"
     else:
         h = int(seconds // 3600)
         m = int((seconds % 3600) // 60)
         s = int(seconds % 60)
-        return f"{h} h {m} m {s} s"
+        return f"{h}h {m}m {s}s"
 
 # ==========================================
 #           DATA MANAGEMENT
@@ -96,7 +96,6 @@ def load_config(cost_file, h_min, units):
 # ==========================================
 
 def evaluate_network(individual, inp_file, strategy="static", gen=0, tolerance=0.0, total_gens=100):
-    # --- SILENCE BLOCK (Локальне глушіння при завантаженні) ---
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         wn = wntr.network.WaterNetworkModel(inp_file)
@@ -138,7 +137,6 @@ def evaluate_network(individual, inp_file, strategy="static", gen=0, tolerance=0
     return total_cost + penalty,
 
 def get_real_stats(individual, inp_file):
-    # --- SILENCE BLOCK ---
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         wn = wntr.network.WaterNetworkModel(inp_file)
@@ -176,16 +174,13 @@ def mutCreepInt(individual, low, up, indpb):
 
 def create_mixed_population(n_pipes, n_diams, pop_size):
     pop = []
-    # 25% Max diameters
     for _ in range(int(pop_size * 0.25)):
         ind = [n_diams - 1] * n_pipes 
         pop.append(creator.Individual(ind))
-    # 25% Median diameters
     mid_idx = n_diams // 2
     for _ in range(int(pop_size * 0.25)):
         ind = [mid_idx] * n_pipes
         pop.append(creator.Individual(ind))
-    # 50% Random
     remaining = pop_size - len(pop)
     for _ in range(remaining):
         ind = [random.randint(0, n_diams-1) for _ in range(n_pipes)]
@@ -193,71 +188,50 @@ def create_mixed_population(n_pipes, n_diams, pop_size):
     return pop
 
 # --- LOCAL SEARCH ---
-def simple_descent(individual, inp_file):
-    curr = list(individual)
-    max_checks = 100 if len(curr) > 300 else len(curr)
-    indices = random.sample(range(len(curr)), k=max_checks)
-    
-    for i in indices:
-        if curr[i] > 0:
-            candidate = list(curr)
-            candidate[i] -= 1
-            curr_score = evaluate_network(curr, inp_file, "static", tolerance=0.0)[0]
-            cand_score = evaluate_network(candidate, inp_file, "static", tolerance=0.0)[0]
-            if cand_score < curr_score:
-                curr[i] -= 1
-    return curr
-
-def deep_local_search(individual, inp_file, run_id_label=""):
-    print(f"\n   > [Run {run_id_label}] Running Deep Local Search...")
-    polish_start = time.time()
-    
+def run_local_search(individual, inp_file, limit_pipes=None, verbose=False):
+    start_time = time.time()
     current_best = list(individual)
+    
     cost_tuple = evaluate_network(current_best, inp_file, "static", tolerance=0.0)
     current_cost = cost_tuple[0]
     
     n_pipes = len(current_best)
     
-    if n_pipes < 300:
+    if limit_pipes is None or limit_pipes >= n_pipes:
         check_indices = list(range(n_pipes))
-        print("     [Mode] Full Search")
+        mode_str = f"Full Scan ({n_pipes} pipes)"
     else:
-        sample_size = min(100, n_pipes)
-        check_indices = random.sample(range(n_pipes), k=sample_size)
-        print(f"     [Mode] Sampling Search ({sample_size}/{n_pipes} pipes)")
+        check_indices = random.sample(range(n_pipes), k=limit_pipes)
+        mode_str = f"Random Sample ({limit_pipes}/{n_pipes} pipes)"
 
-    improved = True
-    while improved:
-        improved = False
-        best_move_candidate = None
-        best_move_cost = current_cost
-        
-        for i in check_indices: 
-            if current_best[i] > 0: 
-                candidate = list(current_best)
-                candidate[i] -= 1 
-                
-                c_tuple = evaluate_network(candidate, inp_file, "static", tolerance=0.0)
-                cost = c_tuple[0]
-                
-                if cost < 1e13:
-                    if cost < best_move_cost:
-                        best_move_cost = cost
-                        best_move_candidate = candidate
+    if verbose:
+        print(f"\n   > Running Local Search: {mode_str}...")
 
-        if best_move_candidate is not None and best_move_cost < current_cost - 0.1:
-            current_best = best_move_candidate
-            current_cost = best_move_cost
-            improved = True
+    improvements = 0
+    
+    for i in check_indices:
+        if current_best[i] > 0:
+            candidate = list(current_best)
+            candidate[i] -= 1
             
-    print(f"   > Polished in {format_time(time.time() - polish_start)}. Final: {current_cost/1e6:.4f} M$")
+            c_tuple = evaluate_network(candidate, inp_file, "static", tolerance=0.0)
+            new_cost = c_tuple[0]
+            
+            if new_cost < current_cost:
+                current_best = candidate
+                current_cost = new_cost
+                improvements += 1
+                
+    if verbose:
+        elapsed = time.time() - start_time
+        print(f"   > Done in {format_time(elapsed)}. Improved {improvements} pipes. Final: {current_cost/1e6:.4f} M$")
+        
     return current_best
 
 # --- REPORTING ---
 def export_solution(individual, history, inp_file, filename_prefix="final_solution"):
     print(f"\n--- Saving results to {filename_prefix}.csv ---")
     
-    # --- SILENCE BLOCK ---
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         wn = wntr.network.WaterNetworkModel(inp_file)
@@ -287,6 +261,25 @@ def run_single_trial(run_id, args):
     run_start = time.time()
     print(f"\n>>> Starting Run #{run_id + 1}/{args.runs}...")
     
+    memo = {} 
+    
+    def cached_eval(individual, generation):
+        ind_tuple = tuple(individual)
+        
+        if ind_tuple in memo:
+            return memo[ind_tuple]
+        
+        if generation < args.gen * 0.75: 
+            progress = generation / (args.gen * 0.75)
+            tol = EPSILON_START - progress * (EPSILON_START - EPSILON_END)
+        else: 
+            tol = 0.0
+            
+        fit = evaluate_network(individual, args.inp, "epsilon", generation, tol, args.gen)
+        
+        memo[ind_tuple] = fit
+        return fit
+
     if hasattr(creator, "FitnessMin"): del creator.FitnessMin
     if hasattr(creator, "Individual"): del creator.Individual
     creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
@@ -295,62 +288,57 @@ def run_single_trial(run_id, args):
     toolbox = base.Toolbox()
     n_diams = len(CONFIG["diameters_raw"])
     
-    # --- SILENCE BLOCK ---
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         wn_temp = wntr.network.WaterNetworkModel(args.inp)
         
     n_pipes = len(wn_temp.pipe_name_list)
-    
     toolbox.register("mate", tools.cxTwoPoint)
     toolbox.register("select", tools.selTournament, tournsize=3)
     toolbox.register("attr_int", random.randint, 0, n_diams-1)
 
-    # 1. POPULATION
     pop = create_mixed_population(n_pipes, n_diams, args.pop)
     
-    # 2. PRE-FLIGHT CHECK
     if run_id == 0:
         max_ind = [n_diams - 1] * n_pipes
         _, max_p = get_real_stats(max_ind, args.inp)
-        print(f"    [INFO] Feasibility Check (Max Pipes): P={max_p:.2f} m")
+        print(f"    [INFO] Max Possible Pressure (All Max Pipes): {max_p:.2f} m")
         if max_p < args.hmin:
-            print(f"    [CRITICAL WARNING] Target {args.hmin}m is IMPOSSIBLE. Max feasible is {max_p:.2f} m.")
+            print(f"    [WARNING] TARGET H_MIN={args.hmin}m IS IMPOSSIBLE! Max feasible is {max_p:.2f}m")
+            print("    Optimization will fail to find feasible solutions.")
     
     hof = tools.HallOfFame(1)
     history_log = [] 
     
-    fitnesses = [evaluate_network(ind, args.inp, "epsilon", 0, EPSILON_START, args.gen) for ind in pop]
-    for ind, fit in zip(pop, fitnesses): ind.fitness.values = fit
+    for ind in pop:
+        ind.fitness.values = cached_eval(ind, 0)
     hof.update(pop)
 
     for gen in range(args.gen):
-        if gen < args.gen * 0.75: 
-            progress = gen / (args.gen * 0.75)
-            tol = EPSILON_START - progress * (EPSILON_START - EPSILON_END)
-        else: tol = 0.0
-
         mut_prob = MUTATION_START - (gen/args.gen)*(MUTATION_START - MUTATION_END)
         toolbox.register("mutate", mutCreepInt, low=0, up=n_diams-1, indpb=mut_prob)
 
         offspring = toolbox.select(pop, len(pop))
         offspring = list(map(toolbox.clone, offspring))
+        
         for child1, child2 in zip(offspring[::2], offspring[1::2]):
             if random.random() < 0.8: toolbox.mate(child1, child2); del child1.fitness.values, child2.fitness.values
         for mutant in offspring:
             if random.random() < 0.35: toolbox.mutate(mutant); del mutant.fitness.values
         
         invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-        fitnesses = [evaluate_network(ind, args.inp, "epsilon", gen, tol, args.gen) for ind in invalid_ind]
-        for ind, fit in zip(invalid_ind, fitnesses): ind.fitness.values = fit
+        for ind in invalid_ind:
+            ind.fitness.values = cached_eval(ind, gen)
         
         pop[:] = offspring
         
-        if gen > 0 and gen % 5 == 0 and len(hof) > 0:
-            imp_ind_list = simple_descent(list(hof[0]), args.inp)
+        if gen > 0 and gen % 20 == 0 and len(hof) > 0:
+            imp_ind_list = run_local_search(list(hof[0]), args.inp, limit_pipes=20, verbose=False)
             imp_ind = creator.Individual(imp_ind_list)
-            imp_fit = evaluate_network(imp_ind, args.inp, "epsilon", gen, tol, args.gen)
+            
+            imp_fit = cached_eval(imp_ind, gen)
             imp_ind.fitness.values = imp_fit
+            
             if imp_fit[0] < hof[0].fitness.values[0]:
                 hof.clear()
                 hof.update([imp_ind])
@@ -358,6 +346,7 @@ def run_single_trial(run_id, args):
 
         best_cand = tools.selBest(pop, 1)[0]
         real_fit_tuple = evaluate_network(best_cand, args.inp, "static", gen, 0.0, args.gen) 
+        
         if real_fit_tuple[0] < hof[0].fitness.values[0]:
             nc = toolbox.clone(best_cand)
             nc.fitness.values = real_fit_tuple
@@ -382,7 +371,6 @@ def run_single_trial(run_id, args):
     print(f"    >> Run #{run_id + 1} Done ({format_time(run_time)}). Final: {real_cost/1e6:.4f} M$ | P: {min_p:.2f} m")
     
     return best_ind, real_cost, min_p, run_time, history_log
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--inp", type=str, default=DEFAULT_INP_FILE)
@@ -416,7 +404,7 @@ if __name__ == "__main__":
 
     for i in range(args.runs):
         ind, cost, pressure, duration, hist = run_single_trial(i, args)
-        polished_ind = deep_local_search(ind, args.inp, run_id_label=str(i+1))
+        polished_ind = run_local_search(ind, args.inp, limit_pipes=500, verbose=True)
         cost_pol, pressure_pol = get_real_stats(polished_ind, args.inp)
         is_feasible = (pressure_pol >= args.hmin - 0.001)
         results_summary.append({
