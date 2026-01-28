@@ -352,7 +352,8 @@ def run_single_trial(run_id, args):
             imp_fit = evaluate_network(imp_ind, args.inp, "epsilon", gen, tol, args.gen)
             imp_ind.fitness.values = imp_fit
             if imp_fit[0] < hof[0].fitness.values[0]:
-                hof[0] = imp_ind
+                hof.clear()
+                hof.update([imp_ind])
                 pop[random.randint(0, len(pop)-1)] = imp_ind
 
         best_cand = tools.selBest(pop, 1)[0]
