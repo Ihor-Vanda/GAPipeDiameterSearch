@@ -36,9 +36,14 @@ def main():
     for i in range(args.runs):
         ind, cost, p, dur, hist = optimizer.run(i, args.hmin)
         
-        print("    [Post-Process] Running Deep Local Search...")
-        limit = None if simulator.n_pipes < 200 else 500
-        polished_ind = optimizer.run_local_search(ind, limit_pipes=limit, verbose=True)
+        # --- POST-PROCESS ---
+        print("    [Post-Process] Refining Solution...")
+        
+        if simulator.n_pipes < 100:
+            polished_ind = optimizer.run_kick_and_fix(ind, iterations=100, kick_strength=3, verbose=True)
+        else:
+            limit = 500
+            polished_ind = optimizer.run_local_search(ind, limit_pipes=limit, verbose=True)
         
         final_cost, final_p = simulator.get_stats(polished_ind)
         is_feasible = (final_p >= args.hmin - 0.001)

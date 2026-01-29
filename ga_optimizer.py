@@ -1,4 +1,3 @@
-# ga_optimizer.py
 import random
 import time
 from deap import base, creator, tools
@@ -15,7 +14,6 @@ class GeneticOptimizer:
         self.memo = {} 
         self.start_time = time.time()
 
-        # DEAP setup
         if hasattr(creator, "FitnessMin"): del creator.FitnessMin
         if hasattr(creator, "Individual"): del creator.Individual
         creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
@@ -27,7 +25,6 @@ class GeneticOptimizer:
 
     def _smart_mutation(self, individual, indpb, stagnation_factor=1.0):
         effective_pb = indpb * stagnation_factor
-        
         for i in range(len(individual)):
             if random.random() < effective_pb:
                 if random.random() < 0.9: 
@@ -85,9 +82,8 @@ class GeneticOptimizer:
         for i in indices:
             if current[i] > 0:
                 cand = list(current)
-                cand[i] -= 1
+                cand[i] -= 1 
                 new_cost = self.sim.evaluate(cand, "static", tolerance=0.0)[0]
-                
                 if new_cost < current_cost:
                     current = cand
                     current_cost = new_cost
@@ -95,6 +91,42 @@ class GeneticOptimizer:
         
         if verbose: print(f"   > Done in {format_time(time.time()-start)}. Imp: {imp}. Final: {current_cost/1e6:.4f} M$")
         return current
+
+    def run_kick_and_fix(self, individual, iterations=50, kick_strength=3, verbose=True):
+        start_kf = time.time()
+        current_best = list(individual)
+        best_cost = self.sim.evaluate(current_best, "static", tolerance=0.0)[0]
+        
+        if verbose: 
+            print(f"   > Kick & Fix Strategy ({iterations} iters, strength={kick_strength})...")
+            print(f"     Start Cost: {best_cost/1e6:.4f} M$")
+
+        for i in range(iterations):
+            elapsed = time.time() - start_kf
+            avg_per_iter = elapsed / (i + 1)
+            remain_iter = iterations - (i + 1)
+            eta_kf = avg_per_iter * remain_iter
+            
+            candidate = list(current_best)
+            pipes_to_kick = random.sample(range(self.n_pipes), kick_strength)
+            for p_idx in pipes_to_kick:
+                candidate[p_idx] = random.randint(0, self.n_diams - 1)
+
+            repaired = self.run_local_search(candidate, limit_pipes=None, verbose=False)
+            repaired_cost = self.sim.evaluate(repaired, "static", tolerance=0.0)[0]
+
+            if repaired_cost < best_cost:
+                if verbose:
+                    print(f"     [Iter {i+1}/{iterations}] New Best: {best_cost/1e6:.4f} -> {repaired_cost/1e6:.4f} M$ | ETA: {format_time(eta_kf)}")
+                best_cost = repaired_cost
+                current_best = repaired
+            elif verbose and i % 10 == 0:
+                 print(f"     [Iter {i+1}/{iterations}] ... searching ... | ETA: {format_time(eta_kf)}")
+
+        if verbose:
+            print(f"   > K&F Done in {format_time(time.time()-start_kf)}. Final: {best_cost/1e6:.4f} M$")
+            
+        return current_best
 
     def run(self, run_id, h_min):
         random.seed(time.time() + run_id)
@@ -104,16 +136,10 @@ class GeneticOptimizer:
         is_small_net = self.n_pipes < 100
         
         if is_small_net:
-            ls_freq = 5
-            ls_limit = None
-            cache_enabled = False
-            tourn_size = 2
+            ls_freq = 5; ls_limit = None; cache_enabled = False; tourn_size = 2
             print(f"    [Mode] Aggressive (Small Network) | TournSize=2 | No Cache")
         else:
-            ls_freq = 20
-            ls_limit = 20
-            cache_enabled = True
-            tourn_size = 3
+            ls_freq = 20; ls_limit = 20; cache_enabled = True; tourn_size = 3
             print(f"    [Mode] Eco (Large Network) | TournSize=3 | Cache ON")
 
         self.toolbox.register("select", tools.selTournament, tournsize=tourn_size)
@@ -135,22 +161,27 @@ class GeneticOptimizer:
         stagnation_counter = 0
 
         for gen in range(self.n_gens):
+            elapsed = time.time() - self.start_time
+            gens_done = gen + 1
+            avg_time_per_gen = elapsed / gens_done
+            remaining_gens = self.n_gens - gens_done
+            eta_seconds = avg_time_per_gen * remaining_gens
+            eta_str = format_time(eta_seconds)
+
             base_mut_prob = MUTATION_START - (gen/self.n_gens)*(MUTATION_START - MUTATION_END)
-            
             current_best_cost = hof[0].fitness.values[0]
             if abs(current_best_cost - last_best_cost) < 1e-3:
                 stagnation_counter += 1
             else:
                 stagnation_counter = 0
                 last_best_cost = current_best_cost
-
+            
             stag_factor = 3.0 if stagnation_counter > 10 else 1.0
             
             self.toolbox.register("mutate", self._smart_mutation, indpb=base_mut_prob, stagnation_factor=stag_factor)
 
             offspring = self.toolbox.select(pop, len(pop))
             offspring = list(map(self.toolbox.clone, offspring))
-            
             offspring[0] = self.toolbox.clone(hof[0]) 
 
             for child1, child2 in zip(offspring[1::2], offspring[2::2]):
@@ -171,14 +202,10 @@ class GeneticOptimizer:
             if gen > 0 and gen % ls_freq == 0:
                 candidate = list(hof[0])
                 improved_cand = self.run_local_search(candidate, limit_pipes=ls_limit, verbose=False)
-                
                 imp_ind = creator.Individual(improved_cand)
                 imp_ind.fitness.values = self._cached_eval(imp_ind, gen, cache_enabled)
-                
                 if imp_ind.fitness.values[0] < hof[0].fitness.values[0]:
-                    hof.clear()
-                    hof.update([imp_ind])
-                    pop[0] = imp_ind
+                    hof.clear(); hof.update([imp_ind]); pop[0] = imp_ind
 
             best_in_pop = tools.selBest(pop, 1)[0]
             real_fit = self.sim.evaluate(best_in_pop, "static", gen, 0.0, self.n_gens)
@@ -191,9 +218,8 @@ class GeneticOptimizer:
             
             if gen % 10 == 0 or gen == self.n_gens - 1:
                 cost, p = self.sim.get_stats(hof[0])
-                elapsed = time.time() - self.start_time
                 stag_msg = " [STAGNATION]" if stagnation_counter > 10 else ""
-                print(f"    [Gen {gen:3d}] Cost={cost/1e6:.4f}M$ | P={p:.2f}m | Time={format_time(elapsed)}{stag_msg}")
+                print(f"    [Gen {gen:3d}] Cost={cost/1e6:.2f}M$ | P={p:.2f}m | Time={format_time(elapsed)} | ETA: {eta_str}{stag_msg}")
 
         best_ind = hof[0]
         cost, p = self.sim.get_stats(best_ind)
