@@ -193,7 +193,7 @@ class GeneticOptimizer:
                 cost, p = self.sim.get_stats(hof[0])
                 elapsed = time.time() - self.start_time
                 stag_msg = " [STAGNATION]" if stagnation_counter > 10 else ""
-                print(f"    [Gen {gen:3d}] Cost={cost/1e6:.2f}M$ | P={p:.2f}m | Time={format_time(elapsed)}{stag_msg}")
+                print(f"    [Gen {gen:3d}] Cost={cost/1e6:.4f}M$ | P={p:.2f}m | Time={format_time(elapsed)}{stag_msg}")
 
         best_ind = hof[0]
         cost, p = self.sim.get_stats(best_ind)
