@@ -20,40 +20,81 @@ class GeneticOptimizer:
         creator.create("Individual", list, fitness=creator.FitnessMin)
 
         self.toolbox = base.Toolbox()
-        self.toolbox.register("mate", tools.cxTwoPoint)
+        
+        # [NEW] UNIFORM CROSSOVER
+        # Для довгих хромосом (454 гени) це працює краще, ніж TwoPoint
+        # indpb=0.2 означає, що кожен ген має 20% шанс бути обміняним
+        self.toolbox.register("mate", tools.cxUniform, indpb=0.20)
+        
         self.toolbox.register("attr_int", random.randint, 0, self.n_diams-1)
 
-    def _smart_mutation(self, individual, indpb, stagnation_factor=1.0):
-        effective_pb = indpb * stagnation_factor
+    def _smart_mutation(self, individual, indpb):
         for i in range(len(individual)):
-            if random.random() < effective_pb:
-                if random.random() < 0.9: 
-                    step = random.randint(1, 2)
-                    change = step if random.random() < 0.5 else -step
-                    new_val = individual[i] + change
+            if random.random() < indpb:
+                r = random.random()
+                if r < 0.85: # [NEW] Трохи підвищили шанс "тонкого налаштування"
+                    # Creep: Може стрибнути на -2, -1, +1, +2
+                    # Більше шансів на зменшення (-), ніж на збільшення (+)
+                    step = random.choice([-2, -1, -1, 1]) 
+                    new_val = individual[i] + step
+                    
                     if new_val < 0: new_val = 0
                     elif new_val > self.n_diams - 1: new_val = self.n_diams - 1
                     individual[i] = new_val
                 else:
+                    # Random Reset
                     individual[i] = random.randint(0, self.n_diams - 1)
         return individual,
 
+    def _apply_hyper_mutation(self, population, strength=0.2):
+        genes_to_change = int(self.n_pipes * strength)
+        if genes_to_change < 1: genes_to_change = 1
+        
+        for ind in population:
+            indices = random.sample(range(self.n_pipes), genes_to_change)
+            for idx in indices:
+                ind[idx] = random.randint(0, self.n_diams - 1)
+            del ind.fitness.values
+        return population
+
     def _create_population(self):
         pop = []
-        for _ in range(int(self.pop_size * 0.1)):
-            pop.append(creator.Individual([self.n_diams - 1] * self.n_pipes))
+        
+        # [NEW] AGGRESSIVE INITIALIZATION STRATEGY
+        
+        # 1. Minimum Possible (Всі труби найтонші) - 5%
+        # Це змусить алгоритм "нарощувати" діаметри, а не зменшувати.
+        for _ in range(int(self.pop_size * 0.05)):
+            pop.append(creator.Individual([0] * self.n_pipes))
+
+        # 2. Low-End Random (Дуже дешеві) - 45%
+        # Вибираємо тільки серед перших 3-х діаметрів
+        limit_idx = min(2, self.n_diams - 1)
+        for _ in range(int(self.pop_size * 0.45)):
+             pop.append(creator.Individual([random.randint(0, limit_idx) for _ in range(self.n_pipes)]))
+
+        # 3. Median (Баланс) - 20%
         mid_idx = self.n_diams // 2
-        for _ in range(int(self.pop_size * 0.4)):
+        for _ in range(int(self.pop_size * 0.20)):
             pop.append(creator.Individual([mid_idx] * self.n_pipes))
+
+        # 4. Full Random (Для різноманітності) - 30%
         remaining = self.pop_size - len(pop)
         for _ in range(remaining):
             pop.append(creator.Individual([random.randint(0, self.n_diams-1) for _ in range(self.n_pipes)]))
+            
         return pop
 
     def _cached_eval(self, individual, gen, cache_enabled=True):
-        if gen < self.n_gens * 0.75:
-            progress = gen / (self.n_gens * 0.75)
-            tol = max(0.0, EPSILON_START - progress * (EPSILON_START - EPSILON_END))
+        # [NEW] Більш плавний Epsilon графік
+        # Даємо більше часу на "порушення правил" (90% часу замість 75%)
+        limit_gen = self.n_gens * 0.90
+        
+        if gen < limit_gen:
+            progress = gen / limit_gen
+            # Використовуємо квадратичну функцію для плавного зниження допуску
+            factor = (1.0 - progress) ** 2 
+            tol = EPSILON_START * factor
         else: 
             tol = 0.0
 
@@ -73,10 +114,16 @@ class GeneticOptimizer:
         current_cost = self.sim.evaluate(current, "static", tolerance=0.0)[0]
         
         indices = list(range(self.n_pipes))
-        if limit_pipes and limit_pipes < self.n_pipes:
-            indices = random.sample(indices, k=limit_pipes)
         
-        if verbose: print(f"   > Local Search ({len(indices)} pipes)...")
+        # [NEW] Smart Sorting for Local Search
+        # Спочатку перевіряємо ТОВСТІ труби (вони найдорожчі), потім тонкі
+        # Це дає найбільшу економію швидше
+        if limit_pipes:
+            # Сортуємо індекси: спочатку ті, де діаметр великий
+            indices.sort(key=lambda i: current[i], reverse=True)
+            indices = indices[:limit_pipes]
+        else:
+            random.shuffle(indices)
         
         imp = 0
         for i in indices:
@@ -89,128 +136,109 @@ class GeneticOptimizer:
                     current_cost = new_cost
                     imp += 1
         
-        if verbose: print(f"   > Done in {format_time(time.time()-start)}. Imp: {imp}. Final: {current_cost/1e6:.4f} M$")
+        if verbose: print(f"   > Local Search: Done in {format_time(time.time()-start)}. Imp: {imp}. Final: {current_cost/1e6:.4f} M$")
         return current
-
-    def run_kick_and_fix(self, individual, iterations=50, kick_strength=3, verbose=True):
-        start_kf = time.time()
-        current_best = list(individual)
-        best_cost = self.sim.evaluate(current_best, "static", tolerance=0.0)[0]
-        
-        if verbose: 
-            print(f"   > Kick & Fix Strategy ({iterations} iters, strength={kick_strength})...")
-            print(f"     Start Cost: {best_cost/1e6:.4f} M$")
-
-        for i in range(iterations):
-            elapsed = time.time() - start_kf
-            avg_per_iter = elapsed / (i + 1)
-            remain_iter = iterations - (i + 1)
-            eta_kf = avg_per_iter * remain_iter
-            
-            candidate = list(current_best)
-            pipes_to_kick = random.sample(range(self.n_pipes), kick_strength)
-            for p_idx in pipes_to_kick:
-                candidate[p_idx] = random.randint(0, self.n_diams - 1)
-
-            repaired = self.run_local_search(candidate, limit_pipes=None, verbose=False)
-            repaired_cost = self.sim.evaluate(repaired, "static", tolerance=0.0)[0]
-
-            if repaired_cost < best_cost:
-                if verbose:
-                    print(f"     [Iter {i+1}/{iterations}] New Best: {best_cost/1e6:.4f} -> {repaired_cost/1e6:.4f} M$ | ETA: {format_time(eta_kf)}")
-                best_cost = repaired_cost
-                current_best = repaired
-            elif verbose and i % 10 == 0:
-                 print(f"     [Iter {i+1}/{iterations}] ... searching ... | ETA: {format_time(eta_kf)}")
-
-        if verbose:
-            print(f"   > K&F Done in {format_time(time.time()-start_kf)}. Final: {best_cost/1e6:.4f} M$")
-            
-        return current_best
 
     def run(self, run_id, h_min):
         random.seed(time.time() + run_id)
         self.start_time = time.time()
         print(f"\n>>> Starting Run #{run_id + 1}...")
 
-        is_small_net = self.n_pipes < 100
+        is_small_net = self.n_pipes < 150
         
         if is_small_net:
+            # Hanoi: Частий LS, малий турнір
             ls_freq = 5; ls_limit = None; cache_enabled = False; tourn_size = 2
-            print(f"    [Mode] Aggressive (Small Network) | TournSize=2 | No Cache")
+            hyper_trigger = 10
+            print(f"    [Mode] Aggressive (Small Network) | Uniform CX")
         else:
-            ls_freq = 20; ls_limit = 20; cache_enabled = True; tourn_size = 3
-            print(f"    [Mode] Eco (Large Network) | TournSize=3 | Cache ON")
+            # Balerma: LS кожні 10 (частіше!), турнір 2 (менший тиск, більше різноманітності)
+            ls_freq = 10; ls_limit = 50; cache_enabled = True; tourn_size = 2
+            hyper_trigger = 12 # [NEW] Швидше реагуємо на застій (було 20)
+            print(f"    [Mode] Deep Dive (Large Network) | Uniform CX | Smart Init")
 
         self.toolbox.register("select", tools.selTournament, tournsize=tourn_size)
 
-        max_ind = [self.n_diams - 1] * self.n_pipes
-        _, max_p = self.sim.get_stats(max_ind)
-        print(f"    [INFO] Feasibility Check: P={max_p:.2f} m")
-        if max_p < h_min:
-            print(f"    [CRITICAL] Target {h_min}m IMPOSSIBLE. Max is {max_p:.2f}m")
-
         pop = self._create_population()
         hof = tools.HallOfFame(1)
-        history = []
-
+        
         for ind in pop: ind.fitness.values = self._cached_eval(ind, 0, cache_enabled)
         hof.update(pop)
 
         last_best_cost = hof[0].fitness.values[0]
         stagnation_counter = 0
+        history = []
 
         for gen in range(self.n_gens):
             elapsed = time.time() - self.start_time
-            gens_done = gen + 1
-            avg_time_per_gen = elapsed / gens_done
-            remaining_gens = self.n_gens - gens_done
-            eta_seconds = avg_time_per_gen * remaining_gens
-            eta_str = format_time(eta_seconds)
+            if gen > 0:
+                eta_str = format_time((elapsed / gen) * (self.n_gens - gen))
+            else: eta_str = "..."
 
-            base_mut_prob = MUTATION_START - (gen/self.n_gens)*(MUTATION_START - MUTATION_END)
-            current_best_cost = hof[0].fitness.values[0]
-            if abs(current_best_cost - last_best_cost) < 1e-3:
+            # Anti-Stagnation
+            current_best = hof[0].fitness.values[0]
+            if abs(current_best - last_best_cost) < 1e-4:
                 stagnation_counter += 1
             else:
                 stagnation_counter = 0
-                last_best_cost = current_best_cost
-            
-            stag_factor = 3.0 if stagnation_counter > 10 else 1.0
-            
-            self.toolbox.register("mutate", self._smart_mutation, indpb=base_mut_prob, stagnation_factor=stag_factor)
+                last_best_cost = current_best
 
-            offspring = self.toolbox.select(pop, len(pop))
-            offspring = list(map(self.toolbox.clone, offspring))
-            offspring[0] = self.toolbox.clone(hof[0]) 
+            # Mutation Params
+            base_mut_prob = MUTATION_START - (gen/self.n_gens)*(MUTATION_START - MUTATION_END)
+            
+            # --- HYPER MUTATION LOGIC ---
+            triggered_hyper = False
+            if stagnation_counter > hyper_trigger:
+                print(f"    [Gen {gen}] ⚡ HYPER-MUTATION! (Stag: {stagnation_counter})")
+                elite = self.toolbox.clone(hof[0])
+                pop = self._apply_hyper_mutation(pop, strength=0.25) # 25% генів
+                pop[0] = elite
+                for ind in pop: 
+                    if not ind.fitness.valid:
+                        ind.fitness.values = self._cached_eval(ind, gen, cache_enabled)
+                stagnation_counter = 0
+                triggered_hyper = True
+            
+            elif stagnation_counter > 5:
+                base_mut_prob = 0.8 # Тимчасово підвищуємо мутацію
 
-            for child1, child2 in zip(offspring[1::2], offspring[2::2]):
-                if random.random() < 0.8: 
-                    self.toolbox.mate(child1, child2)
-                    del child1.fitness.values, child2.fitness.values
-            
-            for i in range(1, len(offspring)):
-                if random.random() < 0.35: 
-                    self.toolbox.mutate(offspring[i])
-                    del offspring[i].fitness.values
-            
-            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-            for ind in invalid_ind: ind.fitness.values = self._cached_eval(ind, gen, cache_enabled)
-            
-            pop[:] = offspring
+            self.toolbox.register("mutate", self._smart_mutation, indpb=base_mut_prob)
 
+            if not triggered_hyper:
+                offspring = self.toolbox.select(pop, len(pop))
+                offspring = list(map(self.toolbox.clone, offspring))
+                offspring[0] = self.toolbox.clone(hof[0])
+
+                # Uniform Crossover
+                for child1, child2 in zip(offspring[1::2], offspring[2::2]):
+                    if random.random() < 0.9: # Високий шанс схрещування
+                        self.toolbox.mate(child1, child2)
+                        del child1.fitness.values, child2.fitness.values
+                
+                for i in range(1, len(offspring)):
+                    if random.random() < 0.4: # Високий шанс мутації
+                        self.toolbox.mutate(offspring[i])
+                        del offspring[i].fitness.values
+                
+                invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+                for ind in invalid_ind: ind.fitness.values = self._cached_eval(ind, gen, cache_enabled)
+                pop[:] = offspring
+
+            # Frequent Lite Local Search
             if gen > 0 and gen % ls_freq == 0:
-                candidate = list(hof[0])
-                improved_cand = self.run_local_search(candidate, limit_pipes=ls_limit, verbose=False)
-                imp_ind = creator.Individual(improved_cand)
+                cand = list(hof[0])
+                # Limit 50, але найдорожчих труб!
+                improved = self.run_local_search(cand, limit_pipes=ls_limit, verbose=False)
+                imp_ind = creator.Individual(improved)
                 imp_ind.fitness.values = self._cached_eval(imp_ind, gen, cache_enabled)
                 if imp_ind.fitness.values[0] < hof[0].fitness.values[0]:
                     hof.clear(); hof.update([imp_ind]); pop[0] = imp_ind
 
-            best_in_pop = tools.selBest(pop, 1)[0]
-            real_fit = self.sim.evaluate(best_in_pop, "static", gen, 0.0, self.n_gens)
+            # Update HOF
+            best_pop = tools.selBest(pop, 1)[0]
+            real_fit = self.sim.evaluate(best_pop, "static", gen, 0.0, self.n_gens)
             if real_fit[0] < hof[0].fitness.values[0]:
-                nc = self.toolbox.clone(best_in_pop)
+                nc = self.toolbox.clone(best_pop)
                 nc.fitness.values = real_fit
                 hof.clear(); hof.update([nc])
 
@@ -218,8 +246,8 @@ class GeneticOptimizer:
             
             if gen % 10 == 0 or gen == self.n_gens - 1:
                 cost, p = self.sim.get_stats(hof[0])
-                stag_msg = " [STAGNATION]" if stagnation_counter > 10 else ""
-                print(f"    [Gen {gen:3d}] Cost={cost/1e6:.2f}M$ | P={p:.2f}m | Time={format_time(elapsed)} | ETA: {eta_str}{stag_msg}")
+                stag_info = f" [Stag:{stagnation_counter}]" if stagnation_counter > 3 else ""
+                print(f"    [Gen {gen:3d}] Cost={cost/1e6:.2f}M$ | P={p:.2f}m | Time={format_time(elapsed)} | ETA: {eta_str}{stag_info}")
 
         best_ind = hof[0]
         cost, p = self.sim.get_stats(best_ind)

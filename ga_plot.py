@@ -23,8 +23,9 @@ def plot_convergence(history, filename="convergence.png"):
     plt.close()
     print(f"[Plot] Saved convergence graph: {filename}")
 
+
 def plot_network_map(individual, inp_file, filename="solution_map.png"):
-    print("[Plot] Generating map with node labels...")
+    print("[Plot] Generating map with adaptive labels...")
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -38,28 +39,36 @@ def plot_network_map(individual, inp_file, filename="solution_map.png"):
         
         attr_series = pd.Series(pipe_diams)
 
-        plt.figure(figsize=(12, 10))
+        num_nodes = len(wn.node_name_list)
+        is_large_net = num_nodes > 100
+
+        node_size = 5 if is_large_net else 20
+        font_size = 4 if is_large_net else 8
+        link_width = 1.5 if is_large_net else 2.5
+        
+        plt.figure(figsize=(14, 12))
         ax = plt.gca()
         
         unique_diams = sorted(list(set(diams_raw)))
         cmap_object = plt.get_cmap("jet")
         colors = cmap_object(np.linspace(0, 1, len(unique_diams)))
         
-        wntr.graphics.plot_network(wn, link_attribute=attr_series, node_size=20, 
-                                   link_width=2.5, link_cmap=cmap_object,
+        wntr.graphics.plot_network(wn, link_attribute=attr_series, 
+                                   node_size=node_size, 
+                                   link_width=link_width, 
+                                   link_cmap=cmap_object,
                                    add_colorbar=False, title=f"Optimized Solution", ax=ax)
         
-        num_nodes = len(wn.node_name_list)
-        font_size = 8 if num_nodes < 100 else 5
+        if num_nodes < 1000:
+            for node_name in wn.node_name_list:
+                node = wn.get_node(node_name)
+                x, y = node.coordinates
+                if x is not None and y is not None:
+                    plt.text(x, y, s=node_name, color='white', fontsize=font_size, 
+                             fontweight='bold', ha='center', va='center', zorder=10,
+                             bbox=dict(boxstyle="circle,pad=0.1", fc="black", ec="none", alpha=0.6))
         
-        for node_name in wn.node_name_list:
-            node = wn.get_node(node_name)
-            x, y = node.coordinates
-            if x is not None and y is not None:
-                plt.text(x, y, s=node_name, color='white', fontsize=font_size, 
-                         fontweight='bold', ha='center', va='center', zorder=10,
-                         bbox=dict(boxstyle="circle,pad=0.2", fc="black", ec="none", alpha=0.7))
-        
+        # Легенда
         patches = [mpatches.Patch(color=colors[i], label=f"{d}") for i, d in enumerate(unique_diams)]
         plt.legend(handles=patches, title=f"Diameters ({CONFIG['unit_system']})", 
                    bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
