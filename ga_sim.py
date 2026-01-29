@@ -22,6 +22,7 @@ class NetworkSimulator:
             diams_m = CONFIG["diameters_m"]
             costs = CONFIG["costs"]
             h_min = CONFIG["h_min"]
+            h_max = CONFIG.get("h_max", 1000.0)
 
             for i, pipe_name in enumerate(self.pipe_names):
                 idx = individual[i]
@@ -36,12 +37,18 @@ class NetworkSimulator:
             
             pressures = results.node['pressure'].iloc[-1]
             violation = 0.0
-            effective_limit = h_min - tolerance
+            
+            effective_min = h_min - tolerance
+            effective_max = h_max + tolerance
             
             for node in self.junction_names:
                 p = pressures[node]
-                if p < effective_limit:
-                    violation += (effective_limit - p)
+                
+                if p < effective_min:
+                    violation += (effective_min - p)
+                
+                if p > effective_max:
+                    violation += (p - effective_max)
 
             penalty = 0.0
             if violation > 0:
@@ -67,8 +74,11 @@ class NetworkSimulator:
             try:
                 sim = wntr.sim.EpanetSimulator(wn)
                 results = sim.run_sim()
-                min_p = results.node['pressure'].iloc[-1].loc[self.junction_names].min()
+                pressures = results.node['pressure'].iloc[-1].loc[self.junction_names]
+                min_p = pressures.min()
+                max_p = pressures.max()
             except:
                 min_p = -999.0
+                max_p = 9999.0
             
-            return total_cost, min_p
+            return total_cost, min_p, max_p
