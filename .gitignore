@@ -1,2 +1,4 @@
 temp.*
 __pycache__/
+temp_sim/
+_temp_sim_data/

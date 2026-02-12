@@ -3,9 +3,9 @@ import sys
 import pandas as pd
 from ga_config import CONFIG
 
-def load_config(cost_file, h_min, units):
+def load_config(cost_file, h_min, units, silent=False):
     if not os.path.exists(cost_file):
-        print(f"[ERROR] Cost file '{cost_file}' not found.")
+        if not silent: print(f"[ERROR] Cost file '{cost_file}' not found.")
         sys.exit(1)
     
     try:
@@ -26,16 +26,17 @@ def load_config(cost_file, h_min, units):
         
         if units == "mm":
             CONFIG["diameters_m"] = [d / 1000.0 for d in df[diam_col]]
-            print("[Config] Units: Millimeters (converted to meters / 1000)")
+            if not silent: print("[Config] Units: Millimeters (converted to meters / 1000)")
         else:
             CONFIG["diameters_m"] = [d * 0.0254 for d in df[diam_col]]
-            print("[Config] Units: Inches (converted to meters * 0.0254)")
+            if not silent: print("[Config] Units: Inches (converted to meters * 0.0254)")
             
         CONFIG["costs"] = dict(zip(df[diam_col], df[cost_col]))
         CONFIG["h_min"] = h_min
         CONFIG["unit_system"] = units
-        print(f"[Config] Loaded {len(CONFIG['diameters_raw'])} pipe types.")
         
+        if not silent: print(f"[Config] Loaded {len(CONFIG['diameters_raw'])} pipe types.")
+            
     except Exception as e:
-        print(f"[Error] Failed to load config: {e}")
+        if not silent: print(f"[ERROR] Failed to load costs: {e}")
         sys.exit(1)

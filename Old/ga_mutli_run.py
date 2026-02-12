@@ -2,7 +2,6 @@ import os
 import sys
 import warnings
 
-# --- HARD SILENCE BLOCK ---
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
     os.environ["PYTHONWARNINGS"] = "ignore"
@@ -18,13 +17,10 @@ import logging
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
-# Глушимо WNTR
 wntr_logger = logging.getLogger('wntr')
 wntr_logger.setLevel(logging.CRITICAL)
 
-# ==========================================
-#        DEFAULT CONFIGURATION
-# ==========================================
+
 DEFAULT_INP_FILE = "InputData/Hanoi/Hanoi.inp"
 DEFAULT_COST_FILE = "InputData/Hanoi/costs.csv"
 DEFAULT_POPSIZE = 100
@@ -49,10 +45,6 @@ def format_time(seconds):
     if seconds < 60: return f"{seconds:.1f}s"
     elif seconds < 3600: return f"{int(seconds//60)}m {int(seconds%60)}s"
     else: return f"{int(seconds//3600)}h {int((seconds%3600)//60)}m"
-
-# ==========================================
-#           DATA MANAGEMENT
-# ==========================================
 
 def load_config(cost_file, h_min, units):
     if not os.path.exists(cost_file):
@@ -90,10 +82,6 @@ def load_config(cost_file, h_min, units):
     except Exception as e:
         print(f"[Error] Failed to load config: {e}")
         sys.exit(1)
-
-# ==========================================
-#           CORE FUNCTIONS
-# ==========================================
 
 def evaluate_network(individual, inp_file, strategy="static", gen=0, tolerance=0.0, total_gens=100):
     with warnings.catch_warnings():
@@ -250,7 +238,6 @@ def plot_network_map(individual, inp_file, filename="solution_map.png"):
             
         diams_raw = CONFIG["diameters_raw"]
         
-        # Підготовка даних для труб
         pipe_diams = {}
         for i, pipe_name in enumerate(wn.pipe_name_list):
             idx = individual[i]
@@ -263,22 +250,18 @@ def plot_network_map(individual, inp_file, filename="solution_map.png"):
         
         unique_diams = sorted(list(set(diams_raw)))
         
-        # Виправлення для нових версій matplotlib (об'єкт cmap)
         cmap_object = plt.get_cmap("jet")
         colors = cmap_object(np.linspace(0, 1, len(unique_diams)))
         
-        # 1. Малюємо труби та вузли
         wntr.graphics.plot_network(wn, 
                                    link_attribute=attr_series, 
-                                   node_size=20, # Трохи більші вузли
+                                   node_size=20, 
                                    link_width=2.5, 
                                    link_cmap=cmap_object,
                                    add_colorbar=False,
                                    title=f"Optimized Solution", 
                                    ax=ax)
         
-        # 2. ДОДАЄМО НАЗВИ ВУЗЛІВ (Labels)
-        # Адаптивний шрифт: якщо вузлів багато - шрифт менший
         num_nodes = len(wn.node_name_list)
         font_size = 8 if num_nodes < 100 else 5
         
@@ -286,17 +269,15 @@ def plot_network_map(individual, inp_file, filename="solution_map.png"):
             node = wn.get_node(node_name)
             x, y = node.coordinates
             
-            # Малюємо мітку тільки якщо є координати
             if x is not None and y is not None:
                 plt.text(x, y, s=node_name, 
                          color='white', 
                          fontsize=font_size, 
                          fontweight='bold', 
                          ha='center', va='center', 
-                         zorder=10, # Щоб текст був ПОВЕРХ труб
+                         zorder=10,
                          bbox=dict(boxstyle="circle,pad=0.2", fc="black", ec="none", alpha=0.7))
         
-        # Легенда
         patches = [mpatches.Patch(color=colors[i], label=f"{d}") for i, d in enumerate(unique_diams)]
         plt.legend(handles=patches, title=f"Diameters ({CONFIG['unit_system']})", 
                    bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
@@ -309,8 +290,6 @@ def plot_network_map(individual, inp_file, filename="solution_map.png"):
     except Exception as e:
         print(f"\n[PLOT ERROR] Failed to generate map.")
         print(f"Error details: {e}")
-        # import traceback
-        # traceback.print_exc()
 
 def export_solution(individual, history, inp_file, filename_prefix="final_solution"):
     print(f"\n--- Saving results ---")
@@ -332,7 +311,6 @@ def export_solution(individual, history, inp_file, filename_prefix="final_soluti
         })
     pd.DataFrame(pipe_data).to_csv(f"{filename_prefix}.csv", index=False)
     
-    # Generate Plots
     plot_convergence(history, f"{filename_prefix}_convergence.png")
     plot_network_map(individual, inp_file, f"{filename_prefix}_map.png")
 
@@ -345,20 +323,17 @@ def run_single_trial(run_id, args):
     run_start = time.time()
     print(f"\n>>> Starting Run #{run_id + 1}/{args.runs}...")
     
-    # --- AUTO-TUNE SETTINGS ---
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         wn_check = wntr.network.WaterNetworkModel(args.inp)
         n_pipes_total = len(wn_check.pipe_name_list)
 
-    # Якщо мережа мала (Hanoi, 34 труби) - Агресивний режим
     if n_pipes_total < 100:
-        LS_FREQ = 5          # Кожні 5 поколінь
-        LS_LIMIT = None      # Перевіряти ВСІ труби
-        CACHE_ENABLED = False # Кешування на малих мережах іноді заважає вийти з ям
+        LS_FREQ = 5       
+        LS_LIMIT = None    
+        CACHE_ENABLED = False 
         print(f"    [Mode] Aggressive (Small Network: {n_pipes_total} pipes)")
     else:
-        # Для L-Town - Економний режим
         LS_FREQ = 20
         LS_LIMIT = 20
         CACHE_ENABLED = True
@@ -430,7 +405,6 @@ def run_single_trial(run_id, args):
         
         pop[:] = offspring
         
-        # --- ADAPTIVE LOCAL SEARCH ---
         if gen > 0 and gen % LS_FREQ == 0 and len(hof) > 0:
             imp_ind_list = run_local_search(list(hof[0]), args.inp, limit_pipes=LS_LIMIT, verbose=False)
             imp_ind = creator.Individual(imp_ind_list)
@@ -499,7 +473,6 @@ if __name__ == "__main__":
     for i in range(args.runs):
         ind, cost, pressure, duration, hist = run_single_trial(i, args)
         
-        # Smart Polish: All pipes for small nets, 500 for large
         wn_tmp = wntr.network.WaterNetworkModel(args.inp)
         polish_limit = None if len(wn_tmp.pipe_name_list) < 200 else 500
         
