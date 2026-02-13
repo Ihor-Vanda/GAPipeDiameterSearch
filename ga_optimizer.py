@@ -300,6 +300,27 @@ class GeneticOptimizer:
         self.start_time = time.time()
         print(f"\n>>> Starting Run #{run_id + 1}...")
 
+        # --- DIAGNOSTICS BLOCK (Відновлено) ---
+        print("\n    [DIAGNOSTICS] Network Bounds:")
+        
+        # 1. MIN CONFIG (Найдешевша, усі труби = 0)
+        min_ind = [0] * self.n_pipes
+        min_cost, min_p_min, min_p_max = self.sim.get_stats(min_ind)
+        print(f"    1. CHEAPEST (All Min): Cost={min_cost/1e6:.4f}M$ | P=[{min_p_min:.2f} .. {min_p_max:.2f}]m")
+        
+        # 2. MAX CONFIG (Найдорожча, усі труби = Max)
+        max_ind = [self.n_diams - 1] * self.n_pipes
+        max_cost, max_p_min, max_p_max = self.sim.get_stats(max_ind)
+        print(f"    2. ROBUST   (All Max): Cost={max_cost/1e6:.4f}M$ | P=[{max_p_min:.2f} .. {max_p_max:.2f}]m")
+
+        # Перевірка на можливість рішення
+        if max_p_min < h_min:
+             print(f"    [CRITICAL WARNING] Solution IMPOSSIBLE! Max pressure {max_p_min:.2f}m < Target {h_min}m")
+        elif min_p_min >= h_min:
+             print(f"    [INFO] Trivial solution! Cheapest pipes already satisfy pressure.")
+        print("-" * 50)
+        # --------------------------------------
+
         CONFIG['h_min'] = h_min 
         current_pf = self.HEAVY_PF
         start_eps = h_min * 0.50 
