@@ -300,27 +300,6 @@ class GeneticOptimizer:
         self.start_time = time.time()
         print(f"\n>>> Starting Run #{run_id + 1}...")
 
-        # --- DIAGNOSTICS BLOCK (Відновлено) ---
-        print("\n    [DIAGNOSTICS] Network Bounds:")
-        
-        # 1. MIN CONFIG (Найдешевша, усі труби = 0)
-        min_ind = [0] * self.n_pipes
-        min_cost, min_p_min, min_p_max = self.sim.get_stats(min_ind)
-        print(f"    1. CHEAPEST (All Min): Cost={min_cost/1e6:.4f}M$ | P=[{min_p_min:.2f} .. {min_p_max:.2f}]m")
-        
-        # 2. MAX CONFIG (Найдорожча, усі труби = Max)
-        max_ind = [self.n_diams - 1] * self.n_pipes
-        max_cost, max_p_min, max_p_max = self.sim.get_stats(max_ind)
-        print(f"    2. ROBUST   (All Max): Cost={max_cost/1e6:.4f}M$ | P=[{max_p_min:.2f} .. {max_p_max:.2f}]m")
-
-        # Перевірка на можливість рішення
-        if max_p_min < h_min:
-             print(f"    [CRITICAL WARNING] Solution IMPOSSIBLE! Max pressure {max_p_min:.2f}m < Target {h_min}m")
-        elif min_p_min >= h_min:
-             print(f"    [INFO] Trivial solution! Cheapest pipes already satisfy pressure.")
-        print("-" * 50)
-        # --------------------------------------
-
         CONFIG['h_min'] = h_min 
         current_pf = self.HEAVY_PF
         start_eps = h_min * 0.50 
@@ -352,7 +331,9 @@ class GeneticOptimizer:
         current_mutation_rate = 0.05
         
         consecutive_fails = 0
+        MAX_TOTAL_SHOCKS = 5
         MAX_FAILS = 3 
+        record_at_shock_start = float('inf')
         
         epsilon_registry = {} 
         global_valid_cost = float('inf')
@@ -361,7 +342,7 @@ class GeneticOptimizer:
         self.toolbox.register("mutate", self._smart_mutation, indpb=current_mutation_rate)
 
         while (gen < self.n_gens) or (shock_active or cooldown_active) or (current_epsilon == 0.0 and consecutive_fails < MAX_FAILS):
-            if gen > self.n_gens * 1.5: break
+            if gen > self.n_gens * 5: break
 
             elapsed = time.time() - self.start_time
             if gen > 0:
@@ -458,8 +439,12 @@ class GeneticOptimizer:
                         pop = self._inject_diversity(pop, ratio=0.25)
 
                     elif current_epsilon == 0.0:
+                        if shock_triggered_count >= MAX_TOTAL_SHOCKS:
+                            print(f"    [Auto-Stop] 🛑 Reached max total shocks ({MAX_TOTAL_SHOCKS}). Stopping.")
+                            break
+                        
                         if consecutive_fails >= MAX_FAILS:
-                            print(f"    [Auto-Stop] 🛑 Reached limit of {MAX_FAILS} failed shocks. Stopping.")
+                            print(f"    [Auto-Stop] 🛑 Too many consecutive fails ({consecutive_fails}). Stopping.")
                             break
 
                         if stagnation_counter > 60 and expansions_used < 2:
@@ -468,7 +453,8 @@ class GeneticOptimizer:
                              self._invalidate_fitness(pop, hof); continue
 
                         shock_active = True; shock_triggered_count += 1
-                        shock_val = shock_levels[(shock_triggered_count - 1) % len(shock_levels)]
+                        record_at_shock_start = global_valid_cost
+                        shock_val = shock_levels[(shock_triggered_count - 1) % len(shock_levels)]    
                         
                         shock_duration = 40 + int(self.n_vars * 0.25)
                         shock_duration = max(50, min(300, shock_duration))
@@ -494,8 +480,8 @@ class GeneticOptimizer:
                     self._invalidate_fitness(pop, hof); hof.clear(); hof.update(pop)
 
             elif cooldown_active:
-                status_msg = f"COOLING (BAN {banned_legacy_cost/1e6:.1f})" if banned_legacy_cost else "COOLING"
-                if stagnation_counter > 40:
+                status_msg = f"COOLING (BAN {banned_legacy_cost/1e6:.4f})" if banned_legacy_cost else "COOLING"
+                if stagnation_counter > 50:
                     cooldown_idx += 1
                     if cooldown_idx < len(cooldown_steps):
                         current_epsilon = cooldown_steps[cooldown_idx]
@@ -513,21 +499,19 @@ class GeneticOptimizer:
                              pop[0] = creator.Individual(rep_genes)
                         del pop[0].fitness.values
                     else:
-                        cooldown_active = False; current_epsilon = 0.0; banned_legacy_cost = None 
-                        print(f"    [Cooldown] ✅ Soft Landing complete (0.0m).")
+                        cooldown_active = False; current_epsilon = 0.0
+                        banned_legacy_cost = None
                         
-                        if hof[0].fitness.valid:
-                            current_val = hof[0].fitness.values[0]
+                        current_best_fitness = hof[0].fitness.values[0]
+                        
+                        if global_valid_cost < record_at_shock_start:
+                            consecutive_fails = 0
+                            print(f"    [Cooldown] 🚀 NEW RECORD confirmed! ({global_valid_cost/1e6:.4f}M$). Strikes reset.")
                         else:
-                            current_val, _, _, _ = self._get_stats(hof[0])
+                            consecutive_fails += 1
+                            print(f"    [Cooldown] 📉 No new record. Strike {consecutive_fails}/{MAX_FAILS}.")
 
-                        if current_val < (banned_legacy_cost * 0.9999):
-                             consecutive_fails = 0
-                             print(f"    [Strike] ✅ Improvement detected! ({banned_legacy_cost/1e6:.4f} -> {current_val/1e6:.4f}M$). Strikes reset.")
-                        else:
-                             consecutive_fails += 1
-                             print(f"    [Strike] ❌ No significant improvement over previous best ({banned_legacy_cost/1e6:.4f}M$). Strikes: {consecutive_fails}/{MAX_FAILS}")
-                        
+                        print(f"    [Cooldown] ✅ Soft Landing complete (0.0m).")
                         self._invalidate_fitness(pop, hof)
 
             # --- 3. EVALUATION ---

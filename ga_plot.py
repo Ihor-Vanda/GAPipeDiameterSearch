@@ -50,12 +50,15 @@ def plot_network_map(individual, inp_file, filename="solution_map.png"):
         
         attr_series = pd.Series(pipe_diams)
         
-        plt.figure(figsize=(12, 10))
+        plt.figure(figsize=(20, 15), dpi=300)
         
-    
-        wntr.graphics.plot_network(wn, link_attribute=attr_series, node_size=15, 
-                                   link_width=2, link_cmap=plt.cm.viridis, 
+        wntr.graphics.plot_network(wn, 
+                                   link_attribute=attr_series, 
+                                   node_size=2, 
+                                   link_width=1.5, 
+                                   link_cmap=plt.cm.viridis, 
                                    add_colorbar=False, 
+                                   node_range=[0, 0],
                                    title="Optimized Pipe Diameters")
         
         unique_diams = sorted(list(set(diams_raw)))
@@ -75,7 +78,7 @@ def plot_network_map(individual, inp_file, filename="solution_map.png"):
         plt.tight_layout()
         
         os.makedirs(os.path.dirname(filename), exist_ok=True)
-        plt.savefig(filename, dpi=300)
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
         plt.close()
         print(f"[Plot] Saved network map: {filename}")
         
