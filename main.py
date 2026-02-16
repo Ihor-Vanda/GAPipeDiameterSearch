@@ -15,6 +15,8 @@ from ga_data import load_config
 from water_sim import WaterSimulator
 from ga_optimizer import GeneticOptimizer
 from ga_plot import plot_convergence, plot_network_map, export_solution
+from ga_utils import DualLogger
+from datetime import datetime
 
 silence_warnings()
 
@@ -84,6 +86,16 @@ def clean_all_temp():
             try: shutil.rmtree(root, ignore_errors=True)
             except: pass
 
+def setup_run_directory(base_dir="OutputData"):
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    
+    run_dir = os.path.join(base_dir, timestamp)
+    
+    os.makedirs(run_dir, exist_ok=True)
+    
+    print(f"[System] Created new output directory: {run_dir}")
+    return run_dir
+
 def main():
     multiprocessing.freeze_support()
 
@@ -107,6 +119,14 @@ def main():
 
     main_proc_temp = os.path.join(get_temp_root(), "main_process")
     os.makedirs(main_proc_temp, exist_ok=True)
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    log_file = f"OutputData/logs/run_{timestamp}.txt"
+    
+    sys.stdout = DualLogger(log_file)
+    sys.stderr = sys.stdout
+    
+    print(f"[System] Log file initiated: {log_file}")
 
     print("[System] Loading configuration in Main Process...")
     try:
@@ -127,7 +147,7 @@ def main():
         traceback.print_exc()
         return
 
-    base_dir = "OutputData"
+    base_dir = setup_run_directory()
     os.makedirs(os.path.join(base_dir, "plots"), exist_ok=True)
     os.makedirs(os.path.join(base_dir, "tables"), exist_ok=True)
     

@@ -331,7 +331,7 @@ class GeneticOptimizer:
         current_mutation_rate = 0.05
         
         consecutive_fails = 0
-        MAX_TOTAL_SHOCKS = 5
+        MAX_TOTAL_SHOCKS = 10
         MAX_FAILS = 3 
         record_at_shock_start = float('inf')
         
@@ -405,6 +405,16 @@ class GeneticOptimizer:
                 new_ind = creator.Individual(squeezed_cand)
                 fit_val = self._cached_eval(new_ind, gen, current_pf, current_epsilon)
                 new_ind.fitness.values = fit_val
+                
+                sq_cost, sq_p, _, _ = self.sim.get_stats(new_ind)
+
+                if sq_p >= (h_min - 0.01):
+                    if sq_cost < global_valid_cost:
+                        print(f"    [Record] 🏆 New Global Best (from Squeeze): {sq_cost/1e6:.4f}M$ (Valid)")
+                        global_valid_cost = sq_cost
+                        global_valid_ind = creator.Individual(new_ind)
+                        consecutive_fails = 0
+
                 if new_ind.fitness.values[0] < hof[0].fitness.values[0]:
                     print(f"    [Optimization] 📉 Squeeze: {hof[0].fitness.values[0]/1e6:.4f}M -> {new_ind.fitness.values[0]/1e6:.4f}M")
                     hof.update([new_ind]); pop[0] = new_ind
