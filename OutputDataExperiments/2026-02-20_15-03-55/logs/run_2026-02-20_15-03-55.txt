@@ -1,0 +1,419 @@
+[System] Log file initiated: OutputDataExperiments\2026-02-20_15-03-55/logs/run_2026-02-20_15-03-55.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+[System] Initializing 16 parallel workers (Strict Isolation)...
+
+--- [System] Auto-Configuration ---
+[Auto-Config] Population: 200
+[Config] Max Generations: 150
+[Config] Mode: Deep Dive with post shock
+[Config] Penalties: Linear (Factor=669067)
+-----------------------------------
+
+
+>>> Starting Run #1...
+    [Config] Init: RANDOM | Eps: False | Shocks: False | Expand: False | Graphs: False
+    [Warmup] 🎲 Using PURE RANDOM strategy...
+    [Warmup] ✅ Generated 200 items. Valid initial solutions: 200
+    [Gen    0] Cost=4.8658M$ | P=-274.21m | Eps=0.000 | Sims=402 | INVALID (PF↑) | Time: 2.9s (ETA: ...)
+    [Gen   10] Cost=5.5902M$ | P=-210.35m | Eps=0.000 | Sims=2395 | INVALID (PF↑) | Time: 8.4s (ETA: ...)
+    [Gen   20] Cost=6.3575M$ | P=-60.31m | Eps=0.000 | Sims=4386 | INVALID (PF↑) | Time: 13.2s (ETA: ...)
+    [Gen   30] Cost=6.5725M$ | P=-4.95m | Eps=0.000 | Sims=6387 | INVALID (PF↑) | Time: 18.6s (ETA: 1m 14s)
+    [Gen   40] Cost=7.1995M$ | P=14.70m | Eps=0.000 | Sims=8386 | INVALID (PF↑) | Time: 23.2s (ETA: 1m 3s)
+    [Gen   50] Cost=6.8356M$ | P=16.73m | Eps=0.000 | Sims=10377 | INVALID (PF↑) | Time: 28.6s (ETA: 57.2s)
+    [Record] 🏆 New Global Best: 8.0438M$ (Valid)
+    [Gen   60] Cost=7.3361M$ | P=30.10m | Eps=0.000 | Sims=12310 | OK | Time: 33.6s (ETA: 50.4s)
+    [Record] 🏆 New Global Best: 7.3361M$ (Valid)
+    [Record] 🏆 New Global Best: 7.2673M$ (Valid)
+    [Record] 🏆 New Global Best: 6.8447M$ (Valid)
+    [Gen   70] Cost=6.8447M$ | P=32.23m | Eps=0.000 | Sims=14100 | OK | Time: 38.8s (ETA: 44.4s)
+    [Record] 🏆 New Global Best: 6.7521M$ (Valid)
+    [Record] 🏆 New Global Best: 6.7032M$ (Valid)
+    [Gen   80] Cost=6.7032M$ | P=31.22m | Eps=0.000 | Sims=15896 | OK | Time: 43.6s (ETA: 38.2s)
+    [Record] 🏆 New Global Best: 6.6785M$ (Valid)
+    [Record] 🏆 New Global Best: 6.6582M$ (Valid)
+    [Gen   90] Cost=6.6582M$ | P=30.72m | Eps=0.000 | Sims=17723 | OK | Time: 48.6s (ETA: 32.4s)
+    [Record] 🏆 New Global Best: 6.6239M$ (Valid)
+    [Record] 🏆 New Global Best: 6.5961M$ (Valid)
+    [Record] 🏆 New Global Best: 6.5942M$ (Valid)
+    [Record] 🏆 New Global Best: 6.5870M$ (Valid)
+    [Gen  100] Cost=6.5696M$ | P=30.44m | Eps=0.000 | Sims=19510 | OK | Time: 54.3s (ETA: 27.2s)
+    [Record] 🏆 New Global Best: 6.5696M$ (Valid)
+    [Record] 🏆 New Global Best: 6.4962M$ (Valid)
+    [Gen  110] Cost=6.4962M$ | P=30.30m | Eps=0.000 | Sims=21305 | OK | Time: 59.4s (ETA: 21.6s)
+    [Gen  120] Cost=6.4962M$ | P=30.30m | Eps=0.000 | Sims=23129 | OK | Time: 1m 4s (ETA: 16.1s)
+    [Record] 🏆 New Global Best: 6.4722M$ (Valid)
+    [Gen  130] Cost=6.3905M$ | P=30.28m | Eps=0.000 | Sims=24938 | OK | Time: 1m 8s (ETA: 10.6s)
+    [Record] 🏆 New Global Best: 6.3905M$ (Valid)
+    [Gen  140] Cost=6.3905M$ | P=30.15m | Eps=0.000 | Sims=26742 | OK | Time: 1m 14s (ETA: 5.3s)
+    [Gen  150] Cost=6.3904M$ | P=30.15m | Eps=0.000 | Sims=28557 | OK | Time: 1m 18s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.3904M$ (Valid)
+    [Record] 🏆 New Global Best: 6.3901M$ (Valid)
+    [Record] 🏆 New Global Best: 6.3882M$ (Valid)
+    [Record] 🏆 New Global Best: 6.3837M$ (Valid)
+    [Gen  160] Cost=6.3641M$ | P=30.41m | Eps=0.000 | Sims=30311 | OK | Time: 1m 23s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.3641M$ (Valid)
+    [Record] 🏆 New Global Best: 6.3250M$ (Valid)
+    [Record] 🏆 New Global Best: 6.3076M$ (Valid)
+    [Gen  170] Cost=6.3076M$ | P=30.41m | Eps=0.000 | Sims=32107 | OK | Time: 1m 28s (ETA: 0.0s)
+    [Gen  180] Cost=6.3076M$ | P=30.41m | Eps=0.000 | Sims=33895 | OK | Time: 1m 33s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.3021M$ (Valid)
+    [Gen  190] Cost=6.3021M$ | P=30.03m | Eps=0.000 | Sims=35692 | OK | Time: 1m 37s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.2809M$ (Valid)
+    [Record] 🏆 New Global Best: 6.2628M$ (Valid)
+    [Gen  200] Cost=6.2628M$ | P=30.00m | Eps=0.000 | Sims=37484 | OK | Time: 1m 43s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.2555M$ (Valid)
+    [Gen  210] Cost=6.2555M$ | P=30.13m | Eps=0.000 | Sims=39271 | OK | Time: 1m 47s (ETA: 0.0s)
+    [Gen  220] Cost=6.2555M$ | P=30.13m | Eps=0.000 | Sims=41055 | OK | Time: 1m 52s (ETA: 0.0s)
+    [Gen  230] Cost=6.2555M$ | P=30.13m | Eps=0.000 | Sims=42832 | OK | Time: 1m 57s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.2496M$ (Valid)
+    [Record] 🏆 New Global Best: 6.2289M$ (Valid)
+    [Gen  240] Cost=6.2289M$ | P=30.10m | Eps=0.000 | Sims=44602 | OK | Time: 2m 2s (ETA: 0.0s)
+    [Gen  250] Cost=6.1384M$ | P=30.10m | Eps=0.000 | Sims=46414 | OK | Time: 2m 6s (ETA: 0.0s)
+    [Gen  260] Cost=6.2348M$ | P=30.42m | Eps=0.000 | Sims=48220 | OK | Time: 2m 12s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.2263M$ (Valid)
+    [Gen  270] Cost=6.2263M$ | P=30.43m | Eps=0.000 | Sims=49981 | OK | Time: 2m 16s (ETA: 0.0s)
+    [Gen  280] Cost=6.2263M$ | P=30.43m | Eps=0.000 | Sims=51782 | OK | Time: 2m 21s (ETA: 0.0s)
+    [Gen  290] Cost=6.2263M$ | P=30.43m | Eps=0.000 | Sims=53574 | OK | Time: 2m 26s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.2226M$ (Valid)
+    [Record] 🏆 New Global Best: 6.2152M$ (Valid)
+    [Gen  300] Cost=6.2152M$ | P=30.31m | Eps=0.000 | Sims=55366 | OK | Time: 2m 31s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.2103M$ (Valid)
+    [Gen  310] Cost=6.2103M$ | P=30.02m | Eps=0.000 | Sims=57169 | OK | Time: 2m 36s (ETA: 0.0s)
+    [Gen  320] Cost=6.2103M$ | P=30.02m | Eps=0.000 | Sims=58949 | OK | Time: 2m 41s (ETA: 0.0s)
+    [Gen  330] Cost=6.2103M$ | P=30.02m | Eps=0.000 | Sims=60730 | OK | Time: 2m 45s (ETA: 0.0s)
+    [Gen  340] Cost=6.2103M$ | P=30.02m | Eps=0.000 | Sims=62521 | OK | Time: 2m 50s (ETA: 0.0s)
+    [Gen  350] Cost=6.2103M$ | P=30.02m | Eps=0.000 | Sims=64313 | OK | Time: 2m 55s (ETA: 0.0s)
+    [Handover] Switching to Eps 0.00m...
+      > Restored champion for Eps 0.0 from registry (6.21M$)
+    [Gen  360] Cost=6.2103M$ | P=30.02m | Eps=0.000 | Sims=66106 | OK | Time: 2m 59s (ETA: 0.0s)
+    [Gen  370] Cost=6.2103M$ | P=30.02m | Eps=0.000 | Sims=67877 | OK | Time: 3m 4s (ETA: 0.0s)
+    [Gen  380] Cost=6.2103M$ | P=30.02m | Eps=0.000 | Sims=69657 | OK | Time: 3m 9s (ETA: 0.0s)
+    [Gen  390] Cost=6.2103M$ | P=30.02m | Eps=0.000 | Sims=71454 | OK | Time: 3m 14s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.1923M$ (Valid)
+    [Record] 🏆 New Global Best: 6.1448M$ (Valid)
+    [Gen  400] Cost=6.1448M$ | P=30.05m | Eps=0.000 | Sims=73221 | OK | Time: 3m 19s (ETA: 0.0s)
+    [Gen  410] Cost=6.1448M$ | P=30.05m | Eps=0.000 | Sims=74997 | OK | Time: 3m 24s (ETA: 0.0s)
+    [Gen  420] Cost=6.1448M$ | P=30.05m | Eps=0.000 | Sims=76765 | OK | Time: 3m 28s (ETA: 0.0s)
+    [Gen  430] Cost=6.1448M$ | P=30.05m | Eps=0.000 | Sims=78516 | OK | Time: 3m 32s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.1240M$ (Valid)
+    [Gen  440] Cost=6.1240M$ | P=30.01m | Eps=0.000 | Sims=80288 | OK | Time: 3m 37s (ETA: 0.0s)
+    [Gen  450] Cost=6.1536M$ | P=30.35m | Eps=0.000 | Sims=82069 | OK | Time: 3m 42s (ETA: 0.0s)
+    [Gen  460] Cost=6.1448M$ | P=30.05m | Eps=0.000 | Sims=83818 | OK | Time: 3m 46s (ETA: 0.0s)
+    [Gen  470] Cost=6.1448M$ | P=30.05m | Eps=0.000 | Sims=85604 | OK | Time: 3m 51s (ETA: 0.0s)
+    [Gen  480] Cost=6.1448M$ | P=30.05m | Eps=0.000 | Sims=87386 | OK | Time: 3m 56s (ETA: 0.0s)
+    [Gen  490] Cost=6.1448M$ | P=30.05m | Eps=0.000 | Sims=89185 | OK | Time: 4m 1s (ETA: 0.0s)
+    [Gen  500] Cost=6.1340M$ | P=30.29m | Eps=0.000 | Sims=90980 | OK | Time: 4m 6s (ETA: 0.0s)
+    [Gen  510] Cost=6.1340M$ | P=30.29m | Eps=0.000 | Sims=92765 | OK | Time: 4m 10s (ETA: 0.0s)
+    [Gen  520] Cost=6.1340M$ | P=30.29m | Eps=0.000 | Sims=94577 | OK | Time: 4m 15s (ETA: 0.0s)
+    [Gen  530] Cost=6.1277M$ | P=30.28m | Eps=0.000 | Sims=96392 | OK | Time: 4m 20s (ETA: 0.0s)
+    [Gen  540] Cost=6.1240M$ | P=30.01m | Eps=0.000 | Sims=98164 | OK | Time: 4m 25s (ETA: 0.0s)
+    [Gen  550] Cost=6.1213M$ | P=30.01m | Eps=0.000 | Sims=99990 | OK | Time: 4m 30s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.1213M$ (Valid)
+    [Gen  560] Cost=6.1213M$ | P=30.04m | Eps=0.000 | Sims=101771 | OK | Time: 4m 34s (ETA: 0.0s)
+    [Gen  570] Cost=6.1213M$ | P=30.04m | Eps=0.000 | Sims=103569 | OK | Time: 4m 39s (ETA: 0.0s)
+    [Gen  580] Cost=6.1213M$ | P=30.04m | Eps=0.000 | Sims=105376 | OK | Time: 4m 44s (ETA: 0.0s)
+    [Gen  590] Cost=6.1213M$ | P=30.04m | Eps=0.000 | Sims=107154 | OK | Time: 4m 48s (ETA: 0.0s)
+    [Gen  600] Cost=6.1213M$ | P=30.04m | Eps=0.000 | Sims=108939 | OK | Time: 4m 53s (ETA: 0.0s)
+    [Auto-Stop] 🛑 Stagnation reached 0.0 limit without shocks. Stopping.
+
+    [Finalizing] Validating & Polishing...
+    >> Done in 4m 54s. Final Result: 6.1213M$ | P=30.04m | Sims=109121 | Time: 4m 54s
+    [Post-Process] Refining Solution...
+
+>>> Starting Run #2...
+    [Config] Init: RANDOM | Eps: False | Shocks: False | Expand: False | Graphs: False
+    [Warmup] 🎲 Using PURE RANDOM strategy...
+    [Warmup] ✅ Generated 200 items. Valid initial solutions: 200
+    [Gen    0] Cost=6.3451M$ | P=-155.10m | Eps=0.000 | Sims=402 | INVALID (PF↑) | Time: 0.5s (ETA: ...)
+    [Gen   10] Cost=6.2593M$ | P=-76.15m | Eps=0.000 | Sims=2404 | INVALID (PF↑) | Time: 6.3s (ETA: ...)
+    [Gen   20] Cost=6.5338M$ | P=-123.47m | Eps=0.000 | Sims=4395 | INVALID (PF↑) | Time: 11.3s (ETA: ...)
+    [Gen   30] Cost=6.7828M$ | P=-26.23m | Eps=0.000 | Sims=6395 | INVALID (PF↑) | Time: 17.3s (ETA: 1m 9s)
+    [Gen   40] Cost=6.8463M$ | P=-11.58m | Eps=0.000 | Sims=8396 | INVALID (PF↑) | Time: 22.9s (ETA: 1m 2s)
+    [Gen   50] Cost=7.1421M$ | P=18.81m | Eps=0.000 | Sims=10389 | INVALID (PF↑) | Time: 27.9s (ETA: 55.8s)
+    [Gen   60] Cost=6.9112M$ | P=23.65m | Eps=0.000 | Sims=12363 | INVALID (PF↑) | Time: 34.0s (ETA: 50.9s)
+    [Record] 🏆 New Global Best: 7.2696M$ (Valid)
+    [Gen   70] Cost=7.1048M$ | P=32.25m | Eps=0.000 | Sims=14322 | OK | Time: 39.1s (ETA: 44.7s)
+    [Record] 🏆 New Global Best: 7.1048M$ (Valid)
+    [Record] 🏆 New Global Best: 6.9374M$ (Valid)
+    [Record] 🏆 New Global Best: 6.9358M$ (Valid)
+    [Record] 🏆 New Global Best: 6.8940M$ (Valid)
+    [Record] 🏆 New Global Best: 6.8182M$ (Valid)
+    [Gen   80] Cost=6.8182M$ | P=30.27m | Eps=0.000 | Sims=16148 | OK | Time: 44.1s (ETA: 38.5s)
+    [Record] 🏆 New Global Best: 6.8168M$ (Valid)
+    [Record] 🏆 New Global Best: 6.8049M$ (Valid)
+    [Gen   90] Cost=6.7172M$ | P=31.18m | Eps=0.000 | Sims=17948 | OK | Time: 48.3s (ETA: 32.2s)
+    [Record] 🏆 New Global Best: 6.7172M$ (Valid)
+    [Record] 🏆 New Global Best: 6.6975M$ (Valid)
+    [Record] 🏆 New Global Best: 6.6590M$ (Valid)
+    [Gen  100] Cost=6.6590M$ | P=30.13m | Eps=0.000 | Sims=19780 | OK | Time: 53.3s (ETA: 26.6s)
+    [Record] 🏆 New Global Best: 6.6453M$ (Valid)
+    [Gen  110] Cost=6.6453M$ | P=30.22m | Eps=0.000 | Sims=21579 | OK | Time: 57.8s (ETA: 21.0s)
+    [Record] 🏆 New Global Best: 6.6426M$ (Valid)
+    [Record] 🏆 New Global Best: 6.6312M$ (Valid)
+    [Record] 🏆 New Global Best: 6.6102M$ (Valid)
+    [Gen  120] Cost=6.6102M$ | P=30.70m | Eps=0.000 | Sims=23361 | OK | Time: 1m 2s (ETA: 15.7s)
+    [Record] 🏆 New Global Best: 6.6095M$ (Valid)
+    [Record] 🏆 New Global Best: 6.5882M$ (Valid)
+    [Gen  130] Cost=6.5882M$ | P=30.60m | Eps=0.000 | Sims=25149 | OK | Time: 1m 7s (ETA: 10.4s)
+    [Record] 🏆 New Global Best: 6.5729M$ (Valid)
+    [Record] 🏆 New Global Best: 6.5030M$ (Valid)
+    [Gen  140] Cost=6.5030M$ | P=31.02m | Eps=0.000 | Sims=26923 | OK | Time: 1m 12s (ETA: 5.2s)
+    [Gen  150] Cost=6.5030M$ | P=31.02m | Eps=0.000 | Sims=28691 | OK | Time: 1m 17s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.4814M$ (Valid)
+    [Gen  160] Cost=6.4604M$ | P=30.53m | Eps=0.000 | Sims=30463 | OK | Time: 1m 22s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.4604M$ (Valid)
+    [Gen  170] Cost=6.4604M$ | P=30.34m | Eps=0.000 | Sims=32237 | OK | Time: 1m 27s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.4318M$ (Valid)
+    [Gen  180] Cost=6.4318M$ | P=30.38m | Eps=0.000 | Sims=34010 | OK | Time: 1m 32s (ETA: 0.0s)
+    [Gen  190] Cost=6.4318M$ | P=30.38m | Eps=0.000 | Sims=35760 | OK | Time: 1m 36s (ETA: 0.0s)
+    [Gen  200] Cost=6.4318M$ | P=30.38m | Eps=0.000 | Sims=37520 | OK | Time: 1m 41s (ETA: 0.0s)
+    [Gen  210] Cost=6.4318M$ | P=30.38m | Eps=0.000 | Sims=39280 | OK | Time: 1m 46s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.4298M$ (Valid)
+    [Gen  220] Cost=6.4298M$ | P=30.38m | Eps=0.000 | Sims=41071 | OK | Time: 1m 50s (ETA: 0.0s)
+    [Gen  230] Cost=6.4298M$ | P=30.38m | Eps=0.000 | Sims=42846 | OK | Time: 1m 55s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.4182M$ (Valid)
+    [Gen  240] Cost=6.4182M$ | P=30.60m | Eps=0.000 | Sims=44619 | OK | Time: 2m 0s (ETA: 0.0s)
+    [Gen  250] Cost=6.4182M$ | P=30.60m | Eps=0.000 | Sims=46396 | OK | Time: 2m 4s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.4133M$ (Valid)
+    [Gen  260] Cost=6.4133M$ | P=30.38m | Eps=0.000 | Sims=48185 | OK | Time: 2m 9s (ETA: 0.0s)
+    [Gen  270] Cost=6.4133M$ | P=30.38m | Eps=0.000 | Sims=49964 | OK | Time: 2m 14s (ETA: 0.0s)
+    [Gen  280] Cost=6.4133M$ | P=30.38m | Eps=0.000 | Sims=51744 | OK | Time: 2m 18s (ETA: 0.0s)
+    [Gen  290] Cost=6.4133M$ | P=30.38m | Eps=0.000 | Sims=53541 | OK | Time: 2m 23s (ETA: 0.0s)
+    [Gen  300] Cost=6.4133M$ | P=30.38m | Eps=0.000 | Sims=55339 | OK | Time: 2m 28s (ETA: 0.0s)
+    [Handover] Switching to Eps 0.00m...
+      > Restored champion for Eps 0.0 from registry (6.41M$)
+    [Gen  310] Cost=6.4464M$ | P=30.10m | Eps=0.000 | Sims=57141 | OK | Time: 2m 33s (ETA: 0.0s)
+    [Gen  320] Cost=6.4404M$ | P=30.12m | Eps=0.000 | Sims=58934 | OK | Time: 2m 37s (ETA: 0.0s)
+    [Gen  330] Cost=6.4404M$ | P=30.12m | Eps=0.000 | Sims=60697 | OK | Time: 2m 42s (ETA: 0.0s)
+    [Gen  340] Cost=6.4259M$ | P=30.11m | Eps=0.000 | Sims=62489 | OK | Time: 2m 46s (ETA: 0.0s)
+    [Gen  350] Cost=6.4259M$ | P=30.32m | Eps=0.000 | Sims=64276 | OK | Time: 2m 51s (ETA: 0.0s)
+    [Gen  360] Cost=6.4259M$ | P=30.32m | Eps=0.000 | Sims=66040 | OK | Time: 2m 56s (ETA: 0.0s)
+    [Gen  370] Cost=6.4259M$ | P=30.32m | Eps=0.000 | Sims=67809 | OK | Time: 3m 1s (ETA: 0.0s)
+    [Gen  380] Cost=6.4259M$ | P=30.32m | Eps=0.000 | Sims=69597 | OK | Time: 3m 5s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.4106M$ (Valid)
+    [Record] 🏆 New Global Best: 6.4069M$ (Valid)
+    [Gen  390] Cost=6.4069M$ | P=30.03m | Eps=0.000 | Sims=71383 | OK | Time: 3m 10s (ETA: 0.0s)
+    [Gen  400] Cost=6.4069M$ | P=30.03m | Eps=0.000 | Sims=73153 | OK | Time: 3m 15s (ETA: 0.0s)
+    [Gen  410] Cost=6.4069M$ | P=30.03m | Eps=0.000 | Sims=74935 | OK | Time: 3m 20s (ETA: 0.0s)
+    [Gen  420] Cost=6.4069M$ | P=30.03m | Eps=0.000 | Sims=76681 | OK | Time: 3m 24s (ETA: 0.0s)
+    [Gen  430] Cost=6.4069M$ | P=30.03m | Eps=0.000 | Sims=78481 | OK | Time: 3m 29s (ETA: 0.0s)
+    [Auto-Stop] 🛑 Stagnation reached 0.0 limit without shocks. Stopping.
+
+    [Finalizing] Validating & Polishing...
+    >> Done in 3m 33s. Final Result: 6.4069M$ | P=30.03m | Sims=79909 | Time: 3m 33s
+    [Post-Process] Refining Solution...
+
+>>> Starting Run #3...
+    [Config] Init: RANDOM | Eps: False | Shocks: False | Expand: False | Graphs: False
+    [Warmup] 🎲 Using PURE RANDOM strategy...
+    [Warmup] ✅ Generated 200 items. Valid initial solutions: 200
+    [Gen    0] Cost=6.0370M$ | P=-233.51m | Eps=0.000 | Sims=402 | INVALID (PF↑) | Time: 0.5s (ETA: ...)
+    [Gen   10] Cost=7.3297M$ | P=-97.12m | Eps=0.000 | Sims=2404 | INVALID (PF↑) | Time: 6.4s (ETA: ...)
+    [Gen   20] Cost=6.5735M$ | P=-19.96m | Eps=0.000 | Sims=4396 | INVALID (PF↑) | Time: 11.6s (ETA: ...)
+    [Gen   30] Cost=6.8955M$ | P=-37.21m | Eps=0.000 | Sims=6382 | INVALID (PF↑) | Time: 16.8s (ETA: 1m 7s)
+    [Gen   40] Cost=6.7603M$ | P=10.61m | Eps=0.000 | Sims=8378 | INVALID (PF↑) | Time: 21.4s (ETA: 59.0s)
+    [Gen   50] Cost=7.5623M$ | P=10.41m | Eps=0.000 | Sims=10366 | INVALID (PF↑) | Time: 26.5s (ETA: 53.1s)
+    [Gen   60] Cost=6.9612M$ | P=21.95m | Eps=0.000 | Sims=12356 | INVALID (PF↑) | Time: 31.7s (ETA: 47.6s)
+    [Record] 🏆 New Global Best: 7.0959M$ (Valid)
+    [Record] 🏆 New Global Best: 7.0172M$ (Valid)
+    [Gen   70] Cost=7.0172M$ | P=30.48m | Eps=0.000 | Sims=14282 | OK | Time: 36.1s (ETA: 41.2s)
+    [Record] 🏆 New Global Best: 6.9128M$ (Valid)
+    [Record] 🏆 New Global Best: 6.8985M$ (Valid)
+    [Record] 🏆 New Global Best: 6.8489M$ (Valid)
+    [Record] 🏆 New Global Best: 6.7272M$ (Valid)
+    [Record] 🏆 New Global Best: 6.6755M$ (Valid)
+    [Gen   80] Cost=6.6755M$ | P=30.49m | Eps=0.000 | Sims=16048 | OK | Time: 40.7s (ETA: 35.6s)
+    [Record] 🏆 New Global Best: 6.6255M$ (Valid)
+    [Record] 🏆 New Global Best: 6.5170M$ (Valid)
+    [Gen   90] Cost=6.5170M$ | P=30.83m | Eps=0.000 | Sims=17842 | OK | Time: 44.6s (ETA: 29.7s)
+    [Gen  100] Cost=6.5170M$ | P=30.83m | Eps=0.000 | Sims=19663 | OK | Time: 49.2s (ETA: 24.6s)
+    [Record] 🏆 New Global Best: 6.5103M$ (Valid)
+    [Record] 🏆 New Global Best: 6.5063M$ (Valid)
+    [Gen  110] Cost=6.4924M$ | P=30.83m | Eps=0.000 | Sims=21429 | OK | Time: 53.4s (ETA: 19.4s)
+    [Record] 🏆 New Global Best: 6.4924M$ (Valid)
+    [Gen  120] Cost=6.4924M$ | P=30.51m | Eps=0.000 | Sims=23205 | OK | Time: 58.0s (ETA: 14.5s)
+    [Record] 🏆 New Global Best: 6.4638M$ (Valid)
+    [Record] 🏆 New Global Best: 6.4565M$ (Valid)
+    [Gen  130] Cost=6.4426M$ | P=31.39m | Eps=0.000 | Sims=24983 | OK | Time: 1m 1s (ETA: 9.5s)
+    [Record] 🏆 New Global Best: 6.4426M$ (Valid)
+    [Gen  140] Cost=6.4426M$ | P=30.08m | Eps=0.000 | Sims=26790 | OK | Time: 1m 6s (ETA: 4.7s)
+    [Record] 🏆 New Global Best: 6.4376M$ (Valid)
+    [Gen  150] Cost=6.4376M$ | P=30.94m | Eps=0.000 | Sims=28541 | OK | Time: 1m 9s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.4145M$ (Valid)
+    [Record] 🏆 New Global Best: 6.4110M$ (Valid)
+    [Gen  160] Cost=6.4110M$ | P=30.31m | Eps=0.000 | Sims=30317 | OK | Time: 1m 14s (ETA: 0.0s)
+    [Gen  170] Cost=6.4110M$ | P=30.31m | Eps=0.000 | Sims=32080 | OK | Time: 1m 17s (ETA: 0.0s)
+    [Gen  180] Cost=6.4110M$ | P=30.31m | Eps=0.000 | Sims=33880 | OK | Time: 1m 22s (ETA: 0.0s)
+    [Gen  190] Cost=6.4110M$ | P=30.31m | Eps=0.000 | Sims=35620 | OK | Time: 1m 26s (ETA: 0.0s)
+    [Gen  200] Cost=6.4110M$ | P=30.31m | Eps=0.000 | Sims=37431 | OK | Time: 1m 30s (ETA: 0.0s)
+    [Handover] Switching to Eps 0.00m...
+      > Restored champion for Eps 0.0 from registry (6.41M$)
+    [Gen  210] Cost=6.4110M$ | P=30.31m | Eps=0.000 | Sims=39246 | OK | Time: 1m 34s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.3981M$ (Valid)
+    [Gen  220] Cost=6.3981M$ | P=30.68m | Eps=0.000 | Sims=41059 | OK | Time: 1m 38s (ETA: 0.0s)
+    [Gen  230] Cost=6.3981M$ | P=30.68m | Eps=0.000 | Sims=42870 | OK | Time: 1m 42s (ETA: 0.0s)
+    [Gen  240] Cost=6.3981M$ | P=30.68m | Eps=0.000 | Sims=44651 | OK | Time: 1m 47s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.3951M$ (Valid)
+    [Gen  250] Cost=6.3951M$ | P=30.68m | Eps=0.000 | Sims=46446 | OK | Time: 1m 51s (ETA: 0.0s)
+    [Gen  260] Cost=6.3951M$ | P=30.68m | Eps=0.000 | Sims=48229 | OK | Time: 1m 55s (ETA: 0.0s)
+    [Gen  270] Cost=6.3951M$ | P=30.68m | Eps=0.000 | Sims=50012 | OK | Time: 1m 58s (ETA: 0.0s)
+    [Gen  280] Cost=6.3951M$ | P=30.68m | Eps=0.000 | Sims=51755 | OK | Time: 2m 3s (ETA: 0.0s)
+    [Gen  290] Cost=6.3951M$ | P=30.68m | Eps=0.000 | Sims=53551 | OK | Time: 2m 7s (ETA: 0.0s)
+    [Auto-Stop] 🛑 Stagnation reached 0.0 limit without shocks. Stopping.
+
+    [Finalizing] Validating & Polishing...
+    >> Done in 2m 9s. Final Result: 6.3951M$ | P=30.68m | Sims=53894 | Time: 2m 9s
+    [Post-Process] Refining Solution...
+
+>>> Starting Run #4...
+    [Config] Init: RANDOM | Eps: False | Shocks: False | Expand: False | Graphs: False
+    [Warmup] 🎲 Using PURE RANDOM strategy...
+    [Warmup] ✅ Generated 200 items. Valid initial solutions: 200
+    [Gen    0] Cost=4.2492M$ | P=-405.25m | Eps=0.000 | Sims=402 | INVALID (PF↑) | Time: 0.8s (ETA: ...)
+    [Gen   10] Cost=5.4539M$ | P=-134.46m | Eps=0.000 | Sims=2402 | INVALID (PF↑) | Time: 5.5s (ETA: ...)
+    [Gen   20] Cost=7.2349M$ | P=-54.98m | Eps=0.000 | Sims=4400 | INVALID (PF↑) | Time: 10.6s (ETA: ...)
+    [Gen   30] Cost=6.8015M$ | P=-131.99m | Eps=0.000 | Sims=6397 | INVALID (PF↑) | Time: 15.4s (ETA: 1m 1s)
+    [Gen   40] Cost=7.3776M$ | P=25.12m | Eps=0.000 | Sims=8393 | INVALID (PF↑) | Time: 20.7s (ETA: 57.0s)
+    [Gen   50] Cost=7.2912M$ | P=25.74m | Eps=0.000 | Sims=10377 | INVALID (PF↑) | Time: 25.8s (ETA: 51.7s)
+    [Record] 🏆 New Global Best: 7.2756M$ (Valid)
+    [Record] 🏆 New Global Best: 7.0345M$ (Valid)
+    [Record] 🏆 New Global Best: 7.0031M$ (Valid)
+    [Gen   60] Cost=7.0031M$ | P=30.42m | Eps=0.000 | Sims=12302 | OK | Time: 30.9s (ETA: 46.3s)
+    [Record] 🏆 New Global Best: 6.9738M$ (Valid)
+    [Record] 🏆 New Global Best: 6.8987M$ (Valid)
+    [Record] 🏆 New Global Best: 6.8767M$ (Valid)
+    [Gen   70] Cost=6.7858M$ | P=31.33m | Eps=0.000 | Sims=14133 | OK | Time: 35.2s (ETA: 40.2s)
+    [Record] 🏆 New Global Best: 6.7858M$ (Valid)
+    [Gen   80] Cost=6.7858M$ | P=30.68m | Eps=0.000 | Sims=15960 | OK | Time: 39.8s (ETA: 34.8s)
+    [Record] 🏆 New Global Best: 6.6834M$ (Valid)
+    [Record] 🏆 New Global Best: 6.6822M$ (Valid)
+    [Record] 🏆 New Global Best: 6.6319M$ (Valid)
+    [Gen   90] Cost=6.6319M$ | P=30.17m | Eps=0.000 | Sims=17773 | OK | Time: 44.8s (ETA: 29.9s)
+    [Record] 🏆 New Global Best: 6.5860M$ (Valid)
+    [Record] 🏆 New Global Best: 6.5595M$ (Valid)
+    [Gen  100] Cost=6.5094M$ | P=30.52m | Eps=0.000 | Sims=19565 | OK | Time: 48.6s (ETA: 24.3s)
+    [Record] 🏆 New Global Best: 6.5094M$ (Valid)
+    [Record] 🏆 New Global Best: 6.5016M$ (Valid)
+    [Record] 🏆 New Global Best: 6.4989M$ (Valid)
+    [Record] 🏆 New Global Best: 6.4903M$ (Valid)
+    [Gen  110] Cost=6.4903M$ | P=31.09m | Eps=0.000 | Sims=21371 | OK | Time: 52.9s (ETA: 19.2s)
+    [Record] 🏆 New Global Best: 6.4385M$ (Valid)
+    [Gen  120] Cost=6.4385M$ | P=30.18m | Eps=0.000 | Sims=23172 | OK | Time: 56.6s (ETA: 14.1s)
+    [Gen  130] Cost=6.4385M$ | P=30.18m | Eps=0.000 | Sims=24962 | OK | Time: 1m 0s (ETA: 9.4s)
+    [Gen  140] Cost=6.4385M$ | P=30.18m | Eps=0.000 | Sims=26763 | OK | Time: 1m 4s (ETA: 4.6s)
+    [Gen  150] Cost=6.4385M$ | P=30.18m | Eps=0.000 | Sims=28537 | OK | Time: 1m 8s (ETA: 0.0s)
+    [Gen  160] Cost=6.4385M$ | P=30.18m | Eps=0.000 | Sims=30306 | OK | Time: 1m 12s (ETA: 0.0s)
+    [Handover] Switching to Eps 0.00m...
+      > Restored champion for Eps 0.0 from registry (6.44M$)
+    [Gen  170] Cost=6.4545M$ | P=30.43m | Eps=0.000 | Sims=32122 | OK | Time: 1m 16s (ETA: 0.0s)
+    [Gen  180] Cost=6.4545M$ | P=30.43m | Eps=0.000 | Sims=33890 | OK | Time: 1m 20s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.4259M$ (Valid)
+    [Gen  190] Cost=6.4259M$ | P=30.32m | Eps=0.000 | Sims=35706 | OK | Time: 1m 24s (ETA: 0.0s)
+    [Gen  200] Cost=6.4060M$ | P=30.32m | Eps=0.000 | Sims=37507 | OK | Time: 1m 28s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.4060M$ (Valid)
+    [Gen  210] Cost=6.4060M$ | P=30.85m | Eps=0.000 | Sims=39289 | OK | Time: 1m 33s (ETA: 0.0s)
+    [Gen  220] Cost=6.4060M$ | P=30.85m | Eps=0.000 | Sims=41042 | OK | Time: 1m 37s (ETA: 0.0s)
+    [Gen  230] Cost=6.4060M$ | P=30.85m | Eps=0.000 | Sims=42788 | OK | Time: 1m 41s (ETA: 0.0s)
+    [Gen  240] Cost=6.4060M$ | P=30.85m | Eps=0.000 | Sims=44541 | OK | Time: 1m 45s (ETA: 0.0s)
+    [Gen  250] Cost=6.4060M$ | P=30.85m | Eps=0.000 | Sims=46350 | OK | Time: 1m 50s (ETA: 0.0s)
+    [Auto-Stop] 🛑 Stagnation reached 0.0 limit without shocks. Stopping.
+
+    [Finalizing] Validating & Polishing...
+    >> Done in 1m 50s. Final Result: 6.4060M$ | P=30.85m | Sims=46527 | Time: 1m 50s
+    [Post-Process] Refining Solution...
+
+>>> Starting Run #5...
+    [Config] Init: RANDOM | Eps: False | Shocks: False | Expand: False | Graphs: False
+    [Warmup] 🎲 Using PURE RANDOM strategy...
+    [Warmup] ✅ Generated 200 items. Valid initial solutions: 200
+    [Gen    0] Cost=5.6945M$ | P=-175.43m | Eps=0.000 | Sims=402 | INVALID (PF↑) | Time: 0.4s (ETA: ...)
+    [Gen   10] Cost=5.8678M$ | P=-113.31m | Eps=0.000 | Sims=2396 | INVALID (PF↑) | Time: 4.9s (ETA: ...)
+    [Gen   20] Cost=6.3352M$ | P=-138.49m | Eps=0.000 | Sims=4398 | INVALID (PF↑) | Time: 9.7s (ETA: ...)
+    [Gen   30] Cost=6.5044M$ | P=-3.60m | Eps=0.000 | Sims=6391 | INVALID (PF↑) | Time: 14.8s (ETA: 59.3s)
+    [Gen   40] Cost=6.5902M$ | P=-17.14m | Eps=0.000 | Sims=8388 | INVALID (PF↑) | Time: 19.1s (ETA: 52.5s)
+    [Gen   50] Cost=6.7001M$ | P=7.66m | Eps=0.000 | Sims=10374 | INVALID (PF↑) | Time: 24.3s (ETA: 48.7s)
+    [Gen   60] Cost=6.9163M$ | P=18.96m | Eps=0.000 | Sims=12370 | INVALID (PF↑) | Time: 29.1s (ETA: 43.6s)
+    [Gen   70] Cost=7.0980M$ | P=24.47m | Eps=0.000 | Sims=14356 | INVALID (PF↑) | Time: 34.4s (ETA: 39.3s)
+    [Record] 🏆 New Global Best: 7.5418M$ (Valid)
+    [Record] 🏆 New Global Best: 7.2273M$ (Valid)
+    [Record] 🏆 New Global Best: 7.0044M$ (Valid)
+    [Gen   80] Cost=6.9905M$ | P=30.97m | Eps=0.000 | Sims=16227 | OK | Time: 38.4s (ETA: 33.6s)
+    [Record] 🏆 New Global Best: 6.9905M$ (Valid)
+    [Record] 🏆 New Global Best: 6.9651M$ (Valid)
+    [Record] 🏆 New Global Best: 6.8770M$ (Valid)
+    [Record] 🏆 New Global Best: 6.8711M$ (Valid)
+    [Record] 🏆 New Global Best: 6.8251M$ (Valid)
+    [Record] 🏆 New Global Best: 6.7881M$ (Valid)
+    [Record] 🏆 New Global Best: 6.7617M$ (Valid)
+    [Gen   90] Cost=6.7617M$ | P=30.58m | Eps=0.000 | Sims=18050 | OK | Time: 42.6s (ETA: 28.4s)
+    [Record] 🏆 New Global Best: 6.7409M$ (Valid)
+    [Record] 🏆 New Global Best: 6.7176M$ (Valid)
+    [Gen  100] Cost=6.7176M$ | P=30.88m | Eps=0.000 | Sims=19860 | OK | Time: 46.5s (ETA: 23.3s)
+    [Record] 🏆 New Global Best: 6.7060M$ (Valid)
+    [Record] 🏆 New Global Best: 6.6657M$ (Valid)
+    [Gen  110] Cost=6.6657M$ | P=30.11m | Eps=0.000 | Sims=21655 | OK | Time: 50.6s (ETA: 18.4s)
+    [Record] 🏆 New Global Best: 6.6416M$ (Valid)
+    [Record] 🏆 New Global Best: 6.6125M$ (Valid)
+    [Record] 🏆 New Global Best: 6.5964M$ (Valid)
+    [Record] 🏆 New Global Best: 6.5871M$ (Valid)
+    [Gen  120] Cost=6.5834M$ | P=30.21m | Eps=0.000 | Sims=23449 | OK | Time: 54.2s (ETA: 13.6s)
+    [Record] 🏆 New Global Best: 6.5834M$ (Valid)
+    [Record] 🏆 New Global Best: 6.4779M$ (Valid)
+    [Record] 🏆 New Global Best: 6.4656M$ (Valid)
+    [Gen  130] Cost=6.4626M$ | P=30.00m | Eps=0.000 | Sims=25265 | OK | Time: 58.2s (ETA: 8.9s)
+    [Record] 🏆 New Global Best: 6.4626M$ (Valid)
+    [Record] 🏆 New Global Best: 6.4575M$ (Valid)
+    [Record] 🏆 New Global Best: 6.4522M$ (Valid)
+    [Record] 🏆 New Global Best: 6.4234M$ (Valid)
+    [Gen  140] Cost=6.4234M$ | P=30.24m | Eps=0.000 | Sims=27064 | OK | Time: 1m 1s (ETA: 4.4s)
+    [Record] 🏆 New Global Best: 6.3735M$ (Valid)
+    [Record] 🏆 New Global Best: 6.3568M$ (Valid)
+    [Gen  150] Cost=6.3568M$ | P=30.00m | Eps=0.000 | Sims=28868 | OK | Time: 1m 5s (ETA: 0.0s)
+    [Gen  160] Cost=6.3568M$ | P=30.00m | Eps=0.000 | Sims=30650 | OK | Time: 1m 9s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.3344M$ (Valid)
+    [Record] 🏆 New Global Best: 6.2908M$ (Valid)
+    [Gen  170] Cost=6.2908M$ | P=30.56m | Eps=0.000 | Sims=32442 | OK | Time: 1m 13s (ETA: 0.0s)
+    [Gen  180] Cost=6.2561M$ | P=30.56m | Eps=0.000 | Sims=34238 | OK | Time: 1m 17s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.2561M$ (Valid)
+    [Gen  190] Cost=6.2561M$ | P=30.05m | Eps=0.000 | Sims=36052 | OK | Time: 1m 21s (ETA: 0.0s)
+    [Gen  200] Cost=6.2561M$ | P=30.05m | Eps=0.000 | Sims=37835 | OK | Time: 1m 25s (ETA: 0.0s)
+    [Record] 🏆 New Global Best: 6.2248M$ (Valid)
+    [Gen  210] Cost=6.2248M$ | P=30.90m | Eps=0.000 | Sims=39593 | OK | Time: 1m 28s (ETA: 0.0s)
+    [Gen  220] Cost=6.2248M$ | P=30.90m | Eps=0.000 | Sims=41345 | OK | Time: 1m 32s (ETA: 0.0s)
+    [Gen  230] Cost=6.2248M$ | P=30.90m | Eps=0.000 | Sims=43111 | OK | Time: 1m 36s (ETA: 0.0s)
+    [Gen  240] Cost=6.2248M$ | P=30.90m | Eps=0.000 | Sims=44885 | OK | Time: 1m 40s (ETA: 0.0s)
+    [Gen  250] Cost=6.2248M$ | P=30.90m | Eps=0.000 | Sims=46659 | OK | Time: 1m 44s (ETA: 0.0s)
+    [Handover] Switching to Eps 0.00m...
+      > Restored champion for Eps 0.0 from registry (6.22M$)
+    [Gen  260] Cost=6.2994M$ | P=30.90m | Eps=0.000 | Sims=48481 | OK | Time: 1m 48s (ETA: 0.0s)
+    [Gen  270] Cost=6.2248M$ | P=30.90m | Eps=0.000 | Sims=50246 | OK | Time: 1m 52s (ETA: 0.0s)
+    [Gen  280] Cost=6.2248M$ | P=30.90m | Eps=0.000 | Sims=52043 | OK | Time: 1m 56s (ETA: 0.0s)
+    [Gen  290] Cost=6.2248M$ | P=30.90m | Eps=0.000 | Sims=53795 | OK | Time: 1m 59s (ETA: 0.0s)
+    [Gen  300] Cost=6.2248M$ | P=30.90m | Eps=0.000 | Sims=55578 | OK | Time: 2m 4s (ETA: 0.0s)
+    [Gen  310] Cost=6.2248M$ | P=30.90m | Eps=0.000 | Sims=57358 | OK | Time: 2m 8s (ETA: 0.0s)
+    [Auto-Stop] 🛑 Stagnation reached 0.0 limit without shocks. Stopping.
+
+    [Finalizing] Validating & Polishing...
+    >> Done in 2m 9s. Final Result: 6.2248M$ | P=30.90m | Sims=57726 | Time: 2m 9s
+    [Post-Process] Refining Solution...
+[System] Shutting down workers pool...
+[System] Cleanup complete.
+
+=== FINAL RESULTS ===
+Run 1: 6.1213M$ | P=30.04m | OK
+Run 2: 6.4069M$ | P=30.03m | OK
+Run 3: 6.3951M$ | P=30.68m | OK
+Run 4: 6.4060M$ | P=30.85m | OK
+Run 5: 6.2248M$ | P=30.90m | OK
+[Output] Saved solution table: OutputDataExperiments\2026-02-20_15-03-55\tables\solution_champion.csv
+[Plot] Saved convergence graph: OutputDataExperiments\2026-02-20_15-03-55\plots\convergence.png
+[Plot] Generating network map...
+[Plot] Saved network map: OutputDataExperiments\2026-02-20_15-03-55\plots\network_map.png

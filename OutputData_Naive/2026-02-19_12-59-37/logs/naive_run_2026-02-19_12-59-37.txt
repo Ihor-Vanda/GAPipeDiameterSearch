@@ -1,0 +1,126 @@
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+==============================================
+   NAIVE EVOLUTIONARY OPTIMIZER: InputData/Hanoi/Hanoi.inp
+==============================================
+ Units:         in
+ Population:    200
+ Generations:   1840
+ Min Pressure:  30.0 m
+ Output Dir:    OutputData_Naive\2026-02-19_12-59-37
+==============================================
+
+>>> Starting Run #1/5...
+    [Mode] Aggressive (Small Network: 34 pipes)
+    [INFO] Feasibility Check (All Max Pipes): P=49.62 m
+    [Run 1] Gen   0: Cost=10.97M$ | P=49.62m [OK] | Sims=383 | Time=5.5s
+    [Run 1] Gen  10: Cost=7.22M$ | P=30.26m [OK] | Sims=2202 | Time=33.7s
+    [Run 1] Gen  20: Cost=7.09M$ | P=30.01m [OK] | Sims=4025 | Time=1m 2s
+    [Run 1] Gen  30: Cost=7.08M$ | P=30.01m [OK] | Sims=5826 | Time=1m 30s
+    [Run 1] Gen  40: Cost=7.08M$ | P=30.01m [OK] | Sims=7653 | Time=1m 58s
+    [Run 1] Gen  50: Cost=7.08M$ | P=30.01m [OK] | Sims=9490 | Time=2m 26s
+    [Run 1] Gen  60: Cost=7.08M$ | P=30.01m [OK] | Sims=11289 | Time=2m 51s
+    [Run 1] Gen  70: Cost=7.08M$ | P=30.01m [OK] | Sims=13105 | Time=3m 16s
+    [Run 1] Gen  80: Cost=7.08M$ | P=30.01m [OK] | Sims=14945 | Time=3m 42s
+    [Run 1] Gen  90: Cost=7.08M$ | P=30.01m [OK] | Sims=16772 | Time=4m 7s
+    [Run 1] Gen 100: Cost=7.08M$ | P=30.01m [OK] | Sims=18582 | Time=4m 32s
+    [Run 1] Gen 110: Cost=7.08M$ | P=30.01m [OK] | Sims=20416 | Time=4m 58s
+    [Run 1] Gen 120: Cost=7.08M$ | P=30.01m [OK] | Sims=22250 | Time=5m 23s
+    [Auto-Stop] 🛑 Stagnation limit reached (100 gens without improvement). Stopping run.
+    >> Run #1 Done (5m 36s). Final: 7.0768 M$ | P: 30.01 m | Sims: 23139
+   > Local Search: Full (34)...
+   > Done in 0.4s. Imp: 0. Final: 7.0768 M$
+
+>>> Starting Run #2/5...
+    [Mode] Aggressive (Small Network: 34 pipes)
+    [Run 2] Gen   0: Cost=10.97M$ | P=49.62m [OK] | Sims=385 | Time=5.6s
+    [Run 2] Gen  10: Cost=6.83M$ | P=30.02m [OK] | Sims=2216 | Time=34.4s
+    [Run 2] Gen  20: Cost=6.68M$ | P=30.01m [OK] | Sims=4039 | Time=1m 2s
+    [Run 2] Gen  30: Cost=6.67M$ | P=30.01m [OK] | Sims=5845 | Time=1m 29s
+    [Run 2] Gen  40: Cost=6.67M$ | P=30.01m [OK] | Sims=7667 | Time=1m 57s
+    [Run 2] Gen  50: Cost=6.67M$ | P=30.01m [OK] | Sims=9507 | Time=2m 23s
+    [Run 2] Gen  60: Cost=6.67M$ | P=30.01m [OK] | Sims=11345 | Time=2m 49s
+    [Run 2] Gen  70: Cost=6.67M$ | P=30.01m [OK] | Sims=13192 | Time=3m 15s
+    [Run 2] Gen  80: Cost=6.67M$ | P=30.01m [OK] | Sims=15021 | Time=3m 41s
+    [Run 2] Gen  90: Cost=6.67M$ | P=30.01m [OK] | Sims=16846 | Time=4m 5s
+    [Run 2] Gen 100: Cost=6.67M$ | P=30.01m [OK] | Sims=18669 | Time=4m 30s
+    [Run 2] Gen 110: Cost=6.67M$ | P=30.01m [OK] | Sims=20471 | Time=4m 56s
+    [Run 2] Gen 120: Cost=6.67M$ | P=30.01m [OK] | Sims=22284 | Time=5m 20s
+    [Auto-Stop] 🛑 Stagnation limit reached (100 gens without improvement). Stopping run.
+    >> Run #2 Done (5m 33s). Final: 6.6682 M$ | P: 30.01 m | Sims: 23209
+   > Local Search: Full (34)...
+   > Done in 0.4s. Imp: 0. Final: 6.6682 M$
+
+>>> Starting Run #3/5...
+    [Mode] Aggressive (Small Network: 34 pipes)
+    [Run 3] Gen   0: Cost=9.37M$ | P=41.95m [OK] | Sims=383 | Time=5.5s
+    [Run 3] Gen  10: Cost=7.41M$ | P=30.05m [OK] | Sims=2227 | Time=34.6s
+    [Run 3] Gen  20: Cost=7.21M$ | P=30.09m [OK] | Sims=4068 | Time=1m 3s
+    [Run 3] Gen  30: Cost=7.15M$ | P=30.09m [OK] | Sims=5847 | Time=1m 31s
+    [Run 3] Gen  40: Cost=7.15M$ | P=30.09m [OK] | Sims=7680 | Time=2m 0s
+    [Run 3] Gen  50: Cost=7.15M$ | P=30.09m [OK] | Sims=9495 | Time=2m 27s
+    [Run 3] Gen  60: Cost=7.15M$ | P=30.09m [OK] | Sims=11315 | Time=2m 53s
+    [Run 3] Gen  70: Cost=7.15M$ | P=30.09m [OK] | Sims=13135 | Time=3m 18s
+    [Run 3] Gen  80: Cost=7.15M$ | P=30.09m [OK] | Sims=14958 | Time=3m 44s
+    [Run 3] Gen  90: Cost=7.15M$ | P=30.09m [OK] | Sims=16782 | Time=4m 10s
+    [Run 3] Gen 100: Cost=7.15M$ | P=30.09m [OK] | Sims=18596 | Time=4m 35s
+    [Run 3] Gen 110: Cost=7.15M$ | P=30.09m [OK] | Sims=20383 | Time=4m 59s
+    [Run 3] Gen 120: Cost=7.15M$ | P=30.09m [OK] | Sims=22213 | Time=5m 26s
+    [Auto-Stop] 🛑 Stagnation limit reached (100 gens without improvement). Stopping run.
+    >> Run #3 Done (5m 39s). Final: 7.1546 M$ | P: 30.09 m | Sims: 23133
+   > Local Search: Full (34)...
+   > Done in 0.5s. Imp: 0. Final: 7.1546 M$
+
+>>> Starting Run #4/5...
+    [Mode] Aggressive (Small Network: 34 pipes)
+    [Run 4] Gen   0: Cost=10.97M$ | P=49.62m [OK] | Sims=370 | Time=5.5s
+    [Run 4] Gen  10: Cost=8.21M$ | P=30.05m [OK] | Sims=2207 | Time=34.2s
+    [Run 4] Gen  20: Cost=7.37M$ | P=30.49m [OK] | Sims=4063 | Time=1m 2s
+    [Run 4] Gen  30: Cost=7.09M$ | P=30.09m [OK] | Sims=5875 | Time=1m 30s
+    [Run 4] Gen  40: Cost=7.06M$ | P=30.03m [OK] | Sims=7671 | Time=1m 57s
+    [Run 4] Gen  50: Cost=7.06M$ | P=30.03m [OK] | Sims=9473 | Time=2m 23s
+    [Run 4] Gen  60: Cost=7.06M$ | P=30.03m [OK] | Sims=11317 | Time=2m 49s
+    [Run 4] Gen  70: Cost=7.06M$ | P=30.03m [OK] | Sims=13143 | Time=3m 14s
+    [Run 4] Gen  80: Cost=7.06M$ | P=30.03m [OK] | Sims=14967 | Time=3m 39s
+    [Run 4] Gen  90: Cost=7.06M$ | P=30.03m [OK] | Sims=16766 | Time=4m 4s
+    [Run 4] Gen 100: Cost=7.06M$ | P=30.03m [OK] | Sims=18571 | Time=4m 29s
+    [Run 4] Gen 110: Cost=7.06M$ | P=30.03m [OK] | Sims=20374 | Time=4m 54s
+    [Run 4] Gen 120: Cost=7.06M$ | P=30.03m [OK] | Sims=22188 | Time=5m 19s
+    [Run 4] Gen 130: Cost=7.06M$ | P=30.03m [OK] | Sims=24030 | Time=5m 45s
+    [Auto-Stop] 🛑 Stagnation limit reached (100 gens without improvement). Stopping run.
+    >> Run #4 Done (5m 58s). Final: 7.0611 M$ | P: 30.03 m | Sims: 24920
+   > Local Search: Full (34)...
+   > Done in 0.4s. Imp: 0. Final: 7.0611 M$
+
+>>> Starting Run #5/5...
+    [Mode] Aggressive (Small Network: 34 pipes)
+    [Run 5] Gen   0: Cost=8.93M$ | P=36.56m [OK] | Sims=374 | Time=5.5s
+    [Run 5] Gen  10: Cost=6.95M$ | P=30.00m [OK] | Sims=2200 | Time=34.4s
+    [Run 5] Gen  20: Cost=6.92M$ | P=30.00m [OK] | Sims=3995 | Time=1m 1s
+    [Run 5] Gen  30: Cost=6.91M$ | P=30.00m [OK] | Sims=5810 | Time=1m 28s
+    [Run 5] Gen  40: Cost=6.91M$ | P=30.00m [OK] | Sims=7647 | Time=1m 53s
+    [Run 5] Gen  50: Cost=6.91M$ | P=30.00m [OK] | Sims=9459 | Time=2m 19s
+    [Run 5] Gen  60: Cost=6.91M$ | P=30.00m [OK] | Sims=11293 | Time=2m 44s
+    [Run 5] Gen  70: Cost=6.91M$ | P=30.00m [OK] | Sims=13102 | Time=3m 9s
+    [Run 5] Gen  80: Cost=6.91M$ | P=30.00m [OK] | Sims=14924 | Time=3m 34s
+    [Run 5] Gen  90: Cost=6.91M$ | P=30.00m [OK] | Sims=16736 | Time=4m 0s
+    [Run 5] Gen 100: Cost=6.91M$ | P=30.00m [OK] | Sims=18560 | Time=4m 25s
+    [Run 5] Gen 110: Cost=6.91M$ | P=30.00m [OK] | Sims=20377 | Time=4m 51s
+    [Run 5] Gen 120: Cost=6.91M$ | P=30.00m [OK] | Sims=22212 | Time=5m 16s
+    [Auto-Stop] 🛑 Stagnation limit reached (100 gens without improvement). Stopping run.
+    >> Run #5 Done (5m 29s). Final: 6.9119 M$ | P: 30.00 m | Sims: 23119
+   > Local Search: Full (34)...
+   > Done in 0.5s. Imp: 0. Final: 6.9119 M$
+
+
+=== FINAL LEADERBOARD ===
+Run  Cost (M$)  Pressure   Simulations     Time       Status
+-----------------------------------------------------------------
+2    6.6682     30.008     23242           5m 33s     OK    
+5    6.9119     30.001     23153           5m 29s     OK    
+4    7.0611     30.035     24953           5m 58s     OK    
+1    7.0768     30.007     23172           5m 36s     OK    
+3    7.1546     30.091     23165           5m 39s     OK    
+
+CHAMPION: Run #2
+Results saved in: OutputData_Naive\2026-02-19_12-59-37

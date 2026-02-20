@@ -86,7 +86,7 @@ def clean_all_temp():
             try: shutil.rmtree(root, ignore_errors=True)
             except: pass
 
-def setup_run_directory(base_dir="OutputData"):
+def setup_run_directory(base_dir="OutputDataExperiments"):
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     
     run_dir = os.path.join(base_dir, timestamp)
@@ -99,16 +99,23 @@ def setup_run_directory(base_dir="OutputData"):
 def main():
     multiprocessing.freeze_support()
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--inp", type=str, default=DEFAULT_INP_FILE)
-    parser.add_argument("--costs", type=str, default=DEFAULT_COST_FILE)
-    parser.add_argument("--runs", type=int, default=DEFAULT_RUNS)
-    parser.add_argument("--pop", type=int, default=0) 
-    parser.add_argument("--gen", type=int, default=0)
-    parser.add_argument("--hmin", type=float, default=DEFAULT_H_MIN)
-    parser.add_argument("--units", type=str, choices=["in", "mm"], default="mm")
-    parser.add_argument("--cores", type=int, default=0)
-    parser.add_argument("--fixed", action="store_true")
+    parser = argparse.ArgumentParser(description="Hybrid Genetic Algorithm for WDN Optimization")
+    parser.add_argument("--inp", type=str, default=DEFAULT_INP_FILE, help="Path to EPANET .inp file")
+    parser.add_argument("--costs", type=str, default=DEFAULT_COST_FILE, help="Path to cost configuration JSON")
+    parser.add_argument("--runs", type=int, default=DEFAULT_RUNS, help="Number of independent runs")
+    parser.add_argument("--pop", type=int, default=0, help="Population size (0 = auto)") 
+    parser.add_argument("--gen", type=int, default=0, help="Max generations (0 = auto)")
+    parser.add_argument("--hmin", type=float, default=DEFAULT_H_MIN, help="Minimum allowable head (pressure)")
+    parser.add_argument("--units", type=str, choices=["in", "mm"], default="mm", help="Units for pipe diameters")
+    parser.add_argument("--init", type=str, choices=["random", "static", "hyper"], default="hyper", help="Initialization strategy")
+    parser.add_argument("--cores", type=int, default=0, help="Number of CPU cores (0 = all)")
+    parser.add_argument("--fixed", action="store_true", help="Enable fixed penalty mode")
+    
+    parser.add_argument("--no-eps", action="store_true", help="Disable adaptive epsilon relaxation")
+    parser.add_argument("--no-shocks", action="store_true", help="Disable seismic shocks (re-starts)")
+    parser.add_argument("--no-expansion", action="store_true", help="Disable population expansion on stagnation")
+    parser.add_argument("--no-graphs", action="store_true", help="Disable graph heuristics (Smart Repair & Squeeze)")
+
     args = parser.parse_args()
 
     args.inp = os.path.abspath(args.inp)
@@ -120,8 +127,10 @@ def main():
     main_proc_temp = os.path.join(get_temp_root(), "main_process")
     os.makedirs(main_proc_temp, exist_ok=True)
     
+    base_dir = setup_run_directory()
+    
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = f"OutputData/logs/run_{timestamp}.txt"
+    log_file = f"{base_dir}/logs/run_{timestamp}.txt"
     
     sys.stdout = DualLogger(log_file)
     sys.stderr = sys.stdout
@@ -147,7 +156,6 @@ def main():
         traceback.print_exc()
         return
 
-    base_dir = setup_run_directory()
     os.makedirs(os.path.join(base_dir, "plots"), exist_ok=True)
     os.makedirs(os.path.join(base_dir, "tables"), exist_ok=True)
     
@@ -171,15 +179,33 @@ def main():
 
         results = []
         optimizer = GeneticOptimizer(sim, args.pop, args.gen, pool=pool, fixed_mode=args.fixed)
+        
+        use_epsilon = not args.no_eps
+        use_shocks = not args.no_shocks
+        use_expansion = not args.no_expansion
+        use_graphs = not args.no_graphs
 
         for i in range(args.runs):
-            ind, cost, p, dur, hist = optimizer.run(i, args.hmin)
+            optimizer.total_sims = 0
+            optimizer.total_sims = 0
+            ind, _, _, dur, hist = optimizer.run(
+                run_id=i, 
+                h_min=args.hmin, 
+                init_mode=args.init, 
+                use_epsilon=use_epsilon,
+                use_shocks=use_shocks,
+                use_expansion=use_expansion,
+                use_graph_heuristics=use_graphs
+            )
             
             print("    [Post-Process] Refining Solution...")
-            polished_ind = optimizer.run_local_search(ind, limit_pipes=500)
+            if use_graphs:
+                polished_ind = optimizer.run_local_search(ind, limit_pipes=500)
+            else:
+                polished_ind = list(ind)
             
             final_cost, final_p, _, _ = sim.get_stats(polished_ind)
-            is_feasible = (final_p >= args.hmin - 0.001)
+            is_feasible = (final_p >= args.hmin + 0.000001)
             
             results.append({
                 "run_id": i+1, "cost": final_cost, "pressure": final_p,

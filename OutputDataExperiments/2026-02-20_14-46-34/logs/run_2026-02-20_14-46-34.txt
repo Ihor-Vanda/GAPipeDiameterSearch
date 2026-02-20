@@ -1,0 +1,117 @@
+[System] Log file initiated: OutputDataExperiments\2026-02-20_14-46-34/logs/run_2026-02-20_14-46-34.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+[System] Initializing 16 parallel workers (Strict Isolation)...
+
+--- [System] Auto-Configuration ---
+[Auto-Config] Population: 200
+[Config] Max Generations: 150
+[Config] Mode: Deep Dive with post shock
+[Config] Penalties: Linear (Factor=669067)
+-----------------------------------
+
+
+>>> Starting Run #1...
+    [Config] Init: STATIC | Eps: True | Shocks: False | Expand: False | Graphs: True
+    [Warmup] 🛡️ Using GUARANTEED strategy (20% Max, 30% Mid, 50% Rnd)...
+    [Warmup] ✅ Generated 200 items. Valid initial solutions: 200
+    [Record] 🏆 New Global Best: 10.9698M$ (Valid)
+    [Gen    0] Cost=10.9698M$ | P=49.62m | Eps=15.000 | Sims=203 | OK | Time: 2.6s (ETA: ...)
+    [Record] 🏆 New Global Best: 9.4409M$ (Valid)
+    [Gen   10] Cost=7.5503M$ | P=-212.16m | Eps=15.000 | Sims=2078 | INVALID (PF↑) | Time: 6.6s (ETA: ...)
+    [Gen   20] Cost=7.3111M$ | P=18.05m | Eps=15.000 | Sims=3932 | OK | Time: 11.2s (ETA: ...)
+    [Gen   30] Cost=6.7316M$ | P=21.28m | Eps=15.000 | Sims=5784 | OK | Time: 15.4s (ETA: 1m 1s)
+    [Gen   40] Cost=6.3267M$ | P=16.83m | Eps=15.000 | Sims=7611 | OK | Time: 20.0s (ETA: 55.1s)
+    [Gen   50] Cost=6.1482M$ | P=15.77m | Eps=15.000 | Sims=9399 | OK | Time: 24.0s (ETA: 48.0s)
+    [Gen   60] Cost=6.0291M$ | P=18.32m | Eps=15.000 | Sims=11204 | OK | Time: 28.4s (ETA: 42.6s)
+    [Gen   70] Cost=5.8569M$ | P=17.55m | Eps=15.000 | Sims=12991 | OK | Time: 32.3s (ETA: 36.9s)
+    [Gen   80] Cost=5.7907M$ | P=15.30m | Eps=15.000 | Sims=14792 | OK | Time: 36.9s (ETA: 32.3s)
+    [Gen   90] Cost=5.7641M$ | P=15.18m | Eps=15.000 | Sims=16602 | OK | Time: 41.4s (ETA: 27.6s)
+    [Gen  100] Cost=5.7516M$ | P=17.39m | Eps=15.000 | Sims=18420 | OK | Time: 46.0s (ETA: 23.0s)
+    [Gen  110] Cost=5.6536M$ | P=15.35m | Eps=15.000 | Sims=20199 | OK | Time: 50.2s (ETA: 18.3s)
+    [Gen  120] Cost=5.6489M$ | P=16.43m | Eps=15.000 | Sims=21992 | OK | Time: 54.8s (ETA: 13.7s)
+    [Gen  130] Cost=5.6479M$ | P=15.93m | Eps=15.000 | Sims=23772 | OK | Time: 58.9s (ETA: 9.1s)
+    [Gen  140] Cost=5.6394M$ | P=16.35m | Eps=15.000 | Sims=25573 | OK | Time: 1m 3s (ETA: 4.5s)
+
+    [Finalizing] Validating & Polishing...
+    [Memory] ⏪ Restoring GLOBAL best valid solution (9.4409M$)
+    [Polishing] Starting Iterative Squeeze (Eps=0.00)...
+    >> Done in 1m 11s. Final Result: 7.8641M$ | P=30.01m | Sims=27420 | Time: 1m 11s
+    [Post-Process] Refining Solution...
+
+>>> Starting Run #2...
+    [Config] Init: STATIC | Eps: True | Shocks: False | Expand: False | Graphs: True
+    [Warmup] 🛡️ Using GUARANTEED strategy (20% Max, 30% Mid, 50% Rnd)...
+    [Warmup] ✅ Generated 200 items. Valid initial solutions: 200
+    [Record] 🏆 New Global Best: 10.9698M$ (Valid)
+    [Gen    0] Cost=10.9698M$ | P=49.62m | Eps=15.000 | Sims=203 | OK | Time: 0.5s (ETA: ...)
+    [Record] 🏆 New Global Best: 9.5444M$ (Valid)
+    [Record] 🏆 New Global Best: 9.3954M$ (Valid)
+    [Gen   10] Cost=7.8815M$ | P=17.01m | Eps=15.000 | Sims=2018 | OK | Time: 4.2s (ETA: ...)
+    [Gen   20] Cost=7.1745M$ | P=16.28m | Eps=15.000 | Sims=3839 | OK | Time: 8.7s (ETA: ...)
+    [Gen   30] Cost=6.3911M$ | P=26.42m | Eps=15.000 | Sims=5651 | OK | Time: 12.8s (ETA: 51.3s)
+    [Gen   40] Cost=6.1342M$ | P=15.32m | Eps=15.000 | Sims=7488 | OK | Time: 17.2s (ETA: 47.3s)
+    [Gen   50] Cost=5.9523M$ | P=15.71m | Eps=15.000 | Sims=9312 | OK | Time: 21.5s (ETA: 42.9s)
+    [Gen   60] Cost=5.7449M$ | P=15.64m | Eps=15.000 | Sims=11133 | OK | Time: 26.0s (ETA: 39.1s)
+    [Gen   70] Cost=5.6892M$ | P=15.39m | Eps=15.000 | Sims=12947 | OK | Time: 30.5s (ETA: 34.9s)
+    [Gen   80] Cost=5.6744M$ | P=15.51m | Eps=15.000 | Sims=14785 | OK | Time: 35.2s (ETA: 30.8s)
+    [Gen   90] Cost=5.6473M$ | P=15.65m | Eps=15.000 | Sims=16585 | OK | Time: 39.6s (ETA: 26.4s)
+    [Gen  100] Cost=5.6024M$ | P=16.23m | Eps=15.000 | Sims=18386 | OK | Time: 44.2s (ETA: 22.1s)
+    [Gen  110] Cost=5.6010M$ | P=15.46m | Eps=15.000 | Sims=20193 | OK | Time: 48.6s (ETA: 17.7s)
+    [Gen  120] Cost=5.5871M$ | P=15.68m | Eps=15.000 | Sims=22006 | OK | Time: 53.1s (ETA: 13.3s)
+    [Gen  130] Cost=5.5871M$ | P=15.68m | Eps=15.000 | Sims=23817 | OK | Time: 57.5s (ETA: 8.8s)
+    [Gen  140] Cost=5.5871M$ | P=15.68m | Eps=15.000 | Sims=25628 | OK | Time: 1m 1s (ETA: 4.4s)
+
+    [Finalizing] Validating & Polishing...
+    [Memory] ⏪ Restoring GLOBAL best valid solution (9.3954M$)
+    [Polishing] Starting Iterative Squeeze (Eps=0.00)...
+    >> Done in 1m 9s. Final Result: 7.0223M$ | P=30.01m | Sims=27476 | Time: 1m 9s
+    [Post-Process] Refining Solution...
+
+>>> Starting Run #3...
+    [Config] Init: STATIC | Eps: True | Shocks: False | Expand: False | Graphs: True
+    [Warmup] 🛡️ Using GUARANTEED strategy (20% Max, 30% Mid, 50% Rnd)...
+    [Warmup] ✅ Generated 200 items. Valid initial solutions: 200
+    [Record] 🏆 New Global Best: 10.9698M$ (Valid)
+    [Gen    0] Cost=10.9698M$ | P=49.62m | Eps=15.000 | Sims=203 | OK | Time: 0.5s (ETA: ...)
+    [Record] 🏆 New Global Best: 9.7764M$ (Valid)
+    [Record] 🏆 New Global Best: 8.1641M$ (Valid)
+    [Record] 🏆 New Global Best: 8.1313M$ (Valid)
+    [Gen   10] Cost=7.7307M$ | P=30.76m | Eps=15.000 | Sims=1998 | OK | Time: 4.7s (ETA: ...)
+    [Gen   20] Cost=7.3679M$ | P=15.33m | Eps=15.000 | Sims=3823 | OK | Time: 8.8s (ETA: ...)
+    [Gen   30] Cost=6.9423M$ | P=17.69m | Eps=15.000 | Sims=5639 | OK | Time: 13.2s (ETA: 52.9s)
+    [Gen   40] Cost=6.4900M$ | P=16.20m | Eps=15.000 | Sims=7472 | OK | Time: 17.4s (ETA: 47.7s)
+    [Gen   50] Cost=6.2135M$ | P=17.49m | Eps=15.000 | Sims=9267 | OK | Time: 22.3s (ETA: 44.5s)
+    [Gen   60] Cost=6.0401M$ | P=16.39m | Eps=15.000 | Sims=11084 | OK | Time: 27.1s (ETA: 40.6s)
+    [Gen   70] Cost=5.9480M$ | P=16.38m | Eps=15.000 | Sims=12882 | OK | Time: 30.9s (ETA: 35.3s)
+    [Gen   80] Cost=5.9145M$ | P=16.77m | Eps=15.000 | Sims=14685 | OK | Time: 35.4s (ETA: 31.0s)
+    [Gen   90] Cost=5.8833M$ | P=15.14m | Eps=15.000 | Sims=16494 | OK | Time: 39.8s (ETA: 26.6s)
+    [Gen  100] Cost=5.8647M$ | P=15.12m | Eps=15.000 | Sims=18284 | OK | Time: 44.6s (ETA: 22.3s)
+    [Gen  110] Cost=5.8647M$ | P=15.12m | Eps=15.000 | Sims=20108 | OK | Time: 48.9s (ETA: 17.8s)
+    [Gen  120] Cost=5.8099M$ | P=15.58m | Eps=15.000 | Sims=21895 | OK | Time: 53.7s (ETA: 13.4s)
+    [Gen  130] Cost=5.8099M$ | P=15.58m | Eps=15.000 | Sims=23679 | OK | Time: 57.8s (ETA: 8.9s)
+    [Gen  140] Cost=5.7955M$ | P=15.27m | Eps=15.000 | Sims=25494 | OK | Time: 1m 2s (ETA: 4.5s)
+
+    [Finalizing] Validating & Polishing...
+    [Memory] ⏪ Restoring GLOBAL best valid solution (8.1313M$)
+    [Polishing] Starting Iterative Squeeze (Eps=0.00)...
+    >> Done in 1m 9s. Final Result: 6.9476M$ | P=30.12m | Sims=27318 | Time: 1m 9s
+    [Post-Process] Refining Solution...
+[System] Shutting down workers pool...
+[System] Cleanup complete.
+
+=== FINAL RESULTS ===
+Run 1: 7.8641M$ | P=30.01m | OK
+Run 2: 7.0223M$ | P=30.01m | OK
+Run 3: 6.9476M$ | P=30.12m | OK
+[Output] Saved solution table: OutputDataExperiments\2026-02-20_14-46-34\tables\solution_champion.csv
+[Plot] Saved convergence graph: OutputDataExperiments\2026-02-20_14-46-34\plots\convergence.png
+[Plot] Generating network map...
+[Plot] Saved network map: OutputDataExperiments\2026-02-20_14-46-34\plots\network_map.png

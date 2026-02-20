@@ -1,0 +1,81 @@
+[Config] Units: Millimeters (converted to meters / 1000)
+[Config] Loaded 6 pipe types.
+==============================================
+   NAIVE EVOLUTIONARY OPTIMIZER: InputData/Hanoi/Hanoi.inp
+==============================================
+ Units:         mm
+ Population:    200
+ Generations:   1840
+ Min Pressure:  30.0 m
+ Output Dir:    OutputData_Naive\2026-02-19_12-35-50
+==============================================
+
+>>> Starting Run #1/5...
+    [Mode] Aggressive (Small Network: 34 pipes)
+    [INFO] Feasibility Check (All Max Pipes): P=-350892544.00 m
+    [CRITICAL WARNING] Target 30.0m is physically IMPOSSIBLE.
+    The best possible pressure is -350892544.00 m.
+    [Run 1] Gen   0: Cost=10.97M$ | P=-350892544.00m [FAIL] | Sims=373 | Time=6.4s
+Traceback (most recent call last):
+  File "E:\Projects\Python\GAPipeDiameterSearch\naive_ga.py", line 536, in <module>
+    ind, cost, pressure, duration, hist, sims = run_single_trial(i, args)
+                                                ~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\naive_ga.py", line 449, in run_single_trial
+    for ind in invalid_ind: ind.fitness.values = cached_eval(ind, gen)
+                                                 ~~~~~~~~~~~^^^^^^^^^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\naive_ga.py", line 394, in cached_eval
+    return evaluate_network(individual, args.inp, "epsilon", generation, tol, args.gen)
+  File "E:\Projects\Python\GAPipeDiameterSearch\naive_ga.py", line 138, in evaluate_network
+    results = sim.run_sim()
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\wntr\sim\epanet.py", line 133, in run_sim
+    results = self.reader.read(outfile, convergence_error, self._wn.options.hydraulic.headloss=='D-W')
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\wntr\epanet\io.py", line 2793, in read
+    self.results.node['pressure'] = HydParam.Pressure._to_si(self.flow_units, df['pressure'])
+                                                                              ~~^^^^^^^^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\frame.py", line 4092, in __getitem__
+    return self._getitem_multilevel(key)
+           ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\frame.py", line 4174, in _getitem_multilevel
+    result = self.iloc[:, loc]
+             ~~~~~~~~~^^^^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\indexing.py", line 1185, in __getitem__
+    return self._getitem_tuple(key)
+           ~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\indexing.py", line 1693, in _getitem_tuple
+    return self._getitem_lowerdim(tup)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\indexing.py", line 1042, in _getitem_lowerdim
+    return self._getitem_nested_tuple(tup)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\indexing.py", line 1154, in _getitem_nested_tuple
+    obj = getattr(obj, self.name)._getitem_axis(key, axis=axis)
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\indexing.py", line 1740, in _getitem_axis
+    return self._getbool_axis(key, axis=axis)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\indexing.py", line 1212, in _getbool_axis
+    return self.obj._take_with_is_copy(inds, axis=axis)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\generic.py", line 4175, in _take_with_is_copy
+    result = self.take(indices=indices, axis=axis)
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\generic.py", line 4155, in take
+    new_data = self._mgr.take(
+        indices,
+        axis=self._get_block_manager_axis(axis),
+        verify=True,
+    )
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\internals\managers.py", line 912, in take
+    new_labels = self.axes[axis].take(indexer)
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\indexes\multi.py", line 2282, in take
+    return MultiIndex(
+        levels=self.levels, codes=taken, names=self.names, verify_integrity=False
+    )
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\indexes\multi.py", line 352, in __new__
+    result._set_codes(codes, copy=copy, validate=False)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\indexes\multi.py", line 1125, in _set_codes
+    self._reset_cache()
+    ~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\base.py", line 123, in _reset_cache
+    def _reset_cache(self, key: str | None = None) -> None:
+    
+KeyboardInterrupt

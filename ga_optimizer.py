@@ -130,10 +130,75 @@ class GeneticOptimizer:
         if not isinstance(val, tuple): val = (val,)
         self.memo[key] = val
         return val
+    
+    def _random_warmup(self, start_eps, start_pf):
+        print(f"    [Warmup] 🎲 Using PURE RANDOM strategy...")
+        
+        pop = []
+        for _ in range(self.pop_size):
+            ind = creator.Individual([random.randint(0, self.n_opts-1) for _ in range(self.n_vars)])
+            pop.append(ind)
+            
+        if self.pool:
+            tasks = [(ind, 0, start_pf, start_eps) for ind in pop]
+            self.total_sims += len(tasks)
+            results = self.pool.map(self.sim.worker_eval_wrapper, tasks)
+            for ind, fit in zip(pop, results): 
+                if not isinstance(fit, tuple): fit = (fit,)
+                ind.fitness.values = fit
+        else:
+            for ind in pop: 
+                ind.fitness.values = self._cached_eval(ind, 0, start_pf, start_eps)
+                
+        valid_count = sum(1 for ind in pop if ind.fitness.values[0] < self.DEATH_LIMIT)
+        print(f"    [Warmup] ✅ Generated {len(pop)} items. Valid initial solutions: {valid_count}")
+        
+        return pop
+    
+    def _guaranteed_warmup(self, start_eps, start_pf):
+        print(f"    [Warmup] 🛡️ Using GUARANTEED strategy (20% Max, 30% Mid, 50% Rnd)...")
+        
+        pop = []
+        n_max = int(self.pop_size * 0.20)
+        n_mid = int(self.pop_size * 0.30)
+        n_rnd = self.pop_size - n_max - n_mid
+        max_idx = self.n_opts - 1
+        for _ in range(n_max):
+            ind = creator.Individual([max_idx] * self.n_vars)
+            pop.append(ind)
+
+        mid_idx = self.n_opts // 2
+        for _ in range(n_mid):
+
+            ind = creator.Individual([
+                max(0, min(mid_idx + random.randint(-1, 1), self.n_opts - 1)) 
+                for _ in range(self.n_vars)
+            ])
+            pop.append(ind)
+
+        for _ in range(n_rnd):
+            ind = creator.Individual([random.randint(0, self.n_opts - 1) for _ in range(self.n_vars)])
+            pop.append(ind)
+            
+        if self.pool:
+            tasks = [(ind, 0, start_pf, start_eps) for ind in pop]
+            self.total_sims += len(tasks)
+            results = self.pool.map(self.sim.worker_eval_wrapper, tasks)
+            for ind, fit in zip(pop, results): 
+                if not isinstance(fit, tuple): fit = (fit,)
+                ind.fitness.values = fit
+        else:
+            for ind in pop: 
+                ind.fitness.values = self._cached_eval(ind, 0, start_pf, start_eps)
+            
+        valid_count = sum(1 for ind in pop if ind.fitness.values[0] < self.DEATH_LIMIT)
+        print(f"    [Warmup] ✅ Generated {len(pop)} items. Valid initial solutions: {valid_count}")
+        
+        return pop
 
     def _mixed_warmup(self, start_eps, start_pf):
-        warmup_pop_size = self.pop_size * 5 
-        warmup_gens = 40
+        warmup_pop_size = self.pop_size * 10
+        warmup_gens = 30
         print(f"    [Hyper-Warmup] 🛡️ Generating mixed initial skeletons...")
         
         pop = []
@@ -294,20 +359,38 @@ class GeneticOptimizer:
         for ind in hof: 
             if hasattr(ind, "fitness"): del ind.fitness.values
 
-    def run(self, run_id, h_min):
+    def run(self, run_id, h_min, 
+            init_mode='hyper',
+            use_epsilon=True, 
+            use_expansion=True, 
+            use_shocks=True, 
+            use_graph_heuristics=True):
+        
         random.seed(time.time() + run_id)
         np.random.seed(int(time.time() + run_id))
         self.start_time = time.time()
         print(f"\n>>> Starting Run #{run_id + 1}...")
+        print(f"    [Config] Init: {init_mode.upper()} | Eps: {use_epsilon} | Shocks: {use_shocks} | Expand: {use_expansion} | Graphs: {use_graph_heuristics}")
 
         CONFIG['h_min'] = h_min 
         current_pf = self.HEAVY_PF
-        start_eps = h_min * 0.50 
         
-        pop = self._mixed_warmup(start_eps, current_pf)
+        if use_epsilon:
+            start_eps = h_min * 0.50 
+            steps = [h_min * x for x in [0.40, 0.30, 0.20, 0.15, 0.10, 0.05, 0.02, 0.0]]
+        else:
+            start_eps = 0.0
+            steps = [0.0]
+            
+        if init_mode == 'static':
+            pop = self._guaranteed_warmup(start_eps, current_pf)
+        elif init_mode == 'random':
+            pop = self._random_warmup(start_eps, current_pf)
+        else:
+            pop = self._mixed_warmup(start_eps, current_pf)
+            
         hof = tools.HallOfFame(10)
         
-        steps = [h_min * x for x in [0.40, 0.30, 0.20, 0.15, 0.10, 0.05, 0.02, 0.0]]
         step_idx = 0
         current_epsilon = start_eps
         
@@ -331,8 +414,8 @@ class GeneticOptimizer:
         current_mutation_rate = 0.05
         
         consecutive_fails = 0
-        MAX_TOTAL_SHOCKS = 10
-        MAX_FAILS = 3 
+        MAX_TOTAL_SHOCKS = 10 if use_shocks else 0
+        MAX_FAILS = 5 
         record_at_shock_start = float('inf')
         
         epsilon_registry = {} 
@@ -343,9 +426,12 @@ class GeneticOptimizer:
 
         while (gen < self.n_gens) or (shock_active or cooldown_active) or (current_epsilon == 0.0 and consecutive_fails < MAX_FAILS):
             if gen > self.n_gens * 5: break
+            if gen >= self.n_gens and not shock_active and not cooldown_active:
+                print(f"    [Auto-Stop] 🛑 Reached strict generation limit ({self.n_gens}).")
+                break
 
             elapsed = time.time() - self.start_time
-            if gen > 0:
+            if gen > 20:
                 eta = (elapsed / gen) * (self.n_gens - gen) if gen < self.n_gens else 0
                 eta_str = format_time(eta)
             else: eta_str = "..."
@@ -366,19 +452,19 @@ class GeneticOptimizer:
             curr_c, leader_p, _, _ = self._get_stats(hof[0])
             eff_limit = h_min - current_epsilon
             
-            if leader_p >= (eff_limit - 0.01):
+            if leader_p >= eff_limit:
                 eps_key = round(current_epsilon, 2)
                 if eps_key not in epsilon_registry or curr_c < epsilon_registry[eps_key][1]:
                     epsilon_registry[eps_key] = (creator.Individual(hof[0]), curr_c)
             
-            if leader_p >= (h_min - 0.01):
+            if leader_p >= h_min:
                 if curr_c < global_valid_cost:
                     print(f"    [Record] 🏆 New Global Best: {curr_c/1e6:.4f}M$ (Valid)")
                     global_valid_cost = curr_c
                     global_valid_ind = creator.Individual(hof[0])
                     consecutive_fails = 0 
             
-            is_valid_now = leader_p >= (eff_limit - 0.01)
+            is_valid_now = leader_p >= eff_limit
 
             if not is_valid_now:
                 current_pf *= 1.2
@@ -386,12 +472,24 @@ class GeneticOptimizer:
                 status_msg = "INVALID (PF↑)"
                 
                 if stagnation_counter > 2:
-                    steps_fix = 5 if current_epsilon > (h_min * 0.4) else 40
-                    fixed_ind, method = self._smart_repair(hof[0], current_epsilon, max_steps=steps_fix)
-                    if "BST" in method or method == "ITER_BST":
-                        fixed_ind = self._iterative_squeeze(fixed_ind, epsilon=current_epsilon, silent=True)
-                        method += "+SQZ"
-                    pop[0] = creator.Individual(fixed_ind)
+                    if use_graph_heuristics:
+                        steps_fix = 5 if current_epsilon > (h_min * 0.4) else 40
+                        fixed_ind, method = self._smart_repair(hof[0], current_epsilon, max_steps=steps_fix)
+                        if "BST" in method or method == "ITER_BST":
+                            fixed_ind = self._iterative_squeeze(fixed_ind, epsilon=current_epsilon, silent=True)
+                            method += "+SQZ"
+                        pop[0] = creator.Individual(fixed_ind)
+                        del pop[0].fitness.values
+                        status_msg = f"{method}"
+                        stagnation_counter = 0
+                    else:
+                        fixed_ind = list(hof[0])
+                        for _ in range(5):
+                            idx = random.randint(0, self.n_vars - 1)
+                            if fixed_ind[idx] < self.n_opts - 1: fixed_ind[idx] += 1
+                        method = "NAIVE_BUMP"
+                        pop[0] = creator.Individual(fixed_ind)
+                    
                     del pop[0].fitness.values
                     status_msg = f"{method}"
                     stagnation_counter = 0
@@ -399,7 +497,7 @@ class GeneticOptimizer:
                 current_pf = max(self.HEAVY_PF, current_pf * 0.95)
                 status_msg = "OK"
 
-            if gen % 50 == 0 and is_valid_now and not shock_active and not cooldown_active and (current_epsilon < h_min * 0.2):
+            if  use_graph_heuristics and gen % 30 == 0 and is_valid_now and not shock_active and not cooldown_active and (current_epsilon < h_min * 0.2):
                 cand = list(hof[0])
                 squeezed_cand = self._iterative_squeeze(cand, epsilon=current_epsilon, silent=True)
                 new_ind = creator.Individual(squeezed_cand)
@@ -408,7 +506,7 @@ class GeneticOptimizer:
                 
                 sq_cost, sq_p, _, _ = self.sim.get_stats(new_ind)
 
-                if sq_p >= (h_min - 0.01):
+                if sq_p >= h_min:
                     if sq_cost < global_valid_cost:
                         print(f"    [Record] 🏆 New Global Best (from Squeeze): {sq_cost/1e6:.4f}M$ (Valid)")
                         global_valid_cost = sq_cost
@@ -433,8 +531,14 @@ class GeneticOptimizer:
                             repaired_leader = creator.Individual(reg_ind)
                         else:
                             print(f"      > Creating repaired clone...")
-                            rep_genes, rep_method = self._smart_repair(hof[0], next_eps, max_steps=50)
-                            rep_genes = self._iterative_squeeze(rep_genes, epsilon=next_eps, silent=True)
+                            if use_graph_heuristics:
+                                rep_genes, _ = self._smart_repair(hof[0], next_eps, max_steps=50)
+                                rep_genes = self._iterative_squeeze(rep_genes, epsilon=next_eps, silent=True)
+                            else:
+                                rep_genes = list(hof[0])
+                                for _ in range(5):
+                                    idx = random.randint(0, self.n_vars - 1)
+                                    if rep_genes[idx] < self.n_opts - 1: rep_genes[idx] += 1
                             repaired_leader = creator.Individual(rep_genes)
                         
                         current_epsilon = next_eps
@@ -449,33 +553,37 @@ class GeneticOptimizer:
                         pop = self._inject_diversity(pop, ratio=0.25)
 
                     elif current_epsilon == 0.0:
-                        if shock_triggered_count >= MAX_TOTAL_SHOCKS:
+                        if  use_shocks and shock_triggered_count >= MAX_TOTAL_SHOCKS:
                             print(f"    [Auto-Stop] 🛑 Reached max total shocks ({MAX_TOTAL_SHOCKS}). Stopping.")
+                            break
+                        elif not use_shocks:
+                            print(f"    [Auto-Stop] 🛑 Stagnation reached 0.0 limit without shocks. Stopping.")
                             break
                         
                         if consecutive_fails >= MAX_FAILS:
                             print(f"    [Auto-Stop] 🛑 Too many consecutive fails ({consecutive_fails}). Stopping.")
                             break
 
-                        if stagnation_counter > 60 and expansions_used < 2:
+                        if use_expansion and stagnation_counter > 50 and expansions_used < 2:
                              pop = self._expand_population(pop)
                              expansions_used += 1; stagnation_counter = 0
                              self._invalidate_fitness(pop, hof); continue
 
-                        shock_active = True; shock_triggered_count += 1
-                        record_at_shock_start = global_valid_cost
-                        shock_val = shock_levels[(shock_triggered_count - 1) % len(shock_levels)]    
-                        
-                        shock_duration = 40 + int(self.n_vars * 0.25)
-                        shock_duration = max(50, min(300, shock_duration))
-                        shock_end_gen = gen + shock_duration
-                        
-                        cost_before_shock = hof[0].fitness.values[0]
-                        banned_legacy_cost = cost_before_shock
-                        stagnation_counter = 0
-                        current_epsilon = shock_val 
-                        self._invalidate_fitness(pop, hof); hof.clear() 
-                        print(f"\n    [Seismic] 〰️ Deep Shock #{shock_triggered_count}! Relaxing to Eps -> {shock_val:.2f}m.")
+                        if use_shocks:
+                            shock_active = True; shock_triggered_count += 1
+                            record_at_shock_start = global_valid_cost
+                            shock_val = shock_levels[(shock_triggered_count - 1) % len(shock_levels)]    
+                            
+                            shock_duration = 40 + int(self.n_vars * 0.25)
+                            shock_duration = max(50, min(300, shock_duration))
+                            shock_end_gen = gen + shock_duration
+                            
+                            cost_before_shock = hof[0].fitness.values[0]
+                            banned_legacy_cost = cost_before_shock
+                            stagnation_counter = 0
+                            current_epsilon = shock_val 
+                            self._invalidate_fitness(pop, hof); hof.clear() 
+                            print(f"\n    [Seismic] 〰️ Deep Shock #{shock_triggered_count}! Relaxing to Eps -> {shock_val:.2f}m.")
 
             elif shock_active:
                 current_epsilon = shock_val
@@ -504,9 +612,15 @@ class GeneticOptimizer:
                              reg_ind, _ = epsilon_registry[next_key]
                              pop[0] = creator.Individual(reg_ind)
                         else:
-                             rep_genes, _ = self._smart_repair(hof[0], current_epsilon, max_steps=30)
-                             rep_genes = self._iterative_squeeze(rep_genes, epsilon=current_epsilon, silent=True)
-                             pop[0] = creator.Individual(rep_genes)
+                            if use_graph_heuristics:
+                                rep_genes, _ = self._smart_repair(hof[0], current_epsilon, max_steps=30)
+                                rep_genes = self._iterative_squeeze(rep_genes, epsilon=current_epsilon, silent=True)
+                            else:
+                                rep_genes = list(hof[0])
+                                for _ in range(5):
+                                    idx = random.randint(0, self.n_vars - 1)
+                                    if rep_genes[idx] < self.n_opts - 1: rep_genes[idx] += 1
+                            pop[0] = creator.Individual(rep_genes)
                         del pop[0].fitness.values
                     else:
                         cooldown_active = False; current_epsilon = 0.0
@@ -583,8 +697,12 @@ class GeneticOptimizer:
                 print(f"    [Memory] ⏪ Restoring GLOBAL best valid solution ({global_valid_cost/1e6:.4f}M$)")
                 hof.clear(); hof.update([global_valid_ind])
         
-        semi_final = self.run_local_search(hof[0], limit_pipes=None, epsilon=0.0)
-        final_solution = self._iterative_squeeze(semi_final)
+        if use_graph_heuristics:
+            semi_final = self.run_local_search(hof[0], limit_pipes=None, epsilon=0.0)
+            final_solution = self._iterative_squeeze(semi_final)
+        else:
+            final_solution = list(hof[0])
+            
         final_ind = creator.Individual(final_solution)
         cost, min_p, _, _ = self._get_stats(final_ind)
         

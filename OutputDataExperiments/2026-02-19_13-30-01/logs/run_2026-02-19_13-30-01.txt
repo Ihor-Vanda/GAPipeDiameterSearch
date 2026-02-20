@@ -1,0 +1,28 @@
+[System] Log file initiated: OutputDataExperiments\2026-02-19_13-30-01/logs/run_2026-02-19_13-30-01.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+[System] Initializing 16 parallel workers (Strict Isolation)...
+
+--- [System] Auto-Configuration ---
+[Auto-Config] Population: 200
+[Auto-Config] Max Generations: 1840
+[Config] Mode: Deep Dive with post shock
+[Config] Penalties: Linear (Factor=669067)
+-----------------------------------
+
+
+>>> Starting Run #1...
+    [Hyper-Warmup] 🛡️ Generating mixed initial skeletons...
+      > Warmup Gen 0: Best 15.52M$ (Valid)
+      > Warmup Gen 10: Best 7.06M$ (Valid)
+
+[System] 🛑 User interrupted via Keyboard (Ctrl+C). Terminating...
+[System] Shutting down workers pool...
+[System] Cleanup complete.

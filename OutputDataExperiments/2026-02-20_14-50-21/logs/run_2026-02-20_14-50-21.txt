@@ -1,0 +1,108 @@
+[System] Log file initiated: OutputDataExperiments\2026-02-20_14-50-21/logs/run_2026-02-20_14-50-21.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+[System] Initializing 16 parallel workers (Strict Isolation)...
+
+--- [System] Auto-Configuration ---
+[Auto-Config] Population: 200
+[Config] Max Generations: 150
+[Config] Mode: Deep Dive with post shock
+[Config] Penalties: Linear (Factor=669067)
+-----------------------------------
+
+
+>>> Starting Run #1...
+    [Config] Init: HYPER | Eps: True | Shocks: False | Expand: False | Graphs: True
+    [Hyper-Warmup] 🛡️ Generating mixed initial skeletons...
+    [Hyper-Warmup] 🧬 Selecting Zombies & Heroes...
+    [Hyper-Warmup] ✅ Ready to dive with 200 diverse agents.
+    [Gen    0] Cost=6.9660M$ | P=6.55m | Eps=15.000 | Sims=402 | INVALID (PF↑) | Time: 2.6s (ETA: ...)
+    [Gen   10] Cost=7.2141M$ | P=12.83m | Eps=15.000 | Sims=2404 | INVALID (PF↑) | Time: 7.6s (ETA: ...)
+    [Gen   20] Cost=6.5372M$ | P=17.25m | Eps=15.000 | Sims=4242 | OK | Time: 11.8s (ETA: ...)
+    [Gen   30] Cost=6.5372M$ | P=17.25m | Eps=15.000 | Sims=6060 | OK | Time: 17.0s (ETA: 1m 7s)
+    [Gen   40] Cost=6.3141M$ | P=17.52m | Eps=15.000 | Sims=7886 | OK | Time: 21.2s (ETA: 58.4s)
+    [Gen   50] Cost=6.1925M$ | P=15.22m | Eps=15.000 | Sims=9696 | OK | Time: 26.1s (ETA: 52.1s)
+    [Gen   60] Cost=6.1146M$ | P=14.93m | Eps=15.000 | Sims=11526 | INVALID (PF↑) | Time: 30.4s (ETA: 45.6s)
+    [Gen   70] Cost=6.0873M$ | P=15.71m | Eps=15.000 | Sims=13367 | OK | Time: 34.9s (ETA: 39.9s)
+    [Gen   80] Cost=5.9545M$ | P=15.14m | Eps=15.000 | Sims=15185 | OK | Time: 39.8s (ETA: 34.8s)
+    [Gen   90] Cost=5.9545M$ | P=15.14m | Eps=15.000 | Sims=16993 | OK | Time: 44.4s (ETA: 29.6s)
+    [Gen  100] Cost=5.9433M$ | P=16.06m | Eps=15.000 | Sims=18792 | OK | Time: 49.1s (ETA: 24.6s)
+    [Gen  110] Cost=5.8841M$ | P=15.15m | Eps=15.000 | Sims=20607 | OK | Time: 53.6s (ETA: 19.5s)
+    [Gen  120] Cost=5.8676M$ | P=16.92m | Eps=15.000 | Sims=22422 | OK | Time: 58.2s (ETA: 14.6s)
+    [Gen  130] Cost=5.9314M$ | P=15.94m | Eps=15.000 | Sims=24245 | OK | Time: 1m 2s (ETA: 9.6s)
+    [Gen  140] Cost=5.8387M$ | P=15.50m | Eps=15.000 | Sims=26055 | OK | Time: 1m 7s (ETA: 4.8s)
+
+    [Finalizing] Validating & Polishing...
+    [Polishing] Starting Iterative Squeeze (Eps=0.00)...
+    >> Done in 1m 12s. Final Result: 5.7820M$ | P=15.51m | Sims=27712 | Time: 1m 12s
+    [Post-Process] Refining Solution...
+
+>>> Starting Run #2...
+    [Config] Init: HYPER | Eps: True | Shocks: False | Expand: False | Graphs: True
+    [Hyper-Warmup] 🛡️ Generating mixed initial skeletons...
+    [Hyper-Warmup] 🧬 Selecting Zombies & Heroes...
+    [Hyper-Warmup] ✅ Ready to dive with 200 diverse agents.
+    [Gen    0] Cost=7.1958M$ | P=7.89m | Eps=15.000 | Sims=402 | INVALID (PF↑) | Time: 0.6s (ETA: ...)
+    [Gen   10] Cost=7.9628M$ | P=15.22m | Eps=15.000 | Sims=2373 | OK | Time: 6.1s (ETA: ...)
+    [Gen   20] Cost=6.5980M$ | P=16.62m | Eps=15.000 | Sims=4171 | OK | Time: 10.6s (ETA: ...)
+    [Gen   30] Cost=6.5315M$ | P=16.10m | Eps=15.000 | Sims=5986 | OK | Time: 15.6s (ETA: 1m 2s)
+    [Gen   40] Cost=6.3399M$ | P=17.62m | Eps=15.000 | Sims=7791 | OK | Time: 19.8s (ETA: 54.4s)
+    [Gen   50] Cost=6.1087M$ | P=15.79m | Eps=15.000 | Sims=9614 | OK | Time: 24.0s (ETA: 48.1s)
+    [Gen   60] Cost=5.8695M$ | P=16.83m | Eps=15.000 | Sims=11439 | OK | Time: 28.3s (ETA: 42.5s)
+    [Gen   70] Cost=5.8695M$ | P=16.83m | Eps=15.000 | Sims=13260 | OK | Time: 32.5s (ETA: 37.1s)
+    [Gen   80] Cost=5.8547M$ | P=15.68m | Eps=15.000 | Sims=15052 | OK | Time: 36.7s (ETA: 32.1s)
+    [Gen   90] Cost=5.8547M$ | P=15.68m | Eps=15.000 | Sims=16843 | OK | Time: 40.9s (ETA: 27.3s)
+    [Gen  100] Cost=5.8135M$ | P=16.63m | Eps=15.000 | Sims=18632 | OK | Time: 45.6s (ETA: 22.8s)
+    [Gen  110] Cost=5.8135M$ | P=15.27m | Eps=15.000 | Sims=20409 | OK | Time: 50.0s (ETA: 18.2s)
+    [Gen  120] Cost=5.7541M$ | P=15.49m | Eps=15.000 | Sims=22198 | OK | Time: 54.2s (ETA: 13.6s)
+    [Gen  130] Cost=5.7217M$ | P=15.25m | Eps=15.000 | Sims=24031 | OK | Time: 59.0s (ETA: 9.1s)
+    [Gen  140] Cost=5.6673M$ | P=15.25m | Eps=15.000 | Sims=25813 | OK | Time: 1m 3s (ETA: 4.5s)
+
+    [Finalizing] Validating & Polishing...
+    [Polishing] Starting Iterative Squeeze (Eps=0.00)...
+    >> Done in 1m 8s. Final Result: 5.6467M$ | P=15.85m | Sims=27450 | Time: 1m 8s
+    [Post-Process] Refining Solution...
+
+>>> Starting Run #3...
+    [Config] Init: HYPER | Eps: True | Shocks: False | Expand: False | Graphs: True
+    [Hyper-Warmup] 🛡️ Generating mixed initial skeletons...
+    [Hyper-Warmup] 🧬 Selecting Zombies & Heroes...
+    [Hyper-Warmup] ✅ Ready to dive with 200 diverse agents.
+    [Gen    0] Cost=7.4238M$ | P=-6.40m | Eps=15.000 | Sims=402 | INVALID (PF↑) | Time: 0.4s (ETA: ...)
+    [Gen   10] Cost=7.2706M$ | P=-1.45m | Eps=15.000 | Sims=2406 | INVALID (PF↑) | Time: 5.8s (ETA: ...)
+    [Gen   20] Cost=6.8111M$ | P=15.07m | Eps=15.000 | Sims=4384 | OK | Time: 10.8s (ETA: ...)
+    [Gen   30] Cost=6.5701M$ | P=15.21m | Eps=15.000 | Sims=6180 | OK | Time: 15.3s (ETA: 1m 1s)
+    [Gen   40] Cost=6.3709M$ | P=16.47m | Eps=15.000 | Sims=8014 | OK | Time: 19.6s (ETA: 54.0s)
+    [Gen   50] Cost=6.2080M$ | P=17.98m | Eps=15.000 | Sims=9806 | OK | Time: 24.3s (ETA: 48.5s)
+    [Gen   60] Cost=6.0512M$ | P=18.82m | Eps=15.000 | Sims=11625 | OK | Time: 28.5s (ETA: 42.8s)
+    [Gen   70] Cost=5.9920M$ | P=15.22m | Eps=15.000 | Sims=13451 | OK | Time: 33.1s (ETA: 37.8s)
+    [Gen   80] Cost=5.9492M$ | P=15.68m | Eps=15.000 | Sims=15270 | OK | Time: 37.1s (ETA: 32.5s)
+    [Gen   90] Cost=5.8555M$ | P=15.21m | Eps=15.000 | Sims=17081 | OK | Time: 41.5s (ETA: 27.6s)
+    [Gen  100] Cost=5.7942M$ | P=15.27m | Eps=15.000 | Sims=18884 | OK | Time: 45.8s (ETA: 22.9s)
+    [Gen  110] Cost=5.7646M$ | P=16.06m | Eps=15.000 | Sims=20680 | OK | Time: 50.6s (ETA: 18.4s)
+    [Gen  120] Cost=5.7547M$ | P=15.33m | Eps=15.000 | Sims=22476 | OK | Time: 55.2s (ETA: 13.8s)
+    [Gen  130] Cost=5.7547M$ | P=15.33m | Eps=15.000 | Sims=24263 | OK | Time: 59.6s (ETA: 9.2s)
+    [Gen  140] Cost=5.6813M$ | P=15.13m | Eps=15.000 | Sims=26088 | OK | Time: 1m 4s (ETA: 4.6s)
+
+    [Finalizing] Validating & Polishing...
+    [Polishing] Starting Iterative Squeeze (Eps=0.00)...
+    >> Done in 1m 10s. Final Result: 5.6813M$ | P=15.13m | Sims=27702 | Time: 1m 10s
+    [Post-Process] Refining Solution...
+[System] Shutting down workers pool...
+[System] Cleanup complete.
+
+=== FINAL RESULTS ===
+Run 1: 5.7820M$ | P=15.51m | FAIL
+Run 2: 5.6467M$ | P=15.85m | FAIL
+Run 3: 5.6813M$ | P=15.13m | FAIL
+[Output] Saved solution table: OutputDataExperiments\2026-02-20_14-50-21\tables\solution_champion.csv
+[Plot] Saved convergence graph: OutputDataExperiments\2026-02-20_14-50-21\plots\convergence.png
+[Plot] Generating network map...
+[Plot] Saved network map: OutputDataExperiments\2026-02-20_14-50-21\plots\network_map.png

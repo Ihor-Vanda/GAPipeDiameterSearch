@@ -1,0 +1,743 @@
+[System] Log file initiated: OutputDataExperiments\2026-02-19_13-31-26/logs/run_2026-02-19_13-31-26.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+[System] Initializing 16 parallel workers (Strict Isolation)...
+
+--- [System] Auto-Configuration ---
+[Auto-Config] Population: 200
+[Auto-Config] Max Generations: 1840
+[Config] Mode: Deep Dive with post shock
+[Config] Penalties: Linear (Factor=669067)
+-----------------------------------
+
+
+>>> Starting Run #1...
+    [Hyper-Warmup] 🛡️ Generating mixed initial skeletons...
+    [Hyper-Warmup] 🧬 Selecting Zombies & Heroes...
+    [Hyper-Warmup] ✅ Ready to dive with 200 diverse agents.
+    [Gen    0] Cost=7.1574M$ | P=-5.72m | Eps=15.000 | Sims=402 | INVALID (PF↑) | Time: 2.4s (ETA: ...)
+    [Gen   10] Cost=7.3326M$ | P=-16.42m | Eps=15.000 | Sims=2408 | INVALID (PF↑) | Time: 7.1s (ETA: 21m 31s)
+    [Gen   20] Cost=7.5176M$ | P=2.47m | Eps=15.000 | Sims=4406 | INVALID (PF↑) | Time: 12.2s (ETA: 18m 29s)
+    [Gen   30] Cost=7.1730M$ | P=19.41m | Eps=15.000 | Sims=6239 | OK | Time: 16.5s (ETA: 16m 37s)
+    [Gen   40] Cost=6.8478M$ | P=17.44m | Eps=15.000 | Sims=8059 | OK | Time: 21.3s (ETA: 15m 59s)
+    [Gen   50] Cost=6.6240M$ | P=15.96m | Eps=15.000 | Sims=9878 | OK | Time: 25.7s (ETA: 15m 21s)
+    [Gen   60] Cost=6.3361M$ | P=16.01m | Eps=15.000 | Sims=11699 | OK | Time: 30.6s (ETA: 15m 7s)
+    [Gen   70] Cost=6.1531M$ | P=15.79m | Eps=15.000 | Sims=13476 | OK | Time: 34.7s (ETA: 14m 38s)
+    [Gen   80] Cost=6.1215M$ | P=18.15m | Eps=15.000 | Sims=15292 | OK | Time: 39.4s (ETA: 14m 26s)
+    [Gen   90] Cost=6.0346M$ | P=17.98m | Eps=15.000 | Sims=17116 | OK | Time: 43.7s (ETA: 14m 10s)
+    [Gen  100] Cost=5.9032M$ | P=16.59m | Eps=15.000 | Sims=18929 | OK | Time: 48.3s (ETA: 13m 59s)
+    [Gen  110] Cost=5.7864M$ | P=15.89m | Eps=15.000 | Sims=20749 | OK | Time: 52.5s (ETA: 13m 45s)
+    [Gen  120] Cost=5.8684M$ | P=15.00m | Eps=15.000 | Sims=22583 | INVALID (PF↑) | Time: 57.1s (ETA: 13m 39s)
+    [Gen  130] Cost=5.7790M$ | P=15.85m | Eps=15.000 | Sims=24373 | OK | Time: 1m 1s (ETA: 13m 28s)
+    [Gen  140] Cost=5.7266M$ | P=15.97m | Eps=15.000 | Sims=26181 | OK | Time: 1m 6s (ETA: 13m 24s)
+    [Gen  150] Cost=5.7220M$ | P=15.51m | Eps=15.000 | Sims=28015 | OK | Time: 1m 10s (ETA: 13m 19s)
+    [Gen  160] Cost=5.6810M$ | P=15.75m | Eps=15.000 | Sims=29806 | OK | Time: 1m 15s (ETA: 13m 15s)
+    [Gen  170] Cost=5.6015M$ | P=15.13m | Eps=15.000 | Sims=31610 | OK | Time: 1m 20s (ETA: 13m 6s)
+    [Gen  180] Cost=5.6015M$ | P=15.13m | Eps=15.000 | Sims=33397 | OK | Time: 1m 24s (ETA: 13m 1s)
+    [Gen  190] Cost=5.5592M$ | P=15.22m | Eps=15.000 | Sims=35199 | OK | Time: 1m 29s (ETA: 12m 55s)
+    [Gen  200] Cost=5.5592M$ | P=15.22m | Eps=15.000 | Sims=36987 | OK | Time: 1m 33s (ETA: 12m 47s)
+    [Gen  210] Cost=5.5592M$ | P=15.22m | Eps=15.000 | Sims=38771 | OK | Time: 1m 37s (ETA: 12m 38s)
+    [Gen  220] Cost=5.4971M$ | P=15.22m | Eps=15.000 | Sims=40594 | OK | Time: 1m 42s (ETA: 12m 32s)
+    [Gen  230] Cost=5.6153M$ | P=15.42m | Eps=15.000 | Sims=42435 | OK | Time: 1m 46s (ETA: 12m 28s)
+    [Gen  240] Cost=5.5920M$ | P=15.99m | Eps=15.000 | Sims=44224 | OK | Time: 1m 50s (ETA: 12m 19s)
+    [Gen  250] Cost=5.5793M$ | P=15.69m | Eps=15.000 | Sims=46016 | OK | Time: 1m 55s (ETA: 12m 13s)
+    [Gen  260] Cost=5.5793M$ | P=15.69m | Eps=15.000 | Sims=47812 | OK | Time: 1m 59s (ETA: 12m 6s)
+    [Gen  270] Cost=5.5793M$ | P=15.69m | Eps=15.000 | Sims=49610 | OK | Time: 2m 3s (ETA: 11m 59s)
+    [Gen  280] Cost=5.5793M$ | P=15.69m | Eps=15.000 | Sims=51402 | OK | Time: 2m 7s (ETA: 11m 51s)
+    [Gen  290] Cost=5.5793M$ | P=15.69m | Eps=15.000 | Sims=53194 | OK | Time: 2m 11s (ETA: 11m 45s)
+    [Handover] Switching to Eps 12.00m...
+      > Creating repaired clone...
+    [Gen  300] Cost=5.7655M$ | P=18.16m | Eps=12.000 | Sims=55018 | OK | Time: 2m 16s (ETA: 11m 39s)
+    [Gen  310] Cost=5.7655M$ | P=18.16m | Eps=12.000 | Sims=56790 | OK | Time: 2m 20s (ETA: 11m 35s)
+    [Gen  320] Cost=5.7385M$ | P=18.13m | Eps=12.000 | Sims=58592 | OK | Time: 2m 24s (ETA: 11m 27s)
+    [Gen  330] Cost=5.7301M$ | P=18.01m | Eps=12.000 | Sims=60392 | OK | Time: 2m 29s (ETA: 11m 23s)
+    [Gen  340] Cost=5.7222M$ | P=18.01m | Eps=12.000 | Sims=62198 | OK | Time: 2m 33s (ETA: 11m 18s)
+    [Gen  350] Cost=5.7083M$ | P=18.03m | Eps=12.000 | Sims=64001 | OK | Time: 2m 39s (ETA: 11m 17s)
+    [Gen  360] Cost=5.7083M$ | P=18.03m | Eps=12.000 | Sims=65774 | OK | Time: 2m 44s (ETA: 11m 16s)
+    [Gen  370] Cost=5.7061M$ | P=18.05m | Eps=12.000 | Sims=67580 | OK | Time: 2m 50s (ETA: 11m 17s)
+    [Gen  380] Cost=5.7061M$ | P=18.05m | Eps=12.000 | Sims=69382 | OK | Time: 2m 55s (ETA: 11m 15s)
+    [Gen  390] Cost=5.6805M$ | P=18.15m | Eps=12.000 | Sims=71192 | OK | Time: 3m 1s (ETA: 11m 13s)
+    [Gen  400] Cost=5.6805M$ | P=18.15m | Eps=12.000 | Sims=72993 | OK | Time: 3m 6s (ETA: 11m 11s)
+    [Gen  410] Cost=5.6805M$ | P=18.15m | Eps=12.000 | Sims=74794 | OK | Time: 3m 11s (ETA: 11m 8s)
+    [Gen  420] Cost=5.6805M$ | P=18.15m | Eps=12.000 | Sims=76586 | OK | Time: 3m 15s (ETA: 11m 2s)
+    [Gen  430] Cost=5.6805M$ | P=18.15m | Eps=12.000 | Sims=78401 | OK | Time: 3m 20s (ETA: 10m 57s)
+    [Handover] Switching to Eps 9.00m...
+      > Creating repaired clone...
+    [Gen  440] Cost=5.8342M$ | P=21.27m | Eps=9.000 | Sims=80244 | OK | Time: 3m 25s (ETA: 10m 53s)
+    [Gen  450] Cost=5.8051M$ | P=21.11m | Eps=9.000 | Sims=82045 | OK | Time: 3m 29s (ETA: 10m 48s)
+    [Gen  460] Cost=5.8051M$ | P=21.11m | Eps=9.000 | Sims=83858 | OK | Time: 3m 34s (ETA: 10m 42s)
+    [Gen  470] Cost=5.8046M$ | P=21.13m | Eps=9.000 | Sims=85622 | OK | Time: 3m 38s (ETA: 10m 38s)
+    [Gen  480] Cost=5.7825M$ | P=21.20m | Eps=9.000 | Sims=87421 | OK | Time: 3m 43s (ETA: 10m 32s)
+    [Gen  490] Cost=5.7825M$ | P=21.20m | Eps=9.000 | Sims=89212 | OK | Time: 3m 47s (ETA: 10m 27s)
+    [Gen  500] Cost=5.7825M$ | P=21.20m | Eps=9.000 | Sims=91008 | OK | Time: 3m 52s (ETA: 10m 22s)
+    [Gen  510] Cost=5.7694M$ | P=21.00m | Eps=9.000 | Sims=92795 | OK | Time: 3m 56s (ETA: 10m 18s)
+    [Gen  520] Cost=5.7572M$ | P=21.04m | Eps=9.000 | Sims=94581 | OK | Time: 4m 1s (ETA: 10m 12s)
+    [Gen  530] Cost=5.7572M$ | P=21.04m | Eps=9.000 | Sims=96350 | OK | Time: 4m 5s (ETA: 10m 7s)
+    [Gen  540] Cost=5.7572M$ | P=21.04m | Eps=9.000 | Sims=98132 | OK | Time: 4m 10s (ETA: 10m 2s)
+    [Gen  550] Cost=5.7572M$ | P=21.04m | Eps=9.000 | Sims=99927 | OK | Time: 4m 14s (ETA: 9m 57s)
+    [Gen  560] Cost=5.7572M$ | P=21.04m | Eps=9.000 | Sims=101699 | OK | Time: 4m 18s (ETA: 9m 51s)
+    [Gen  570] Cost=5.7572M$ | P=21.04m | Eps=9.000 | Sims=103476 | OK | Time: 4m 23s (ETA: 9m 47s)
+    [Handover] Switching to Eps 6.00m...
+      > Creating repaired clone...
+    [Gen  580] Cost=5.9291M$ | P=24.86m | Eps=6.000 | Sims=105288 | OK | Time: 4m 27s (ETA: 9m 41s)
+    [Gen  590] Cost=5.9291M$ | P=24.19m | Eps=6.000 | Sims=107084 | OK | Time: 4m 32s (ETA: 9m 37s)
+    [Gen  600] Cost=5.9164M$ | P=24.32m | Eps=6.000 | Sims=108869 | OK | Time: 4m 36s (ETA: 9m 31s)
+    [Gen  610] Cost=5.9164M$ | P=24.32m | Eps=6.000 | Sims=110691 | OK | Time: 4m 41s (ETA: 9m 26s)
+    [Gen  620] Cost=5.8863M$ | P=24.20m | Eps=6.000 | Sims=112512 | OK | Time: 4m 45s (ETA: 9m 22s)
+    [Gen  630] Cost=5.8617M$ | P=25.24m | Eps=6.000 | Sims=114297 | OK | Time: 4m 51s (ETA: 9m 18s)
+    [Gen  640] Cost=5.8617M$ | P=25.24m | Eps=6.000 | Sims=116085 | OK | Time: 4m 55s (ETA: 9m 14s)
+    [Gen  650] Cost=5.8617M$ | P=25.24m | Eps=6.000 | Sims=117845 | OK | Time: 4m 59s (ETA: 9m 8s)
+    [Gen  660] Cost=5.8617M$ | P=25.24m | Eps=6.000 | Sims=119649 | OK | Time: 5m 4s (ETA: 9m 4s)
+    [Gen  670] Cost=5.8617M$ | P=25.24m | Eps=6.000 | Sims=121429 | OK | Time: 5m 8s (ETA: 8m 59s)
+    [Handover] Switching to Eps 4.50m...
+      > Creating repaired clone...
+    [Gen  680] Cost=5.9544M$ | P=26.00m | Eps=4.500 | Sims=123248 | OK | Time: 5m 13s (ETA: 8m 54s)
+    [Gen  690] Cost=5.9397M$ | P=25.82m | Eps=4.500 | Sims=125016 | OK | Time: 5m 17s (ETA: 8m 48s)
+    [Gen  700] Cost=5.9144M$ | P=25.63m | Eps=4.500 | Sims=126817 | OK | Time: 5m 22s (ETA: 8m 44s)
+    [Gen  710] Cost=5.9144M$ | P=25.63m | Eps=4.500 | Sims=128584 | OK | Time: 5m 26s (ETA: 8m 39s)
+    [Gen  720] Cost=5.9233M$ | P=25.64m | Eps=4.500 | Sims=130437 | OK | Time: 5m 31s (ETA: 8m 35s)
+    [Gen  730] Cost=5.9056M$ | P=25.54m | Eps=4.500 | Sims=132216 | OK | Time: 5m 36s (ETA: 8m 31s)
+    [Gen  740] Cost=5.9056M$ | P=25.54m | Eps=4.500 | Sims=133983 | OK | Time: 5m 40s (ETA: 8m 26s)
+    [Gen  750] Cost=5.9056M$ | P=25.54m | Eps=4.500 | Sims=135752 | OK | Time: 5m 44s (ETA: 8m 21s)
+    [Gen  760] Cost=5.9056M$ | P=25.54m | Eps=4.500 | Sims=137521 | OK | Time: 5m 49s (ETA: 8m 16s)
+    [Gen  770] Cost=5.9056M$ | P=25.54m | Eps=4.500 | Sims=139311 | OK | Time: 5m 53s (ETA: 8m 11s)
+    [Gen  780] Cost=5.8902M$ | P=25.48m | Eps=4.500 | Sims=141075 | INVALID (PF↑) | Time: 5m 58s (ETA: 8m 7s)
+    [Gen  790] Cost=5.9229M$ | P=25.77m | Eps=4.500 | Sims=142909 | OK | Time: 6m 2s (ETA: 8m 2s)
+    [Gen  800] Cost=5.9141M$ | P=25.62m | Eps=4.500 | Sims=144664 | OK | Time: 6m 7s (ETA: 7m 57s)
+    [Gen  810] Cost=5.9087M$ | P=25.65m | Eps=4.500 | Sims=146477 | OK | Time: 6m 12s (ETA: 7m 53s)
+    [Gen  820] Cost=5.9173M$ | P=25.86m | Eps=4.500 | Sims=148263 | OK | Time: 6m 16s (ETA: 7m 48s)
+    [Gen  830] Cost=5.9284M$ | P=25.49m | Eps=4.500 | Sims=150136 | INVALID (PF↑) | Time: 6m 21s (ETA: 7m 43s)
+    [Gen  840] Cost=5.8852M$ | P=25.54m | Eps=4.500 | Sims=151853 | OK | Time: 6m 25s (ETA: 7m 39s)
+    [Gen  850] Cost=5.8852M$ | P=25.54m | Eps=4.500 | Sims=153637 | OK | Time: 6m 30s (ETA: 7m 35s)
+    [Gen  860] Cost=5.8852M$ | P=25.54m | Eps=4.500 | Sims=155372 | OK | Time: 6m 35s (ETA: 7m 30s)
+    [Gen  870] Cost=5.8852M$ | P=25.54m | Eps=4.500 | Sims=157130 | OK | Time: 6m 39s (ETA: 7m 25s)
+    [Gen  880] Cost=5.8852M$ | P=25.54m | Eps=4.500 | Sims=158924 | OK | Time: 6m 44s (ETA: 7m 20s)
+    [Handover] Switching to Eps 3.00m...
+      > Creating repaired clone...
+    [Gen  890] Cost=6.0081M$ | P=27.37m | Eps=3.000 | Sims=160730 | OK | Time: 6m 48s (ETA: 7m 15s)
+    [Gen  900] Cost=5.9787M$ | P=27.17m | Eps=3.000 | Sims=162502 | OK | Time: 6m 52s (ETA: 7m 11s)
+    [Gen  910] Cost=5.9787M$ | P=27.17m | Eps=3.000 | Sims=164282 | OK | Time: 6m 57s (ETA: 7m 6s)
+    [Gen  920] Cost=5.9787M$ | P=27.17m | Eps=3.000 | Sims=166073 | OK | Time: 7m 1s (ETA: 7m 1s)
+    [Gen  930] Cost=5.9787M$ | P=27.17m | Eps=3.000 | Sims=167851 | OK | Time: 7m 6s (ETA: 6m 57s)
+    [Gen  940] Cost=5.9787M$ | P=27.17m | Eps=3.000 | Sims=169629 | OK | Time: 7m 11s (ETA: 6m 53s)
+    [Handover] Switching to Eps 1.50m...
+      > Creating repaired clone...
+    [Gen  950] Cost=6.0472M$ | P=29.09m | Eps=1.500 | Sims=171457 | OK | Time: 7m 15s (ETA: 6m 48s)
+    [Gen  960] Cost=6.0336M$ | P=29.01m | Eps=1.500 | Sims=173272 | OK | Time: 7m 20s (ETA: 6m 43s)
+    [Gen  970] Cost=6.0336M$ | P=29.01m | Eps=1.500 | Sims=175044 | OK | Time: 7m 25s (ETA: 6m 39s)
+    [Gen  980] Cost=6.0336M$ | P=29.01m | Eps=1.500 | Sims=176831 | OK | Time: 7m 29s (ETA: 6m 34s)
+    [Gen  990] Cost=6.0336M$ | P=29.01m | Eps=1.500 | Sims=178623 | OK | Time: 7m 33s (ETA: 6m 29s)
+    [Gen 1000] Cost=6.0163M$ | P=28.71m | Eps=1.500 | Sims=180404 | OK | Time: 7m 38s (ETA: 6m 25s)
+    [Gen 1010] Cost=6.0163M$ | P=28.71m | Eps=1.500 | Sims=182142 | OK | Time: 7m 42s (ETA: 6m 20s)
+    [Gen 1020] Cost=6.0163M$ | P=28.71m | Eps=1.500 | Sims=183950 | OK | Time: 7m 47s (ETA: 6m 15s)
+    [Gen 1030] Cost=6.0163M$ | P=28.71m | Eps=1.500 | Sims=185730 | OK | Time: 7m 52s (ETA: 6m 11s)
+    [Gen 1040] Cost=6.0163M$ | P=28.71m | Eps=1.500 | Sims=187520 | OK | Time: 7m 56s (ETA: 6m 6s)
+    [Gen 1050] Cost=6.0163M$ | P=28.71m | Eps=1.500 | Sims=189291 | OK | Time: 8m 1s (ETA: 6m 1s)
+    [Handover] Switching to Eps 0.60m...
+      > Creating repaired clone...
+    [Gen 1060] Cost=6.1394M$ | P=29.58m | Eps=0.600 | Sims=191127 | OK | Time: 8m 6s (ETA: 5m 57s)
+    [Gen 1070] Cost=6.1154M$ | P=29.43m | Eps=0.600 | Sims=192915 | OK | Time: 8m 10s (ETA: 5m 52s)
+    [Gen 1080] Cost=6.1154M$ | P=29.43m | Eps=0.600 | Sims=194705 | OK | Time: 8m 15s (ETA: 5m 48s)
+    [Gen 1090] Cost=6.1154M$ | P=29.43m | Eps=0.600 | Sims=196480 | OK | Time: 8m 19s (ETA: 5m 43s)
+    [Gen 1100] Cost=6.1154M$ | P=29.43m | Eps=0.600 | Sims=198255 | OK | Time: 8m 24s (ETA: 5m 39s)
+    [Gen 1110] Cost=6.1154M$ | P=29.43m | Eps=0.600 | Sims=199991 | OK | Time: 8m 28s (ETA: 5m 34s)
+    [Gen 1120] Cost=6.1154M$ | P=29.43m | Eps=0.600 | Sims=201758 | OK | Time: 8m 33s (ETA: 5m 29s)
+    [Handover] Switching to Eps 0.00m...
+      > Creating repaired clone...
+    [Record] 🏆 New Global Best: 6.1816M$ (Valid)
+    [Record] 🏆 New Global Best: 6.1542M$ (Valid)
+    [Gen 1130] Cost=6.1542M$ | P=30.96m | Eps=0.000 | Sims=203572 | OK | Time: 8m 37s (ETA: 5m 25s)
+    [Gen 1140] Cost=6.1542M$ | P=30.96m | Eps=0.000 | Sims=205358 | OK | Time: 8m 42s (ETA: 5m 20s)
+    [Gen 1150] Cost=6.1542M$ | P=30.96m | Eps=0.000 | Sims=207124 | OK | Time: 8m 46s (ETA: 5m 16s)
+    [Record] 🏆 New Global Best: 6.1266M$ (Valid)
+    [Gen 1160] Cost=6.1266M$ | P=30.24m | Eps=0.000 | Sims=208912 | OK | Time: 8m 51s (ETA: 5m 11s)
+    [Gen 1170] Cost=6.1266M$ | P=30.24m | Eps=0.000 | Sims=210687 | OK | Time: 8m 55s (ETA: 5m 6s)
+    [Gen 1180] Cost=6.1266M$ | P=30.24m | Eps=0.000 | Sims=212431 | OK | Time: 8m 59s (ETA: 5m 1s)
+    [Gen 1190] Cost=6.1266M$ | P=30.24m | Eps=0.000 | Sims=214200 | OK | Time: 9m 4s (ETA: 4m 57s)
+    [Gen 1200] Cost=6.1266M$ | P=30.24m | Eps=0.000 | Sims=215966 | OK | Time: 9m 9s (ETA: 4m 53s)
+    [Auto-Stop] 🛑 Reached max total shocks (0). Stopping.
+
+    [Finalizing] Validating & Polishing...
+    >> Done in 9m 11s. Final Result: 6.1266M$ | P=30.24m | Sims=216506 | Time: 9m 11s
+    [Post-Process] Refining Solution...
+
+>>> Starting Run #2...
+    [Hyper-Warmup] 🛡️ Generating mixed initial skeletons...
+    [Hyper-Warmup] 🧬 Selecting Zombies & Heroes...
+    [Hyper-Warmup] ✅ Ready to dive with 200 diverse agents.
+    [Gen    0] Cost=6.7095M$ | P=-7.37m | Eps=15.000 | Sims=402 | INVALID (PF↑) | Time: 0.4s (ETA: ...)
+    [Gen   10] Cost=8.0680M$ | P=9.24m | Eps=15.000 | Sims=2401 | INVALID (PF↑) | Time: 6.1s (ETA: 18m 28s)
+    [Gen   20] Cost=7.0176M$ | P=19.88m | Eps=15.000 | Sims=4239 | OK | Time: 10.6s (ETA: 16m 7s)
+    [Gen   30] Cost=6.6128M$ | P=15.91m | Eps=15.000 | Sims=6063 | OK | Time: 15.1s (ETA: 15m 11s)
+    [Gen   40] Cost=6.2799M$ | P=16.99m | Eps=15.000 | Sims=7892 | OK | Time: 19.4s (ETA: 14m 32s)
+    [Gen   50] Cost=6.1667M$ | P=16.68m | Eps=15.000 | Sims=9688 | OK | Time: 23.8s (ETA: 14m 13s)
+    [Gen   60] Cost=5.9854M$ | P=17.03m | Eps=15.000 | Sims=11487 | OK | Time: 28.0s (ETA: 13m 49s)
+    [Gen   70] Cost=5.8624M$ | P=16.55m | Eps=15.000 | Sims=13298 | OK | Time: 32.5s (ETA: 13m 43s)
+    [Gen   80] Cost=5.8011M$ | P=18.53m | Eps=15.000 | Sims=15103 | OK | Time: 37.6s (ETA: 13m 46s)
+    [Gen   90] Cost=5.6939M$ | P=15.12m | Eps=15.000 | Sims=16919 | OK | Time: 41.6s (ETA: 13m 29s)
+    [Gen  100] Cost=5.6939M$ | P=15.12m | Eps=15.000 | Sims=18739 | OK | Time: 46.7s (ETA: 13m 33s)
+    [Gen  110] Cost=5.6848M$ | P=15.88m | Eps=15.000 | Sims=20533 | OK | Time: 51.1s (ETA: 13m 23s)
+    [Gen  120] Cost=5.6848M$ | P=15.88m | Eps=15.000 | Sims=22325 | OK | Time: 55.8s (ETA: 13m 19s)
+    [Gen  130] Cost=5.6690M$ | P=16.90m | Eps=15.000 | Sims=24116 | OK | Time: 1m 0s (ETA: 13m 11s)
+    [Gen  140] Cost=5.6554M$ | P=15.26m | Eps=15.000 | Sims=25924 | OK | Time: 1m 5s (ETA: 13m 12s)
+    [Gen  150] Cost=5.6062M$ | P=15.18m | Eps=15.000 | Sims=27719 | OK | Time: 1m 9s (ETA: 13m 3s)
+    [Gen  160] Cost=5.6062M$ | P=15.18m | Eps=15.000 | Sims=29515 | OK | Time: 1m 14s (ETA: 13m 2s)
+    [Gen  170] Cost=5.6062M$ | P=15.18m | Eps=15.000 | Sims=31325 | OK | Time: 1m 18s (ETA: 12m 55s)
+    [Gen  180] Cost=5.6062M$ | P=15.18m | Eps=15.000 | Sims=33124 | OK | Time: 1m 23s (ETA: 12m 48s)
+    [Gen  190] Cost=5.6007M$ | P=15.66m | Eps=15.000 | Sims=34889 | OK | Time: 1m 27s (ETA: 12m 40s)
+    [Gen  200] Cost=5.6007M$ | P=15.66m | Eps=15.000 | Sims=36676 | OK | Time: 1m 32s (ETA: 12m 39s)
+    [Gen  210] Cost=5.5805M$ | P=15.35m | Eps=15.000 | Sims=38510 | OK | Time: 1m 37s (ETA: 12m 34s)
+    [Gen  220] Cost=5.5805M$ | P=15.35m | Eps=15.000 | Sims=40319 | OK | Time: 1m 41s (ETA: 12m 29s)
+    [Gen  230] Cost=5.5805M$ | P=15.35m | Eps=15.000 | Sims=42101 | OK | Time: 1m 46s (ETA: 12m 23s)
+    [Gen  240] Cost=5.5805M$ | P=15.35m | Eps=15.000 | Sims=43896 | OK | Time: 1m 50s (ETA: 12m 18s)
+    [Gen  250] Cost=5.5805M$ | P=15.35m | Eps=15.000 | Sims=45702 | OK | Time: 1m 55s (ETA: 12m 11s)
+    [Handover] Switching to Eps 12.00m...
+      > Creating repaired clone...
+    [Gen  260] Cost=5.7014M$ | P=18.90m | Eps=12.000 | Sims=47529 | OK | Time: 2m 0s (ETA: 12m 9s)
+    [Gen  270] Cost=5.7014M$ | P=18.90m | Eps=12.000 | Sims=49349 | OK | Time: 2m 4s (ETA: 12m 4s)
+    [Gen  280] Cost=5.7014M$ | P=18.90m | Eps=12.000 | Sims=51150 | OK | Time: 2m 9s (ETA: 11m 59s)
+    [Gen  290] Cost=5.7014M$ | P=18.90m | Eps=12.000 | Sims=52956 | OK | Time: 2m 13s (ETA: 11m 54s)
+    [Gen  300] Cost=5.7014M$ | P=18.90m | Eps=12.000 | Sims=54772 | OK | Time: 2m 18s (ETA: 11m 48s)
+    [Handover] Switching to Eps 9.00m...
+      > Creating repaired clone...
+    [Gen  310] Cost=5.8209M$ | P=21.23m | Eps=9.000 | Sims=56566 | OK | Time: 2m 22s (ETA: 11m 42s)
+    [Gen  320] Cost=5.8597M$ | P=21.83m | Eps=9.000 | Sims=58386 | OK | Time: 2m 27s (ETA: 11m 40s)
+    [Gen  330] Cost=5.8597M$ | P=21.83m | Eps=9.000 | Sims=60182 | OK | Time: 2m 31s (ETA: 11m 34s)
+    [Gen  340] Cost=5.8036M$ | P=21.83m | Eps=9.000 | Sims=61994 | OK | Time: 2m 36s (ETA: 11m 29s)
+    [Gen  350] Cost=5.8036M$ | P=22.09m | Eps=9.000 | Sims=63793 | OK | Time: 2m 40s (ETA: 11m 24s)
+    [Gen  360] Cost=5.8036M$ | P=22.09m | Eps=9.000 | Sims=65608 | OK | Time: 2m 45s (ETA: 11m 19s)
+    [Gen  370] Cost=5.8036M$ | P=22.09m | Eps=9.000 | Sims=67422 | OK | Time: 2m 49s (ETA: 11m 14s)
+    [Gen  380] Cost=5.8036M$ | P=22.09m | Eps=9.000 | Sims=69212 | OK | Time: 2m 54s (ETA: 11m 11s)
+    [Gen  390] Cost=5.8036M$ | P=22.09m | Eps=9.000 | Sims=71017 | OK | Time: 2m 59s (ETA: 11m 8s)
+    [Handover] Switching to Eps 6.00m...
+      > Creating repaired clone...
+    [Gen  400] Cost=6.0051M$ | P=24.08m | Eps=6.000 | Sims=72865 | OK | Time: 3m 4s (ETA: 11m 4s)
+    [Gen  410] Cost=6.0022M$ | P=24.43m | Eps=6.000 | Sims=74651 | OK | Time: 3m 9s (ETA: 11m 2s)
+    [Gen  420] Cost=6.0022M$ | P=24.43m | Eps=6.000 | Sims=76453 | OK | Time: 3m 14s (ETA: 10m 56s)
+    [Gen  430] Cost=6.0022M$ | P=24.43m | Eps=6.000 | Sims=78233 | OK | Time: 3m 18s (ETA: 10m 51s)
+    [Gen  440] Cost=5.9770M$ | P=24.06m | Eps=6.000 | Sims=80017 | OK | Time: 3m 23s (ETA: 10m 46s)
+    [Gen  450] Cost=5.9729M$ | P=24.72m | Eps=6.000 | Sims=81795 | OK | Time: 3m 27s (ETA: 10m 41s)
+    [Gen  460] Cost=5.9558M$ | P=24.16m | Eps=6.000 | Sims=83592 | OK | Time: 3m 31s (ETA: 10m 35s)
+    [Gen  470] Cost=5.9558M$ | P=24.16m | Eps=6.000 | Sims=85376 | OK | Time: 3m 36s (ETA: 10m 31s)
+    [Gen  480] Cost=5.9547M$ | P=24.26m | Eps=6.000 | Sims=87156 | OK | Time: 3m 41s (ETA: 10m 26s)
+    [Gen  490] Cost=5.9547M$ | P=24.26m | Eps=6.000 | Sims=88995 | OK | Time: 3m 45s (ETA: 10m 21s)
+    [Gen  500] Cost=5.9470M$ | P=24.31m | Eps=6.000 | Sims=90758 | OK | Time: 3m 49s (ETA: 10m 15s)
+    [Gen  510] Cost=5.9470M$ | P=24.31m | Eps=6.000 | Sims=92526 | OK | Time: 3m 54s (ETA: 10m 11s)
+    [Gen  520] Cost=5.9470M$ | P=24.31m | Eps=6.000 | Sims=94291 | OK | Time: 3m 58s (ETA: 10m 6s)
+    [Gen  530] Cost=5.9470M$ | P=24.31m | Eps=6.000 | Sims=96058 | OK | Time: 4m 4s (ETA: 10m 3s)
+    [Gen  540] Cost=5.9470M$ | P=24.31m | Eps=6.000 | Sims=97842 | OK | Time: 4m 8s (ETA: 9m 58s)
+    [Handover] Switching to Eps 4.50m...
+      > Creating repaired clone...
+    [Gen  550] Cost=6.0454M$ | P=25.57m | Eps=4.500 | Sims=99646 | OK | Time: 4m 13s (ETA: 9m 54s)
+    [Gen  560] Cost=6.0141M$ | P=25.89m | Eps=4.500 | Sims=101432 | OK | Time: 4m 17s (ETA: 9m 49s)
+    [Gen  570] Cost=6.0018M$ | P=25.89m | Eps=4.500 | Sims=103229 | OK | Time: 4m 22s (ETA: 9m 44s)
+    [Gen  580] Cost=5.9446M$ | P=25.47m | Eps=4.500 | Sims=105047 | INVALID (PF↑) | Time: 4m 26s (ETA: 9m 38s)
+    [Gen  590] Cost=5.9888M$ | P=25.51m | Eps=4.500 | Sims=106841 | OK | Time: 4m 31s (ETA: 9m 34s)
+    [Gen  600] Cost=5.9663M$ | P=26.00m | Eps=4.500 | Sims=108615 | OK | Time: 4m 35s (ETA: 9m 28s)
+    [Gen  610] Cost=5.9663M$ | P=26.00m | Eps=4.500 | Sims=110416 | OK | Time: 4m 40s (ETA: 9m 25s)
+    [Gen  620] Cost=5.9511M$ | P=25.63m | Eps=4.500 | Sims=112220 | OK | Time: 4m 44s (ETA: 9m 20s)
+    [Gen  630] Cost=5.9511M$ | P=25.63m | Eps=4.500 | Sims=114054 | OK | Time: 4m 49s (ETA: 9m 16s)
+    [Gen  640] Cost=5.9511M$ | P=25.63m | Eps=4.500 | Sims=115832 | OK | Time: 4m 53s (ETA: 9m 10s)
+    [Gen  650] Cost=5.9511M$ | P=25.63m | Eps=4.500 | Sims=117623 | OK | Time: 4m 58s (ETA: 9m 6s)
+    [Gen  660] Cost=5.9511M$ | P=25.63m | Eps=4.500 | Sims=119426 | OK | Time: 5m 2s (ETA: 9m 1s)
+    [Gen  670] Cost=5.9419M$ | P=26.06m | Eps=4.500 | Sims=121225 | OK | Time: 5m 7s (ETA: 8m 56s)
+    [Gen  680] Cost=5.9418M$ | P=25.89m | Eps=4.500 | Sims=123017 | OK | Time: 5m 11s (ETA: 8m 51s)
+    [Gen  690] Cost=5.9418M$ | P=25.89m | Eps=4.500 | Sims=124819 | OK | Time: 5m 16s (ETA: 8m 47s)
+    [Gen  700] Cost=5.9161M$ | P=25.53m | Eps=4.500 | Sims=126595 | OK | Time: 5m 21s (ETA: 8m 43s)
+    [Gen  710] Cost=5.9146M$ | P=25.56m | Eps=4.500 | Sims=128389 | OK | Time: 5m 25s (ETA: 8m 38s)
+    [Gen  720] Cost=5.9146M$ | P=25.56m | Eps=4.500 | Sims=130146 | OK | Time: 5m 29s (ETA: 8m 33s)
+    [Gen  730] Cost=5.9161M$ | P=25.57m | Eps=4.500 | Sims=131919 | OK | Time: 5m 34s (ETA: 8m 28s)
+    [Gen  740] Cost=5.9048M$ | P=25.55m | Eps=4.500 | Sims=133655 | OK | Time: 5m 39s (ETA: 8m 24s)
+    [Gen  750] Cost=5.9266M$ | P=25.49m | Eps=4.500 | Sims=135415 | INVALID (PF↑) | Time: 5m 43s (ETA: 8m 19s)
+    [Gen  760] Cost=5.8972M$ | P=25.49m | Eps=4.500 | Sims=137277 | INVALID (PF↑) | Time: 5m 48s (ETA: 8m 15s)
+    [Gen  770] Cost=5.9257M$ | P=25.49m | Eps=4.500 | Sims=139085 | INVALID (PF↑) | Time: 5m 52s (ETA: 8m 10s)
+    [Gen  780] Cost=5.9183M$ | P=25.56m | Eps=4.500 | Sims=140859 | OK | Time: 5m 56s (ETA: 8m 5s)
+    [Gen  790] Cost=5.9122M$ | P=25.81m | Eps=4.500 | Sims=142632 | OK | Time: 6m 2s (ETA: 8m 1s)
+    [Gen  800] Cost=5.9161M$ | P=25.49m | Eps=4.500 | Sims=144424 | INVALID (PF↑) | Time: 6m 6s (ETA: 7m 56s)
+    [Gen  810] Cost=5.9096M$ | P=25.63m | Eps=4.500 | Sims=146219 | OK | Time: 6m 11s (ETA: 7m 52s)
+    [Gen  820] Cost=5.9096M$ | P=25.63m | Eps=4.500 | Sims=147995 | OK | Time: 6m 15s (ETA: 7m 47s)
+    [Gen  830] Cost=5.9096M$ | P=25.63m | Eps=4.500 | Sims=149756 | OK | Time: 6m 20s (ETA: 7m 43s)
+    [Gen  840] Cost=5.9096M$ | P=25.63m | Eps=4.500 | Sims=151543 | OK | Time: 6m 25s (ETA: 7m 39s)
+    [Gen  850] Cost=5.9096M$ | P=25.63m | Eps=4.500 | Sims=153271 | OK | Time: 6m 30s (ETA: 7m 34s)
+    [Handover] Switching to Eps 3.00m...
+      > Creating repaired clone...
+    [Gen  860] Cost=6.0296M$ | P=27.55m | Eps=3.000 | Sims=155015 | OK | Time: 6m 35s (ETA: 7m 30s)
+    [Gen  870] Cost=5.9928M$ | P=27.20m | Eps=3.000 | Sims=156786 | OK | Time: 6m 40s (ETA: 7m 26s)
+    [Gen  880] Cost=5.9928M$ | P=27.20m | Eps=3.000 | Sims=158541 | OK | Time: 6m 45s (ETA: 7m 22s)
+    [Gen  890] Cost=5.9928M$ | P=27.20m | Eps=3.000 | Sims=160323 | OK | Time: 6m 50s (ETA: 7m 17s)
+    [Gen  900] Cost=5.9881M$ | P=27.20m | Eps=3.000 | Sims=162101 | OK | Time: 6m 54s (ETA: 7m 13s)
+    [Gen  910] Cost=5.9881M$ | P=27.05m | Eps=3.000 | Sims=163867 | OK | Time: 6m 59s (ETA: 7m 8s)
+    [Gen  920] Cost=5.9832M$ | P=27.36m | Eps=3.000 | Sims=165636 | OK | Time: 7m 4s (ETA: 7m 4s)
+    [Gen  930] Cost=5.9832M$ | P=27.36m | Eps=3.000 | Sims=167441 | OK | Time: 7m 9s (ETA: 7m 0s)
+    [Gen  940] Cost=5.9832M$ | P=27.36m | Eps=3.000 | Sims=169224 | OK | Time: 7m 14s (ETA: 6m 56s)
+    [Gen  950] Cost=5.9832M$ | P=27.36m | Eps=3.000 | Sims=171014 | OK | Time: 7m 19s (ETA: 6m 51s)
+    [Gen  960] Cost=5.9797M$ | P=27.09m | Eps=3.000 | Sims=172792 | OK | Time: 7m 24s (ETA: 6m 47s)
+    [Gen  970] Cost=5.9797M$ | P=27.09m | Eps=3.000 | Sims=174590 | OK | Time: 7m 28s (ETA: 6m 42s)
+    [Gen  980] Cost=5.9797M$ | P=27.09m | Eps=3.000 | Sims=176378 | OK | Time: 7m 34s (ETA: 6m 38s)
+    [Gen  990] Cost=5.9797M$ | P=27.09m | Eps=3.000 | Sims=178162 | OK | Time: 7m 38s (ETA: 6m 33s)
+    [Gen 1000] Cost=5.9797M$ | P=27.09m | Eps=3.000 | Sims=179918 | OK | Time: 7m 43s (ETA: 6m 29s)
+    [Handover] Switching to Eps 1.50m...
+      > Creating repaired clone...
+    [Gen 1010] Cost=6.0420M$ | P=28.94m | Eps=1.500 | Sims=181723 | OK | Time: 7m 48s (ETA: 6m 24s)
+    [Gen 1020] Cost=6.0420M$ | P=28.94m | Eps=1.500 | Sims=183513 | OK | Time: 7m 53s (ETA: 6m 20s)
+    [Gen 1030] Cost=6.0420M$ | P=28.94m | Eps=1.500 | Sims=185273 | OK | Time: 7m 57s (ETA: 6m 15s)
+    [Gen 1040] Cost=6.0420M$ | P=28.94m | Eps=1.500 | Sims=187017 | OK | Time: 8m 2s (ETA: 6m 11s)
+    [Gen 1050] Cost=6.0420M$ | P=28.94m | Eps=1.500 | Sims=188774 | OK | Time: 8m 7s (ETA: 6m 6s)
+    [Gen 1060] Cost=6.0420M$ | P=28.94m | Eps=1.500 | Sims=190576 | OK | Time: 8m 12s (ETA: 6m 2s)
+    [Handover] Switching to Eps 0.60m...
+      > Creating repaired clone...
+    [Gen 1070] Cost=6.0930M$ | P=29.58m | Eps=0.600 | Sims=192374 | OK | Time: 8m 16s (ETA: 5m 57s)
+    [Gen 1080] Cost=6.0930M$ | P=29.58m | Eps=0.600 | Sims=194174 | OK | Time: 8m 21s (ETA: 5m 52s)
+    [Gen 1090] Cost=6.0930M$ | P=29.58m | Eps=0.600 | Sims=195962 | OK | Time: 8m 25s (ETA: 5m 47s)
+    [Gen 1100] Cost=6.0930M$ | P=29.58m | Eps=0.600 | Sims=197749 | OK | Time: 8m 30s (ETA: 5m 43s)
+    [Gen 1110] Cost=6.0930M$ | P=29.58m | Eps=0.600 | Sims=199534 | OK | Time: 8m 34s (ETA: 5m 38s)
+    [Handover] Switching to Eps 0.00m...
+      > Creating repaired clone...
+    [Record] 🏆 New Global Best: 6.1130M$ (Valid)
+    [Gen 1120] Cost=6.1130M$ | P=30.15m | Eps=0.000 | Sims=201325 | OK | Time: 8m 39s (ETA: 5m 33s)
+    [Gen 1130] Cost=6.1130M$ | P=30.15m | Eps=0.000 | Sims=203131 | OK | Time: 8m 43s (ETA: 5m 29s)
+    [Gen 1140] Cost=6.1130M$ | P=30.15m | Eps=0.000 | Sims=204877 | OK | Time: 8m 48s (ETA: 5m 24s)
+    [Gen 1150] Cost=6.1130M$ | P=30.15m | Eps=0.000 | Sims=206659 | OK | Time: 8m 52s (ETA: 5m 19s)
+    [Gen 1160] Cost=6.1130M$ | P=30.15m | Eps=0.000 | Sims=208444 | OK | Time: 8m 57s (ETA: 5m 14s)
+    [Auto-Stop] 🛑 Reached max total shocks (0). Stopping.
+
+    [Finalizing] Validating & Polishing...
+    >> Done in 9m 1s. Final Result: 6.1130M$ | P=30.15m | Sims=210033 | Time: 9m 1s
+    [Post-Process] Refining Solution...
+
+>>> Starting Run #3...
+    [Hyper-Warmup] 🛡️ Generating mixed initial skeletons...
+    [Hyper-Warmup] 🧬 Selecting Zombies & Heroes...
+    [Hyper-Warmup] ✅ Ready to dive with 200 diverse agents.
+    [Gen    0] Cost=6.3484M$ | P=-24.12m | Eps=15.000 | Sims=402 | INVALID (PF↑) | Time: 0.5s (ETA: ...)
+    [Gen   10] Cost=7.9634M$ | P=16.70m | Eps=15.000 | Sims=2289 | OK | Time: 5.6s (ETA: 17m 5s)
+    [Gen   20] Cost=7.0483M$ | P=17.85m | Eps=15.000 | Sims=4116 | OK | Time: 10.4s (ETA: 15m 45s)
+    [Gen   30] Cost=6.7783M$ | P=16.93m | Eps=15.000 | Sims=5899 | OK | Time: 15.2s (ETA: 15m 19s)
+    [Gen   40] Cost=6.3145M$ | P=19.19m | Eps=15.000 | Sims=7678 | OK | Time: 19.7s (ETA: 14m 46s)
+    [Gen   50] Cost=6.2891M$ | P=20.06m | Eps=15.000 | Sims=9494 | OK | Time: 24.5s (ETA: 14m 36s)
+    [Gen   60] Cost=6.1172M$ | P=15.03m | Eps=15.000 | Sims=11306 | OK | Time: 28.9s (ETA: 14m 18s)
+    [Gen   70] Cost=6.0096M$ | P=15.61m | Eps=15.000 | Sims=13121 | OK | Time: 33.6s (ETA: 14m 10s)
+    [Gen   80] Cost=5.9681M$ | P=16.40m | Eps=15.000 | Sims=14915 | OK | Time: 37.9s (ETA: 13m 54s)
+    [Gen   90] Cost=5.8744M$ | P=15.22m | Eps=15.000 | Sims=16728 | OK | Time: 42.5s (ETA: 13m 46s)
+    [Gen  100] Cost=5.8389M$ | P=16.52m | Eps=15.000 | Sims=18551 | OK | Time: 46.8s (ETA: 13m 33s)
+    [Gen  110] Cost=5.6845M$ | P=16.32m | Eps=15.000 | Sims=20371 | OK | Time: 51.9s (ETA: 13m 35s)
+    [Gen  120] Cost=5.6845M$ | P=16.32m | Eps=15.000 | Sims=22175 | OK | Time: 57.2s (ETA: 13m 40s)
+    [Gen  130] Cost=5.6845M$ | P=16.32m | Eps=15.000 | Sims=23963 | OK | Time: 1m 1s (ETA: 13m 31s)
+    [Gen  140] Cost=5.6845M$ | P=16.32m | Eps=15.000 | Sims=25750 | OK | Time: 1m 6s (ETA: 13m 30s)
+    [Gen  150] Cost=5.6845M$ | P=16.32m | Eps=15.000 | Sims=27539 | OK | Time: 1m 10s (ETA: 13m 18s)
+    [Handover] Switching to Eps 12.00m...
+      > Creating repaired clone...
+    [Gen  160] Cost=5.8840M$ | P=18.95m | Eps=12.000 | Sims=29358 | OK | Time: 1m 15s (ETA: 13m 16s)
+    [Gen  170] Cost=5.8840M$ | P=18.95m | Eps=12.000 | Sims=31145 | OK | Time: 1m 20s (ETA: 13m 6s)
+    [Gen  180] Cost=5.8387M$ | P=18.23m | Eps=12.000 | Sims=32956 | OK | Time: 1m 24s (ETA: 12m 59s)
+    [Gen  190] Cost=5.8387M$ | P=18.23m | Eps=12.000 | Sims=34726 | OK | Time: 1m 29s (ETA: 12m 57s)
+    [Gen  200] Cost=5.8353M$ | P=18.40m | Eps=12.000 | Sims=36514 | OK | Time: 1m 34s (ETA: 12m 52s)
+    [Gen  210] Cost=5.8078M$ | P=18.40m | Eps=12.000 | Sims=38323 | OK | Time: 1m 38s (ETA: 12m 44s)
+    [Gen  220] Cost=5.8078M$ | P=19.19m | Eps=12.000 | Sims=40143 | OK | Time: 1m 43s (ETA: 12m 40s)
+    [Gen  230] Cost=5.8078M$ | P=19.19m | Eps=12.000 | Sims=41922 | OK | Time: 1m 47s (ETA: 12m 32s)
+    [Gen  240] Cost=5.8078M$ | P=19.19m | Eps=12.000 | Sims=43737 | OK | Time: 1m 52s (ETA: 12m 31s)
+    [Gen  250] Cost=5.8052M$ | P=18.10m | Eps=12.000 | Sims=45542 | OK | Time: 1m 56s (ETA: 12m 23s)
+    [Gen  260] Cost=5.8052M$ | P=18.10m | Eps=12.000 | Sims=47340 | OK | Time: 2m 1s (ETA: 12m 17s)
+    [Gen  270] Cost=5.8052M$ | P=18.10m | Eps=12.000 | Sims=49151 | OK | Time: 2m 5s (ETA: 12m 10s)
+    [Gen  280] Cost=5.8052M$ | P=18.10m | Eps=12.000 | Sims=50948 | OK | Time: 2m 10s (ETA: 12m 8s)
+    [Gen  290] Cost=5.8052M$ | P=18.10m | Eps=12.000 | Sims=52762 | OK | Time: 2m 14s (ETA: 12m 1s)
+    [Handover] Switching to Eps 9.00m...
+      > Creating repaired clone...
+    [Gen  300] Cost=5.9299M$ | P=21.02m | Eps=9.000 | Sims=54577 | OK | Time: 2m 20s (ETA: 12m 0s)
+    [Gen  310] Cost=5.9299M$ | P=21.02m | Eps=9.000 | Sims=56378 | OK | Time: 2m 24s (ETA: 11m 52s)
+    [Gen  320] Cost=5.9199M$ | P=21.02m | Eps=9.000 | Sims=58141 | OK | Time: 2m 29s (ETA: 11m 48s)
+    [Gen  330] Cost=5.9199M$ | P=21.24m | Eps=9.000 | Sims=59949 | OK | Time: 2m 33s (ETA: 11m 43s)
+    [Gen  340] Cost=5.9113M$ | P=21.40m | Eps=9.000 | Sims=61751 | OK | Time: 2m 38s (ETA: 11m 37s)
+    [Gen  350] Cost=5.9108M$ | P=21.39m | Eps=9.000 | Sims=63531 | OK | Time: 2m 42s (ETA: 11m 31s)
+    [Gen  360] Cost=5.9077M$ | P=21.17m | Eps=9.000 | Sims=65332 | OK | Time: 2m 47s (ETA: 11m 27s)
+    [Gen  370] Cost=5.9077M$ | P=21.17m | Eps=9.000 | Sims=67149 | OK | Time: 2m 51s (ETA: 11m 21s)
+    [Gen  380] Cost=5.9077M$ | P=21.17m | Eps=9.000 | Sims=68934 | OK | Time: 2m 55s (ETA: 11m 16s)
+    [Gen  390] Cost=5.9077M$ | P=21.17m | Eps=9.000 | Sims=70721 | OK | Time: 3m 0s (ETA: 11m 10s)
+    [Gen  400] Cost=5.9077M$ | P=21.17m | Eps=9.000 | Sims=72520 | OK | Time: 3m 5s (ETA: 11m 6s)
+    [Handover] Switching to Eps 6.00m...
+      > Creating repaired clone...
+    [Gen  410] Cost=6.1040M$ | P=23.95m | Eps=6.000 | Sims=74360 | INVALID (PF↑) | Time: 3m 9s (ETA: 11m 0s)
+    [Gen  420] Cost=6.0433M$ | P=24.16m | Eps=6.000 | Sims=76190 | OK | Time: 3m 14s (ETA: 10m 56s)
+    [Gen  430] Cost=6.0433M$ | P=24.16m | Eps=6.000 | Sims=77993 | OK | Time: 3m 18s (ETA: 10m 50s)
+    [Gen  440] Cost=6.0433M$ | P=24.16m | Eps=6.000 | Sims=79818 | OK | Time: 3m 23s (ETA: 10m 46s)
+    [Gen  450] Cost=6.0433M$ | P=24.16m | Eps=6.000 | Sims=81598 | OK | Time: 3m 27s (ETA: 10m 42s)
+    [Gen  460] Cost=5.9897M$ | P=24.26m | Eps=6.000 | Sims=83390 | OK | Time: 3m 32s (ETA: 10m 37s)
+    [Gen  470] Cost=5.9897M$ | P=24.26m | Eps=6.000 | Sims=85180 | OK | Time: 3m 37s (ETA: 10m 33s)
+    [Gen  480] Cost=5.9897M$ | P=24.26m | Eps=6.000 | Sims=86977 | OK | Time: 3m 41s (ETA: 10m 27s)
+    [Gen  490] Cost=5.9897M$ | P=24.26m | Eps=6.000 | Sims=88750 | OK | Time: 3m 45s (ETA: 10m 22s)
+    [Gen  500] Cost=5.9897M$ | P=24.26m | Eps=6.000 | Sims=90533 | OK | Time: 3m 50s (ETA: 10m 17s)
+    [Handover] Switching to Eps 4.50m...
+      > Creating repaired clone...
+    [Gen  510] Cost=6.2554M$ | P=26.09m | Eps=4.500 | Sims=92342 | OK | Time: 3m 54s (ETA: 10m 12s)
+    [Gen  520] Cost=6.2554M$ | P=26.09m | Eps=4.500 | Sims=94151 | OK | Time: 3m 59s (ETA: 10m 7s)
+    [Gen  530] Cost=6.2198M$ | P=26.43m | Eps=4.500 | Sims=95951 | OK | Time: 4m 3s (ETA: 10m 2s)
+    [Gen  540] Cost=6.2111M$ | P=26.43m | Eps=4.500 | Sims=97739 | OK | Time: 4m 8s (ETA: 9m 57s)
+    [Gen  550] Cost=6.2111M$ | P=26.43m | Eps=4.500 | Sims=99522 | OK | Time: 4m 13s (ETA: 9m 53s)
+    [Gen  560] Cost=6.2111M$ | P=26.43m | Eps=4.500 | Sims=101284 | OK | Time: 4m 17s (ETA: 9m 48s)
+    [Gen  570] Cost=6.2111M$ | P=26.43m | Eps=4.500 | Sims=103051 | OK | Time: 4m 22s (ETA: 9m 44s)
+    [Gen  580] Cost=6.2111M$ | P=26.43m | Eps=4.500 | Sims=104786 | OK | Time: 4m 26s (ETA: 9m 38s)
+    [Handover] Switching to Eps 3.00m...
+      > Creating repaired clone...
+    [Gen  590] Cost=6.3151M$ | P=27.68m | Eps=3.000 | Sims=106574 | OK | Time: 4m 31s (ETA: 9m 34s)
+    [Gen  600] Cost=6.2899M$ | P=27.14m | Eps=3.000 | Sims=108362 | OK | Time: 4m 35s (ETA: 9m 28s)
+    [Gen  610] Cost=6.2899M$ | P=27.14m | Eps=3.000 | Sims=110148 | OK | Time: 4m 40s (ETA: 9m 25s)
+    [Gen  620] Cost=6.2899M$ | P=27.14m | Eps=3.000 | Sims=111904 | OK | Time: 4m 44s (ETA: 9m 20s)
+    [Gen  630] Cost=6.2714M$ | P=27.03m | Eps=3.000 | Sims=113679 | OK | Time: 4m 49s (ETA: 9m 16s)
+    [Gen  640] Cost=6.2714M$ | P=27.03m | Eps=3.000 | Sims=115482 | OK | Time: 4m 54s (ETA: 9m 12s)
+    [Gen  650] Cost=6.2714M$ | P=27.03m | Eps=3.000 | Sims=117269 | OK | Time: 4m 59s (ETA: 9m 8s)
+    [Gen  660] Cost=6.2714M$ | P=27.03m | Eps=3.000 | Sims=119058 | OK | Time: 5m 4s (ETA: 9m 3s)
+    [Gen  670] Cost=6.2714M$ | P=27.03m | Eps=3.000 | Sims=120827 | OK | Time: 5m 8s (ETA: 8m 59s)
+    [Handover] Switching to Eps 1.50m...
+      > Creating repaired clone...
+    [Gen  680] Cost=6.3731M$ | P=28.93m | Eps=1.500 | Sims=122620 | OK | Time: 5m 13s (ETA: 8m 54s)
+    [Gen  690] Cost=6.3731M$ | P=28.93m | Eps=1.500 | Sims=124405 | OK | Time: 5m 17s (ETA: 8m 49s)
+    [Gen  700] Cost=6.3616M$ | P=28.72m | Eps=1.500 | Sims=126196 | OK | Time: 5m 22s (ETA: 8m 45s)
+    [Gen  710] Cost=6.3436M$ | P=28.52m | Eps=1.500 | Sims=127999 | OK | Time: 5m 27s (ETA: 8m 40s)
+    [Gen  720] Cost=6.3436M$ | P=28.52m | Eps=1.500 | Sims=129804 | OK | Time: 5m 31s (ETA: 8m 35s)
+    [Gen  730] Cost=6.3436M$ | P=28.52m | Eps=1.500 | Sims=131600 | OK | Time: 5m 36s (ETA: 8m 31s)
+    [Gen  740] Cost=6.3436M$ | P=28.52m | Eps=1.500 | Sims=133333 | OK | Time: 5m 40s (ETA: 8m 26s)
+    [Gen  750] Cost=6.3306M$ | P=28.94m | Eps=1.500 | Sims=135131 | OK | Time: 5m 45s (ETA: 8m 21s)
+    [Gen  760] Cost=6.3306M$ | P=28.94m | Eps=1.500 | Sims=136929 | OK | Time: 5m 50s (ETA: 8m 17s)
+    [Gen  770] Cost=6.3306M$ | P=28.94m | Eps=1.500 | Sims=138709 | OK | Time: 5m 55s (ETA: 8m 13s)
+    [Gen  780] Cost=6.3306M$ | P=28.94m | Eps=1.500 | Sims=140519 | OK | Time: 5m 59s (ETA: 8m 8s)
+    [Gen  790] Cost=6.3306M$ | P=28.94m | Eps=1.500 | Sims=142304 | OK | Time: 6m 3s (ETA: 8m 3s)
+    [Gen  800] Cost=6.3306M$ | P=28.94m | Eps=1.500 | Sims=144091 | OK | Time: 6m 8s (ETA: 7m 58s)
+    [Handover] Switching to Eps 0.60m...
+      > Creating repaired clone...
+    [Record] 🏆 New Global Best: 6.4529M$ (Valid)
+    [Gen  810] Cost=6.4466M$ | P=30.33m | Eps=0.600 | Sims=145877 | OK | Time: 6m 13s (ETA: 7m 55s)
+    [Record] 🏆 New Global Best: 6.4466M$ (Valid)
+    [Gen  820] Cost=6.4143M$ | P=29.91m | Eps=0.600 | Sims=147639 | OK | Time: 6m 17s (ETA: 7m 50s)
+    [Gen  830] Cost=6.4143M$ | P=29.91m | Eps=0.600 | Sims=149453 | OK | Time: 6m 22s (ETA: 7m 45s)
+    [Gen  840] Cost=6.4043M$ | P=29.71m | Eps=0.600 | Sims=151236 | OK | Time: 6m 27s (ETA: 7m 41s)
+    [Gen  850] Cost=6.3833M$ | P=29.64m | Eps=0.600 | Sims=153026 | OK | Time: 6m 32s (ETA: 7m 36s)
+    [Gen  860] Cost=6.3833M$ | P=29.64m | Eps=0.600 | Sims=154806 | OK | Time: 6m 36s (ETA: 7m 32s)
+    [Gen  870] Cost=6.3833M$ | P=29.64m | Eps=0.600 | Sims=156571 | OK | Time: 6m 41s (ETA: 7m 27s)
+    [Gen  880] Cost=6.3833M$ | P=29.64m | Eps=0.600 | Sims=158352 | OK | Time: 6m 45s (ETA: 7m 22s)
+    [Gen  890] Cost=6.3833M$ | P=29.64m | Eps=0.600 | Sims=160149 | OK | Time: 6m 50s (ETA: 7m 18s)
+    [Handover] Switching to Eps 0.00m...
+      > Creating repaired clone...
+    [Record] 🏆 New Global Best: 6.4263M$ (Valid)
+    [Gen  900] Cost=6.4263M$ | P=30.36m | Eps=0.000 | Sims=161975 | OK | Time: 6m 55s (ETA: 7m 13s)
+    [Record] 🏆 New Global Best: 6.4242M$ (Valid)
+    [Gen  910] Cost=6.4486M$ | P=30.47m | Eps=0.000 | Sims=163793 | OK | Time: 6m 59s (ETA: 7m 9s)
+    [Record] 🏆 New Global Best: 6.3951M$ (Valid)
+    [Gen  920] Cost=6.3951M$ | P=30.68m | Eps=0.000 | Sims=165583 | OK | Time: 7m 5s (ETA: 7m 5s)
+    [Gen  930] Cost=6.3951M$ | P=30.68m | Eps=0.000 | Sims=167386 | OK | Time: 7m 10s (ETA: 7m 0s)
+    [Gen  940] Cost=6.3951M$ | P=30.68m | Eps=0.000 | Sims=169185 | OK | Time: 7m 15s (ETA: 6m 56s)
+    [Gen  950] Cost=6.4919M$ | P=30.00m | Eps=0.000 | Sims=170990 | OK | Time: 7m 19s (ETA: 6m 51s)
+    [Gen  960] Cost=6.4180M$ | P=30.14m | Eps=0.000 | Sims=172811 | OK | Time: 7m 24s (ETA: 6m 47s)
+    [Gen  970] Cost=6.4180M$ | P=30.14m | Eps=0.000 | Sims=174584 | OK | Time: 7m 28s (ETA: 6m 42s)
+    [Gen  980] Cost=6.4110M$ | P=30.31m | Eps=0.000 | Sims=176386 | OK | Time: 7m 32s (ETA: 6m 37s)
+    [Gen  990] Cost=6.4020M$ | P=30.05m | Eps=0.000 | Sims=178159 | OK | Time: 7m 37s (ETA: 6m 32s)
+    [Gen 1000] Cost=6.4020M$ | P=30.05m | Eps=0.000 | Sims=179906 | OK | Time: 7m 41s (ETA: 6m 28s)
+    [Gen 1010] Cost=6.4020M$ | P=30.05m | Eps=0.000 | Sims=181695 | OK | Time: 7m 46s (ETA: 6m 23s)
+    [Gen 1020] Cost=6.4020M$ | P=30.05m | Eps=0.000 | Sims=183488 | OK | Time: 7m 52s (ETA: 6m 19s)
+    [Gen 1030] Cost=6.4020M$ | P=30.05m | Eps=0.000 | Sims=185236 | OK | Time: 7m 57s (ETA: 6m 15s)
+    [Auto-Stop] 🛑 Reached max total shocks (0). Stopping.
+
+    [Finalizing] Validating & Polishing...
+    [Memory] ⏪ Restoring GLOBAL best valid solution (6.3951M$)
+    >> Done in 8m 2s. Final Result: 6.3951M$ | P=30.68m | Sims=186504 | Time: 8m 2s
+    [Post-Process] Refining Solution...
+
+>>> Starting Run #4...
+    [Hyper-Warmup] 🛡️ Generating mixed initial skeletons...
+    [Hyper-Warmup] 🧬 Selecting Zombies & Heroes...
+    [Hyper-Warmup] ✅ Ready to dive with 200 diverse agents.
+    [Gen    0] Cost=6.8267M$ | P=10.56m | Eps=15.000 | Sims=402 | INVALID (PF↑) | Time: 0.5s (ETA: ...)
+    [Gen   10] Cost=7.2300M$ | P=11.58m | Eps=15.000 | Sims=2403 | INVALID (PF↑) | Time: 5.9s (ETA: 18m 2s)
+    [Gen   20] Cost=7.0916M$ | P=15.91m | Eps=15.000 | Sims=4287 | OK | Time: 11.0s (ETA: 16m 43s)
+    [Gen   30] Cost=6.6127M$ | P=15.69m | Eps=15.000 | Sims=6099 | OK | Time: 15.8s (ETA: 15m 55s)
+    [Gen   40] Cost=6.3039M$ | P=15.48m | Eps=15.000 | Sims=7910 | OK | Time: 20.4s (ETA: 15m 17s)
+    [Gen   50] Cost=6.1472M$ | P=17.52m | Eps=15.000 | Sims=9751 | OK | Time: 24.7s (ETA: 14m 43s)
+    [Gen   60] Cost=6.0598M$ | P=17.32m | Eps=15.000 | Sims=11598 | OK | Time: 29.6s (ETA: 14m 36s)
+    [Gen   70] Cost=5.9656M$ | P=15.52m | Eps=15.000 | Sims=13428 | OK | Time: 34.0s (ETA: 14m 20s)
+    [Gen   80] Cost=5.8886M$ | P=15.20m | Eps=15.000 | Sims=15221 | OK | Time: 38.6s (ETA: 14m 9s)
+    [Gen   90] Cost=5.8703M$ | P=15.29m | Eps=15.000 | Sims=17039 | OK | Time: 42.7s (ETA: 13m 51s)
+    [Gen  100] Cost=5.8073M$ | P=15.64m | Eps=15.000 | Sims=18859 | OK | Time: 47.5s (ETA: 13m 46s)
+    [Gen  110] Cost=5.7199M$ | P=15.03m | Eps=15.000 | Sims=20659 | OK | Time: 51.8s (ETA: 13m 34s)
+    [Gen  120] Cost=5.6622M$ | P=15.29m | Eps=15.000 | Sims=22448 | OK | Time: 56.4s (ETA: 13m 28s)
+    [Gen  130] Cost=5.6329M$ | P=15.69m | Eps=15.000 | Sims=24282 | OK | Time: 1m 1s (ETA: 13m 27s)
+    [Gen  140] Cost=5.6329M$ | P=15.69m | Eps=15.000 | Sims=26081 | OK | Time: 1m 5s (ETA: 13m 19s)
+    [Gen  150] Cost=5.6275M$ | P=15.21m | Eps=15.000 | Sims=27874 | OK | Time: 1m 10s (ETA: 13m 14s)
+    [Gen  160] Cost=5.6275M$ | P=15.03m | Eps=15.000 | Sims=29673 | OK | Time: 1m 15s (ETA: 13m 13s)
+    [Gen  170] Cost=5.6275M$ | P=15.03m | Eps=15.000 | Sims=31488 | OK | Time: 1m 20s (ETA: 13m 6s)
+    [Gen  180] Cost=5.5998M$ | P=15.23m | Eps=15.000 | Sims=33256 | OK | Time: 1m 24s (ETA: 12m 59s)
+    [Gen  190] Cost=5.5822M$ | P=15.02m | Eps=15.000 | Sims=35040 | OK | Time: 1m 28s (ETA: 12m 49s)
+    [Gen  200] Cost=5.5822M$ | P=15.02m | Eps=15.000 | Sims=36837 | OK | Time: 1m 33s (ETA: 12m 48s)
+    [Gen  210] Cost=5.5791M$ | P=15.08m | Eps=15.000 | Sims=38647 | OK | Time: 1m 38s (ETA: 12m 41s)
+    [Gen  220] Cost=5.5709M$ | P=15.25m | Eps=15.000 | Sims=40425 | OK | Time: 1m 42s (ETA: 12m 36s)
+    [Gen  230] Cost=5.5709M$ | P=15.25m | Eps=15.000 | Sims=42215 | OK | Time: 1m 47s (ETA: 12m 31s)
+    [Gen  240] Cost=5.5709M$ | P=15.25m | Eps=15.000 | Sims=44025 | OK | Time: 1m 51s (ETA: 12m 24s)
+    [Gen  250] Cost=5.5686M$ | P=15.70m | Eps=15.000 | Sims=45814 | OK | Time: 1m 56s (ETA: 12m 20s)
+    [Gen  260] Cost=5.5686M$ | P=15.70m | Eps=15.000 | Sims=47602 | OK | Time: 2m 0s (ETA: 12m 11s)
+    [Gen  270] Cost=5.5564M$ | P=15.49m | Eps=15.000 | Sims=49398 | OK | Time: 2m 5s (ETA: 12m 7s)
+    [Gen  280] Cost=5.5269M$ | P=15.18m | Eps=15.000 | Sims=51174 | OK | Time: 2m 9s (ETA: 12m 0s)
+    [Gen  290] Cost=5.5269M$ | P=15.18m | Eps=15.000 | Sims=52982 | OK | Time: 2m 13s (ETA: 11m 55s)
+    [Gen  300] Cost=5.5269M$ | P=15.18m | Eps=15.000 | Sims=54762 | OK | Time: 2m 18s (ETA: 11m 49s)
+    [Gen  310] Cost=5.5269M$ | P=15.18m | Eps=15.000 | Sims=56552 | OK | Time: 2m 23s (ETA: 11m 46s)
+    [Gen  320] Cost=5.5269M$ | P=15.18m | Eps=15.000 | Sims=58354 | OK | Time: 2m 27s (ETA: 11m 41s)
+    [Handover] Switching to Eps 12.00m...
+      > Creating repaired clone...
+    [Gen  330] Cost=5.8515M$ | P=18.07m | Eps=12.000 | Sims=60125 | OK | Time: 2m 32s (ETA: 11m 37s)
+    [Gen  340] Cost=5.8053M$ | P=18.03m | Eps=12.000 | Sims=61931 | OK | Time: 2m 36s (ETA: 11m 32s)
+    [Gen  350] Cost=5.7734M$ | P=18.45m | Eps=12.000 | Sims=63728 | OK | Time: 2m 42s (ETA: 11m 29s)
+    [Gen  360] Cost=5.7725M$ | P=18.51m | Eps=12.000 | Sims=65495 | OK | Time: 2m 46s (ETA: 11m 23s)
+    [Gen  370] Cost=5.7049M$ | P=18.10m | Eps=12.000 | Sims=67308 | OK | Time: 2m 50s (ETA: 11m 18s)
+    [Gen  380] Cost=5.7049M$ | P=18.10m | Eps=12.000 | Sims=69083 | OK | Time: 2m 55s (ETA: 11m 15s)
+    [Gen  390] Cost=5.7049M$ | P=18.10m | Eps=12.000 | Sims=70894 | OK | Time: 3m 0s (ETA: 11m 12s)
+    [Gen  400] Cost=5.7049M$ | P=18.10m | Eps=12.000 | Sims=72652 | OK | Time: 3m 5s (ETA: 11m 7s)
+    [Gen  410] Cost=5.7049M$ | P=18.10m | Eps=12.000 | Sims=74433 | OK | Time: 3m 11s (ETA: 11m 6s)
+    [Handover] Switching to Eps 9.00m...
+      > Creating repaired clone...
+    [Gen  420] Cost=5.8421M$ | P=21.58m | Eps=9.000 | Sims=76242 | OK | Time: 3m 15s (ETA: 11m 1s)
+    [Gen  430] Cost=5.8421M$ | P=21.16m | Eps=9.000 | Sims=78051 | OK | Time: 3m 20s (ETA: 10m 57s)
+    [Gen  440] Cost=5.8421M$ | P=21.16m | Eps=9.000 | Sims=79900 | OK | Time: 3m 24s (ETA: 10m 52s)
+    [Gen  450] Cost=5.8421M$ | P=21.16m | Eps=9.000 | Sims=81691 | OK | Time: 3m 29s (ETA: 10m 48s)
+    [Gen  460] Cost=5.8421M$ | P=21.16m | Eps=9.000 | Sims=83497 | OK | Time: 3m 34s (ETA: 10m 42s)
+    [Gen  470] Cost=5.8337M$ | P=21.82m | Eps=9.000 | Sims=85254 | OK | Time: 3m 39s (ETA: 10m 39s)
+    [Gen  480] Cost=5.8337M$ | P=21.82m | Eps=9.000 | Sims=87024 | OK | Time: 3m 43s (ETA: 10m 34s)
+    [Gen  490] Cost=5.8337M$ | P=21.82m | Eps=9.000 | Sims=88827 | OK | Time: 3m 48s (ETA: 10m 28s)
+    [Gen  500] Cost=5.8233M$ | P=21.42m | Eps=9.000 | Sims=90627 | OK | Time: 3m 52s (ETA: 10m 23s)
+    [Gen  510] Cost=5.8233M$ | P=21.42m | Eps=9.000 | Sims=92428 | OK | Time: 3m 57s (ETA: 10m 18s)
+    [Gen  520] Cost=5.8233M$ | P=21.42m | Eps=9.000 | Sims=94213 | OK | Time: 4m 1s (ETA: 10m 13s)
+    [Gen  530] Cost=5.8233M$ | P=21.42m | Eps=9.000 | Sims=95993 | OK | Time: 4m 6s (ETA: 10m 8s)
+    [Gen  540] Cost=5.8233M$ | P=21.42m | Eps=9.000 | Sims=97775 | OK | Time: 4m 10s (ETA: 10m 2s)
+    [Handover] Switching to Eps 6.00m...
+      > Creating repaired clone...
+    [Gen  550] Cost=5.9453M$ | P=24.22m | Eps=6.000 | Sims=99592 | OK | Time: 4m 15s (ETA: 9m 58s)
+    [Gen  560] Cost=5.9453M$ | P=24.48m | Eps=6.000 | Sims=101373 | OK | Time: 4m 19s (ETA: 9m 52s)
+    [Gen  570] Cost=5.9453M$ | P=24.48m | Eps=6.000 | Sims=103155 | OK | Time: 4m 23s (ETA: 9m 47s)
+    [Gen  580] Cost=5.9453M$ | P=24.48m | Eps=6.000 | Sims=104940 | OK | Time: 4m 28s (ETA: 9m 42s)
+    [Gen  590] Cost=5.9453M$ | P=24.48m | Eps=6.000 | Sims=106712 | OK | Time: 4m 33s (ETA: 9m 39s)
+    [Gen  600] Cost=5.9453M$ | P=24.48m | Eps=6.000 | Sims=108481 | OK | Time: 4m 37s (ETA: 9m 33s)
+    [Handover] Switching to Eps 4.50m...
+      > Creating repaired clone...
+    [Gen  610] Cost=5.9806M$ | P=25.59m | Eps=4.500 | Sims=110300 | OK | Time: 4m 42s (ETA: 9m 29s)
+    [Gen  620] Cost=5.9806M$ | P=25.59m | Eps=4.500 | Sims=112114 | OK | Time: 4m 46s (ETA: 9m 23s)
+    [Gen  630] Cost=5.9806M$ | P=25.59m | Eps=4.500 | Sims=113902 | OK | Time: 4m 51s (ETA: 9m 19s)
+    [Gen  640] Cost=5.9806M$ | P=25.59m | Eps=4.500 | Sims=115694 | OK | Time: 4m 55s (ETA: 9m 14s)
+    [Gen  650] Cost=5.9806M$ | P=25.59m | Eps=4.500 | Sims=117453 | OK | Time: 4m 59s (ETA: 9m 9s)
+    [Handover] Switching to Eps 3.00m...
+      > Creating repaired clone...
+    [Gen  660] Cost=6.1183M$ | P=27.30m | Eps=3.000 | Sims=119264 | OK | Time: 5m 4s (ETA: 9m 4s)
+    [Gen  670] Cost=6.0762M$ | P=27.14m | Eps=3.000 | Sims=121079 | OK | Time: 5m 9s (ETA: 8m 59s)
+    [Gen  680] Cost=6.0762M$ | P=27.14m | Eps=3.000 | Sims=122849 | OK | Time: 5m 13s (ETA: 8m 55s)
+    [Gen  690] Cost=6.0762M$ | P=27.14m | Eps=3.000 | Sims=124627 | OK | Time: 5m 17s (ETA: 8m 49s)
+    [Gen  700] Cost=6.0762M$ | P=27.14m | Eps=3.000 | Sims=126425 | OK | Time: 5m 22s (ETA: 8m 45s)
+    [Gen  710] Cost=6.0731M$ | P=27.05m | Eps=3.000 | Sims=128198 | OK | Time: 5m 27s (ETA: 8m 40s)
+    [Gen  720] Cost=6.0731M$ | P=27.05m | Eps=3.000 | Sims=130021 | OK | Time: 5m 32s (ETA: 8m 37s)
+    [Gen  730] Cost=6.0731M$ | P=27.05m | Eps=3.000 | Sims=131809 | OK | Time: 5m 36s (ETA: 8m 32s)
+    [Gen  740] Cost=6.0659M$ | P=27.58m | Eps=3.000 | Sims=133629 | OK | Time: 5m 41s (ETA: 8m 27s)
+    [Gen  750] Cost=6.0236M$ | P=27.06m | Eps=3.000 | Sims=135421 | OK | Time: 5m 46s (ETA: 8m 23s)
+    [Gen  760] Cost=6.0236M$ | P=27.06m | Eps=3.000 | Sims=137148 | OK | Time: 5m 50s (ETA: 8m 18s)
+    [Gen  770] Cost=6.0236M$ | P=27.06m | Eps=3.000 | Sims=138921 | OK | Time: 5m 54s (ETA: 8m 12s)
+    [Gen  780] Cost=6.0236M$ | P=27.06m | Eps=3.000 | Sims=140715 | OK | Time: 5m 59s (ETA: 8m 7s)
+    [Gen  790] Cost=6.0236M$ | P=27.06m | Eps=3.000 | Sims=142470 | OK | Time: 6m 3s (ETA: 8m 3s)
+    [Handover] Switching to Eps 1.50m...
+      > Creating repaired clone...
+    [Gen  800] Cost=6.1303M$ | P=28.60m | Eps=1.500 | Sims=144283 | OK | Time: 6m 8s (ETA: 7m 58s)
+    [Gen  810] Cost=6.1303M$ | P=28.60m | Eps=1.500 | Sims=146085 | OK | Time: 6m 12s (ETA: 7m 54s)
+    [Gen  820] Cost=6.1309M$ | P=28.59m | Eps=1.500 | Sims=147895 | OK | Time: 6m 17s (ETA: 7m 49s)
+    [Gen  830] Cost=6.1309M$ | P=28.59m | Eps=1.500 | Sims=149683 | OK | Time: 6m 21s (ETA: 7m 44s)
+    [Gen  840] Cost=6.1086M$ | P=28.69m | Eps=1.500 | Sims=151464 | OK | Time: 6m 26s (ETA: 7m 39s)
+    [Gen  850] Cost=6.1086M$ | P=28.69m | Eps=1.500 | Sims=153222 | OK | Time: 6m 30s (ETA: 7m 34s)
+    [Gen  860] Cost=6.1022M$ | P=28.57m | Eps=1.500 | Sims=154999 | OK | Time: 6m 35s (ETA: 7m 30s)
+    [Gen  870] Cost=6.1022M$ | P=28.57m | Eps=1.500 | Sims=156730 | OK | Time: 6m 39s (ETA: 7m 25s)
+    [Gen  880] Cost=6.0963M$ | P=28.59m | Eps=1.500 | Sims=158518 | OK | Time: 6m 44s (ETA: 7m 21s)
+    [Gen  890] Cost=6.0963M$ | P=28.59m | Eps=1.500 | Sims=160276 | OK | Time: 6m 49s (ETA: 7m 16s)
+    [Gen  900] Cost=6.0940M$ | P=28.66m | Eps=1.500 | Sims=162025 | OK | Time: 6m 54s (ETA: 7m 13s)
+    [Gen  910] Cost=6.0940M$ | P=28.66m | Eps=1.500 | Sims=163796 | OK | Time: 6m 59s (ETA: 7m 8s)
+    [Gen  920] Cost=6.0940M$ | P=28.66m | Eps=1.500 | Sims=165568 | OK | Time: 7m 4s (ETA: 7m 4s)
+    [Gen  930] Cost=6.0940M$ | P=28.66m | Eps=1.500 | Sims=167335 | OK | Time: 7m 8s (ETA: 6m 59s)
+    [Gen  940] Cost=6.0940M$ | P=28.66m | Eps=1.500 | Sims=169107 | OK | Time: 7m 13s (ETA: 6m 55s)
+    [Gen  950] Cost=6.0805M$ | P=28.52m | Eps=1.500 | Sims=170892 | OK | Time: 7m 17s (ETA: 6m 50s)
+    [Gen  960] Cost=6.0805M$ | P=28.52m | Eps=1.500 | Sims=172684 | OK | Time: 7m 22s (ETA: 6m 45s)
+    [Gen  970] Cost=6.0805M$ | P=28.52m | Eps=1.500 | Sims=174424 | OK | Time: 7m 26s (ETA: 6m 40s)
+    [Gen  980] Cost=6.0805M$ | P=28.52m | Eps=1.500 | Sims=176183 | OK | Time: 7m 32s (ETA: 6m 36s)
+    [Gen  990] Cost=6.0805M$ | P=28.52m | Eps=1.500 | Sims=177986 | OK | Time: 7m 36s (ETA: 6m 32s)
+    [Handover] Switching to Eps 0.60m...
+      > Creating repaired clone...
+    [Gen 1000] Cost=6.1751M$ | P=29.50m | Eps=0.600 | Sims=179754 | OK | Time: 7m 41s (ETA: 6m 27s)
+    [Gen 1010] Cost=6.1718M$ | P=29.43m | Eps=0.600 | Sims=181549 | OK | Time: 7m 46s (ETA: 6m 23s)
+    [Gen 1020] Cost=6.1718M$ | P=29.43m | Eps=0.600 | Sims=183325 | OK | Time: 7m 50s (ETA: 6m 18s)
+    [Gen 1030] Cost=6.1372M$ | P=29.42m | Eps=0.600 | Sims=185100 | OK | Time: 7m 54s (ETA: 6m 13s)
+    [Gen 1040] Cost=6.1372M$ | P=29.42m | Eps=0.600 | Sims=186869 | OK | Time: 7m 59s (ETA: 6m 9s)
+    [Gen 1050] Cost=6.1372M$ | P=29.42m | Eps=0.600 | Sims=188676 | OK | Time: 8m 4s (ETA: 6m 4s)
+    [Gen 1060] Cost=6.1372M$ | P=29.42m | Eps=0.600 | Sims=190468 | OK | Time: 8m 9s (ETA: 6m 0s)
+    [Gen 1070] Cost=6.1372M$ | P=29.42m | Eps=0.600 | Sims=192305 | OK | Time: 8m 13s (ETA: 5m 55s)
+    [Gen 1080] Cost=6.1372M$ | P=29.42m | Eps=0.600 | Sims=194099 | OK | Time: 8m 17s (ETA: 5m 50s)
+    [Handover] Switching to Eps 0.00m...
+      > Creating repaired clone...
+    [Record] 🏆 New Global Best: 6.2142M$ (Valid)
+    [Record] 🏆 New Global Best: 6.2026M$ (Valid)
+    [Record] 🏆 New Global Best: 6.2002M$ (Valid)
+    [Record] 🏆 New Global Best: 6.1949M$ (Valid)
+    [Gen 1090] Cost=6.1949M$ | P=30.46m | Eps=0.000 | Sims=195912 | OK | Time: 8m 22s (ETA: 5m 45s)
+    [Gen 1100] Cost=6.1949M$ | P=30.46m | Eps=0.000 | Sims=197682 | OK | Time: 8m 27s (ETA: 5m 41s)
+    [Record] 🏆 New Global Best: 6.1812M$ (Valid)
+    [Gen 1110] Cost=6.1812M$ | P=30.04m | Eps=0.000 | Sims=199465 | OK | Time: 8m 32s (ETA: 5m 36s)
+    [Gen 1120] Cost=6.1812M$ | P=30.04m | Eps=0.000 | Sims=201243 | OK | Time: 8m 37s (ETA: 5m 32s)
+    [Gen 1130] Cost=6.1812M$ | P=30.04m | Eps=0.000 | Sims=203025 | OK | Time: 8m 41s (ETA: 5m 27s)
+    [Gen 1140] Cost=6.1812M$ | P=30.04m | Eps=0.000 | Sims=204770 | OK | Time: 8m 45s (ETA: 5m 22s)
+    [Record] 🏆 New Global Best: 6.1745M$ (Valid)
+    [Gen 1150] Cost=6.1745M$ | P=30.11m | Eps=0.000 | Sims=206539 | OK | Time: 8m 50s (ETA: 5m 18s)
+    [Gen 1160] Cost=6.1745M$ | P=30.11m | Eps=0.000 | Sims=208296 | OK | Time: 8m 55s (ETA: 5m 13s)
+    [Gen 1170] Cost=6.1745M$ | P=30.11m | Eps=0.000 | Sims=210089 | OK | Time: 8m 59s (ETA: 5m 8s)
+    [Gen 1180] Cost=6.1745M$ | P=30.11m | Eps=0.000 | Sims=211850 | OK | Time: 9m 3s (ETA: 5m 4s)
+    [Gen 1190] Cost=6.1745M$ | P=30.11m | Eps=0.000 | Sims=213638 | OK | Time: 9m 8s (ETA: 4m 59s)
+    [Auto-Stop] 🛑 Reached max total shocks (0). Stopping.
+
+    [Finalizing] Validating & Polishing...
+    >> Done in 9m 12s. Final Result: 6.1745M$ | P=30.11m | Sims=214917 | Time: 9m 12s
+    [Post-Process] Refining Solution...
+
+>>> Starting Run #5...
+    [Hyper-Warmup] 🛡️ Generating mixed initial skeletons...
+    [Hyper-Warmup] 🧬 Selecting Zombies & Heroes...
+    [Hyper-Warmup] ✅ Ready to dive with 200 diverse agents.
+    [Gen    0] Cost=7.7178M$ | P=-11.84m | Eps=15.000 | Sims=402 | INVALID (PF↑) | Time: 0.4s (ETA: ...)
+    [Gen   10] Cost=8.1836M$ | P=16.85m | Eps=15.000 | Sims=2332 | OK | Time: 6.3s (ETA: 19m 17s)
+    [Gen   20] Cost=7.2804M$ | P=17.13m | Eps=15.000 | Sims=4152 | OK | Time: 10.8s (ETA: 16m 20s)
+    [Gen   30] Cost=6.7387M$ | P=18.64m | Eps=15.000 | Sims=5995 | OK | Time: 15.5s (ETA: 15m 33s)
+    [Gen   40] Cost=6.4388M$ | P=16.45m | Eps=15.000 | Sims=7810 | OK | Time: 19.8s (ETA: 14m 49s)
+    [Gen   50] Cost=6.3280M$ | P=17.05m | Eps=15.000 | Sims=9648 | OK | Time: 24.5s (ETA: 14m 37s)
+    [Gen   60] Cost=6.0528M$ | P=15.21m | Eps=15.000 | Sims=11466 | OK | Time: 28.8s (ETA: 14m 14s)
+    [Gen   70] Cost=6.0304M$ | P=15.53m | Eps=15.000 | Sims=13280 | OK | Time: 33.4s (ETA: 14m 5s)
+    [Gen   80] Cost=5.8309M$ | P=15.93m | Eps=15.000 | Sims=15088 | OK | Time: 37.7s (ETA: 13m 49s)
+    [Gen   90] Cost=5.8182M$ | P=16.05m | Eps=15.000 | Sims=16915 | OK | Time: 42.2s (ETA: 13m 41s)
+    [Gen  100] Cost=5.7559M$ | P=15.32m | Eps=15.000 | Sims=18751 | OK | Time: 47.1s (ETA: 13m 38s)
+    [Gen  110] Cost=5.7000M$ | P=15.53m | Eps=15.000 | Sims=20566 | OK | Time: 51.8s (ETA: 13m 35s)
+    [Gen  120] Cost=5.6648M$ | P=15.05m | Eps=15.000 | Sims=22376 | OK | Time: 56.3s (ETA: 13m 27s)
+    [Gen  130] Cost=5.5901M$ | P=15.61m | Eps=15.000 | Sims=24186 | OK | Time: 1m 0s (ETA: 13m 22s)
+    [Gen  140] Cost=5.5760M$ | P=15.19m | Eps=15.000 | Sims=25989 | OK | Time: 1m 5s (ETA: 13m 19s)
+    [Gen  150] Cost=5.5760M$ | P=15.19m | Eps=15.000 | Sims=27791 | OK | Time: 1m 10s (ETA: 13m 13s)
+    [Gen  160] Cost=5.5760M$ | P=15.19m | Eps=15.000 | Sims=29587 | OK | Time: 1m 14s (ETA: 13m 5s)
+    [Gen  170] Cost=5.5760M$ | P=15.19m | Eps=15.000 | Sims=31398 | OK | Time: 1m 19s (ETA: 13m 1s)
+    [Gen  180] Cost=5.5760M$ | P=15.19m | Eps=15.000 | Sims=33180 | OK | Time: 1m 23s (ETA: 12m 53s)
+    [Handover] Switching to Eps 12.00m...
+      > Creating repaired clone...
+    [Gen  190] Cost=5.7189M$ | P=18.47m | Eps=12.000 | Sims=34987 | OK | Time: 1m 28s (ETA: 12m 47s)
+    [Gen  200] Cost=5.6879M$ | P=18.09m | Eps=12.000 | Sims=36775 | OK | Time: 1m 32s (ETA: 12m 40s)
+    [Gen  210] Cost=5.6653M$ | P=18.05m | Eps=12.000 | Sims=38533 | OK | Time: 1m 37s (ETA: 12m 38s)
+    [Gen  220] Cost=5.6653M$ | P=18.05m | Eps=12.000 | Sims=40323 | OK | Time: 1m 42s (ETA: 12m 31s)
+    [Gen  230] Cost=5.6653M$ | P=18.05m | Eps=12.000 | Sims=42112 | OK | Time: 1m 46s (ETA: 12m 24s)
+    [Gen  240] Cost=5.6602M$ | P=18.19m | Eps=12.000 | Sims=43920 | OK | Time: 1m 51s (ETA: 12m 21s)
+    [Gen  250] Cost=5.6602M$ | P=18.19m | Eps=12.000 | Sims=45731 | OK | Time: 1m 55s (ETA: 12m 17s)
+    [Gen  260] Cost=5.6602M$ | P=18.19m | Eps=12.000 | Sims=47534 | OK | Time: 2m 0s (ETA: 12m 9s)
+    [Gen  270] Cost=5.6602M$ | P=18.19m | Eps=12.000 | Sims=49324 | OK | Time: 2m 5s (ETA: 12m 8s)
+    [Gen  280] Cost=5.6602M$ | P=18.19m | Eps=12.000 | Sims=51132 | OK | Time: 2m 10s (ETA: 12m 4s)
+    [Handover] Switching to Eps 9.00m...
+      > Creating repaired clone...
+    [Gen  290] Cost=5.8267M$ | P=21.26m | Eps=9.000 | Sims=52926 | OK | Time: 2m 15s (ETA: 12m 1s)
+    [Gen  300] Cost=5.8267M$ | P=21.26m | Eps=9.000 | Sims=54709 | OK | Time: 2m 19s (ETA: 11m 56s)
+    [Gen  310] Cost=5.8098M$ | P=21.28m | Eps=9.000 | Sims=56544 | OK | Time: 2m 24s (ETA: 11m 52s)
+    [Gen  320] Cost=5.8098M$ | P=21.28m | Eps=9.000 | Sims=58292 | OK | Time: 2m 29s (ETA: 11m 50s)
+    [Gen  330] Cost=5.8098M$ | P=21.28m | Eps=9.000 | Sims=60085 | OK | Time: 2m 33s (ETA: 11m 43s)
+    [Gen  340] Cost=5.8041M$ | P=21.09m | Eps=9.000 | Sims=61878 | OK | Time: 2m 38s (ETA: 11m 40s)
+    [Gen  350] Cost=5.8041M$ | P=21.09m | Eps=9.000 | Sims=63679 | OK | Time: 2m 43s (ETA: 11m 36s)
+    [Gen  360] Cost=5.8041M$ | P=21.09m | Eps=9.000 | Sims=65477 | OK | Time: 2m 48s (ETA: 11m 32s)
+    [Gen  370] Cost=5.8041M$ | P=21.09m | Eps=9.000 | Sims=67272 | OK | Time: 2m 52s (ETA: 11m 26s)
+    [Gen  380] Cost=5.8041M$ | P=21.09m | Eps=9.000 | Sims=69075 | OK | Time: 2m 57s (ETA: 11m 22s)
+    [Gen  390] Cost=5.7813M$ | P=21.33m | Eps=9.000 | Sims=70881 | OK | Time: 3m 2s (ETA: 11m 17s)
+    [Gen  400] Cost=5.7813M$ | P=21.33m | Eps=9.000 | Sims=72682 | OK | Time: 3m 6s (ETA: 11m 12s)
+    [Gen  410] Cost=5.7813M$ | P=21.33m | Eps=9.000 | Sims=74468 | OK | Time: 3m 10s (ETA: 11m 5s)
+    [Gen  420] Cost=5.7813M$ | P=21.33m | Eps=9.000 | Sims=76253 | OK | Time: 3m 15s (ETA: 11m 0s)
+    [Gen  430] Cost=5.7813M$ | P=21.33m | Eps=9.000 | Sims=78032 | OK | Time: 3m 19s (ETA: 10m 55s)
+    [Handover] Switching to Eps 6.00m...
+      > Creating repaired clone...
+    [Gen  440] Cost=5.9764M$ | P=24.94m | Eps=6.000 | Sims=79840 | OK | Time: 3m 25s (ETA: 10m 53s)
+    [Gen  450] Cost=5.9571M$ | P=25.63m | Eps=6.000 | Sims=81602 | OK | Time: 3m 29s (ETA: 10m 47s)
+    [Gen  460] Cost=5.9125M$ | P=25.53m | Eps=6.000 | Sims=83417 | OK | Time: 3m 34s (ETA: 10m 43s)
+    [Gen  470] Cost=5.9125M$ | P=25.20m | Eps=6.000 | Sims=85213 | OK | Time: 3m 38s (ETA: 10m 38s)
+    [Gen  480] Cost=5.9079M$ | P=24.22m | Eps=6.000 | Sims=86994 | OK | Time: 3m 43s (ETA: 10m 33s)
+    [Gen  490] Cost=5.8479M$ | P=24.75m | Eps=6.000 | Sims=88813 | OK | Time: 3m 48s (ETA: 10m 30s)
+    [Gen  500] Cost=5.8479M$ | P=24.75m | Eps=6.000 | Sims=90570 | OK | Time: 3m 53s (ETA: 10m 25s)
+    [Gen  510] Cost=5.8479M$ | P=24.75m | Eps=6.000 | Sims=92361 | OK | Time: 3m 57s (ETA: 10m 20s)
+    [Gen  520] Cost=5.8479M$ | P=24.75m | Eps=6.000 | Sims=94120 | OK | Time: 4m 2s (ETA: 10m 14s)
+    [Gen  530] Cost=5.8479M$ | P=24.75m | Eps=6.000 | Sims=95927 | OK | Time: 4m 6s (ETA: 10m 9s)
+    [Handover] Switching to Eps 4.50m...
+      > Creating repaired clone...
+    [Gen  540] Cost=5.9260M$ | P=24.75m | Eps=4.500 | Sims=97721 | OK | Time: 4m 11s (ETA: 10m 5s)
+    [Gen  550] Cost=5.9107M$ | P=25.63m | Eps=4.500 | Sims=99537 | OK | Time: 4m 16s (ETA: 10m 0s)
+    [Gen  560] Cost=5.9107M$ | P=25.63m | Eps=4.500 | Sims=101344 | OK | Time: 4m 21s (ETA: 9m 56s)
+    [Gen  570] Cost=5.9107M$ | P=25.63m | Eps=4.500 | Sims=103111 | OK | Time: 4m 25s (ETA: 9m 50s)
+    [Gen  580] Cost=5.9107M$ | P=25.63m | Eps=4.500 | Sims=104886 | OK | Time: 4m 29s (ETA: 9m 45s)
+    [Gen  590] Cost=5.9107M$ | P=25.63m | Eps=4.500 | Sims=106677 | OK | Time: 4m 34s (ETA: 9m 40s)
+    [Handover] Switching to Eps 3.00m...
+      > Creating repaired clone...
+    [Gen  600] Cost=5.9771M$ | P=27.43m | Eps=3.000 | Sims=108492 | OK | Time: 4m 38s (ETA: 9m 36s)
+    [Gen  610] Cost=5.9771M$ | P=27.43m | Eps=3.000 | Sims=110290 | OK | Time: 4m 42s (ETA: 9m 30s)
+    [Gen  620] Cost=5.9771M$ | P=27.43m | Eps=3.000 | Sims=112100 | OK | Time: 4m 47s (ETA: 9m 25s)
+    [Gen  630] Cost=5.9771M$ | P=27.43m | Eps=3.000 | Sims=113898 | OK | Time: 4m 52s (ETA: 9m 21s)
+    [Gen  640] Cost=5.9747M$ | P=27.76m | Eps=3.000 | Sims=115685 | OK | Time: 4m 57s (ETA: 9m 17s)
+    [Gen  650] Cost=5.9747M$ | P=27.76m | Eps=3.000 | Sims=117482 | OK | Time: 5m 1s (ETA: 9m 12s)
+    [Gen  660] Cost=5.9490M$ | P=27.02m | Eps=3.000 | Sims=119259 | OK | Time: 5m 6s (ETA: 9m 7s)
+    [Gen  670] Cost=5.9490M$ | P=27.02m | Eps=3.000 | Sims=121051 | OK | Time: 5m 11s (ETA: 9m 3s)
+    [Gen  680] Cost=5.9490M$ | P=27.02m | Eps=3.000 | Sims=122865 | OK | Time: 5m 16s (ETA: 8m 59s)
+    [Gen  690] Cost=5.9490M$ | P=27.02m | Eps=3.000 | Sims=124664 | OK | Time: 5m 21s (ETA: 8m 55s)
+    [Gen  700] Cost=5.9490M$ | P=27.02m | Eps=3.000 | Sims=126412 | OK | Time: 5m 25s (ETA: 8m 50s)
+    [Handover] Switching to Eps 1.50m...
+      > Creating repaired clone...
+    [Gen  710] Cost=6.0403M$ | P=28.82m | Eps=1.500 | Sims=128209 | OK | Time: 5m 29s (ETA: 8m 44s)
+    [Gen  720] Cost=6.0403M$ | P=28.82m | Eps=1.500 | Sims=129999 | OK | Time: 5m 34s (ETA: 8m 40s)
+    [Gen  730] Cost=6.0403M$ | P=28.82m | Eps=1.500 | Sims=131773 | OK | Time: 5m 39s (ETA: 8m 36s)
+    [Gen  740] Cost=6.0403M$ | P=28.82m | Eps=1.500 | Sims=133520 | OK | Time: 5m 44s (ETA: 8m 31s)
+    [Gen  750] Cost=6.0403M$ | P=28.82m | Eps=1.500 | Sims=135285 | OK | Time: 5m 48s (ETA: 8m 26s)
+    [Handover] Switching to Eps 0.60m...
+      > Creating repaired clone...
+    [Record] 🏆 New Global Best: 6.1957M$ (Valid)
+    [Gen  760] Cost=6.1736M$ | P=29.81m | Eps=0.600 | Sims=137088 | OK | Time: 5m 54s (ETA: 8m 23s)
+    [Gen  770] Cost=6.1370M$ | P=29.46m | Eps=0.600 | Sims=138877 | OK | Time: 5m 59s (ETA: 8m 19s)
+    [Gen  780] Cost=6.1267M$ | P=29.62m | Eps=0.600 | Sims=140640 | OK | Time: 6m 3s (ETA: 8m 14s)
+    [Gen  790] Cost=6.1267M$ | P=29.62m | Eps=0.600 | Sims=142383 | OK | Time: 6m 8s (ETA: 8m 10s)
+    [Gen  800] Cost=6.1267M$ | P=29.62m | Eps=0.600 | Sims=144161 | OK | Time: 6m 13s (ETA: 8m 5s)
+    [Record] 🏆 New Global Best: 6.1227M$ (Valid)
+    [Gen  810] Cost=6.1227M$ | P=30.16m | Eps=0.600 | Sims=145947 | OK | Time: 6m 17s (ETA: 8m 0s)
+    [Gen  820] Cost=6.1227M$ | P=30.16m | Eps=0.600 | Sims=147745 | OK | Time: 6m 22s (ETA: 7m 55s)
+    [Gen  830] Cost=6.1147M$ | P=29.53m | Eps=0.600 | Sims=149522 | OK | Time: 6m 26s (ETA: 7m 50s)
+    [Gen  840] Cost=6.1147M$ | P=29.53m | Eps=0.600 | Sims=151306 | OK | Time: 6m 31s (ETA: 7m 45s)
+    [Gen  850] Cost=6.1147M$ | P=29.53m | Eps=0.600 | Sims=153110 | OK | Time: 6m 35s (ETA: 7m 41s)
+    [Gen  860] Cost=6.1147M$ | P=29.53m | Eps=0.600 | Sims=154899 | OK | Time: 6m 40s (ETA: 7m 36s)
+    [Gen  870] Cost=6.1147M$ | P=29.53m | Eps=0.600 | Sims=156712 | OK | Time: 6m 44s (ETA: 7m 31s)
+    [Handover] Switching to Eps 0.00m...
+      > Creating repaired clone...
+    [Gen  880] Cost=6.1513M$ | P=30.72m | Eps=0.000 | Sims=158512 | OK | Time: 6m 49s (ETA: 7m 26s)
+    [Gen  890] Cost=6.1513M$ | P=30.72m | Eps=0.000 | Sims=160312 | OK | Time: 6m 54s (ETA: 7m 22s)
+    [Gen  900] Cost=6.1513M$ | P=30.72m | Eps=0.000 | Sims=162087 | OK | Time: 6m 58s (ETA: 7m 17s)
+    [Gen  910] Cost=6.1453M$ | P=30.03m | Eps=0.000 | Sims=163860 | OK | Time: 7m 3s (ETA: 7m 12s)
+    [Gen  920] Cost=6.1453M$ | P=30.03m | Eps=0.000 | Sims=165597 | OK | Time: 7m 7s (ETA: 7m 7s)
+    [Gen  930] Cost=6.1453M$ | P=30.03m | Eps=0.000 | Sims=167367 | OK | Time: 7m 12s (ETA: 7m 2s)
+    [Gen  940] Cost=6.1453M$ | P=30.03m | Eps=0.000 | Sims=169120 | OK | Time: 7m 16s (ETA: 6m 57s)
+    [Record] 🏆 New Global Best: 6.1178M$ (Valid)
+    [Gen  950] Cost=6.1178M$ | P=30.26m | Eps=0.000 | Sims=170895 | OK | Time: 7m 21s (ETA: 6m 53s)
+    [Gen  960] Cost=6.1178M$ | P=30.26m | Eps=0.000 | Sims=172674 | OK | Time: 7m 25s (ETA: 6m 48s)
+    [Gen  970] Cost=6.1178M$ | P=30.26m | Eps=0.000 | Sims=174420 | OK | Time: 7m 29s (ETA: 6m 43s)
+    [Gen  980] Cost=6.1178M$ | P=30.26m | Eps=0.000 | Sims=176203 | OK | Time: 7m 34s (ETA: 6m 38s)
+    [Gen  990] Cost=6.1178M$ | P=30.26m | Eps=0.000 | Sims=177988 | OK | Time: 7m 39s (ETA: 6m 34s)
+    [Auto-Stop] 🛑 Reached max total shocks (0). Stopping.
+
+    [Finalizing] Validating & Polishing...
+    >> Done in 7m 43s. Final Result: 6.1178M$ | P=30.26m | Sims=179584 | Time: 7m 43s
+    [Post-Process] Refining Solution...
+[System] Shutting down workers pool...
+[System] Cleanup complete.
+
+=== FINAL RESULTS ===
+Run 1: 6.1266M$ | P=30.24m | OK
+Run 2: 6.1130M$ | P=30.15m | OK
+Run 3: 6.3951M$ | P=30.68m | OK
+Run 4: 6.1745M$ | P=30.11m | OK
+Run 5: 6.1178M$ | P=30.26m | OK
+[Output] Saved solution table: OutputDataExperiments\2026-02-19_13-31-26\tables\solution_champion.csv
+[Plot] Saved convergence graph: OutputDataExperiments\2026-02-19_13-31-26\plots\convergence.png
+[Plot] Generating network map...
+[Plot] Saved network map: OutputDataExperiments\2026-02-19_13-31-26\plots\network_map.png

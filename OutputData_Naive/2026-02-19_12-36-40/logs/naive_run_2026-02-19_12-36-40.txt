@@ -1,0 +1,84 @@
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+==============================================
+   NAIVE EVOLUTIONARY OPTIMIZER: InputData/Hanoi/Hanoi.inp
+==============================================
+ Units:         in
+ Population:    200
+ Generations:   1840
+ Min Pressure:  30.0 m
+ Output Dir:    OutputData_Naive\2026-02-19_12-36-40
+==============================================
+
+>>> Starting Run #1/5...
+    [Mode] Aggressive (Small Network: 34 pipes)
+    [INFO] Feasibility Check (All Max Pipes): P=49.62 m
+    [Run 1] Gen   0: Cost=9.13M$ | P=32.28m [OK] | Sims=376 | Time=6.1s
+    [Run 1] Gen  10: Cost=7.65M$ | P=30.09m [OK] | Sims=2202 | Time=33.7s
+    [Run 1] Gen  20: Cost=6.95M$ | P=30.41m [OK] | Sims=4032 | Time=1m 1s
+    [Run 1] Gen  30: Cost=6.77M$ | P=30.30m [OK] | Sims=5860 | Time=1m 27s
+    [Run 1] Gen  40: Cost=6.75M$ | P=30.12m [OK] | Sims=7625 | Time=1m 53s
+    [Run 1] Gen  50: Cost=6.75M$ | P=30.12m [OK] | Sims=9417 | Time=2m 17s
+    [Run 1] Gen  60: Cost=6.75M$ | P=30.12m [OK] | Sims=11234 | Time=2m 43s
+    [Run 1] Gen  70: Cost=6.75M$ | P=30.12m [OK] | Sims=13034 | Time=3m 9s
+    [Run 1] Gen  80: Cost=6.75M$ | P=30.12m [OK] | Sims=14815 | Time=3m 34s
+    [Run 1] Gen  90: Cost=6.75M$ | P=30.12m [OK] | Sims=16621 | Time=3m 58s
+    [Run 1] Gen 100: Cost=6.75M$ | P=30.12m [OK] | Sims=18439 | Time=4m 23s
+    [Run 1] Gen 110: Cost=6.75M$ | P=30.12m [OK] | Sims=20253 | Time=4m 48s
+    [Run 1] Gen 120: Cost=6.75M$ | P=30.12m [OK] | Sims=22059 | Time=5m 13s
+    [Run 1] Gen 130: Cost=6.75M$ | P=30.12m [OK] | Sims=23861 | Time=5m 38s
+    [Run 1] Gen 140: Cost=6.75M$ | P=30.12m [OK] | Sims=25661 | Time=6m 2s
+    [Run 1] Gen 150: Cost=6.75M$ | P=30.12m [OK] | Sims=27465 | Time=6m 27s
+    [Run 1] Gen 160: Cost=6.75M$ | P=30.12m [OK] | Sims=29264 | Time=6m 52s
+    [Run 1] Gen 170: Cost=6.75M$ | P=30.12m [OK] | Sims=31070 | Time=7m 17s
+    [Run 1] Gen 180: Cost=6.75M$ | P=30.12m [OK] | Sims=32894 | Time=7m 42s
+    [Run 1] Gen 190: Cost=6.75M$ | P=30.12m [OK] | Sims=34696 | Time=8m 7s
+    [Run 1] Gen 200: Cost=6.75M$ | P=30.12m [OK] | Sims=36535 | Time=8m 33s
+    [Run 1] Gen 210: Cost=6.75M$ | P=30.12m [OK] | Sims=38334 | Time=8m 59s
+    [Run 1] Gen 220: Cost=6.75M$ | P=30.12m [OK] | Sims=40158 | Time=9m 24s
+    [Run 1] Gen 230: Cost=6.75M$ | P=30.12m [OK] | Sims=41962 | Time=9m 50s
+    [Run 1] Gen 240: Cost=6.75M$ | P=30.12m [OK] | Sims=43761 | Time=10m 15s
+    [Run 1] Gen 250: Cost=6.75M$ | P=30.12m [OK] | Sims=45569 | Time=10m 41s
+    [Run 1] Gen 260: Cost=6.75M$ | P=30.12m [OK] | Sims=47401 | Time=11m 8s
+    [Run 1] Gen 270: Cost=6.75M$ | P=30.12m [OK] | Sims=49218 | Time=11m 39s
+    [Run 1] Gen 280: Cost=6.75M$ | P=30.12m [OK] | Sims=51003 | Time=12m 6s
+    [Run 1] Gen 290: Cost=6.75M$ | P=30.12m [OK] | Sims=52798 | Time=12m 33s
+    [Run 1] Gen 300: Cost=6.75M$ | P=30.12m [OK] | Sims=54570 | Time=13m 1s
+    [Run 1] Gen 310: Cost=6.75M$ | P=30.12m [OK] | Sims=56369 | Time=13m 29s
+    [Run 1] Gen 320: Cost=6.75M$ | P=30.12m [OK] | Sims=58196 | Time=13m 56s
+    [Run 1] Gen 330: Cost=6.75M$ | P=30.12m [OK] | Sims=60000 | Time=14m 23s
+    [Run 1] Gen 340: Cost=6.75M$ | P=30.12m [OK] | Sims=61800 | Time=14m 49s
+    [Run 1] Gen 350: Cost=6.75M$ | P=30.12m [OK] | Sims=63616 | Time=15m 14s
+    [Run 1] Gen 360: Cost=6.75M$ | P=30.12m [OK] | Sims=65433 | Time=15m 40s
+    [Run 1] Gen 370: Cost=6.75M$ | P=30.12m [OK] | Sims=67210 | Time=16m 5s
+    [Run 1] Gen 380: Cost=6.75M$ | P=30.12m [OK] | Sims=69013 | Time=16m 30s
+    [Run 1] Gen 390: Cost=6.75M$ | P=30.12m [OK] | Sims=70831 | Time=16m 55s
+    [Run 1] Gen 400: Cost=6.75M$ | P=30.12m [OK] | Sims=72605 | Time=17m 20s
+    [Run 1] Gen 410: Cost=6.75M$ | P=30.12m [OK] | Sims=74427 | Time=17m 45s
+    [Run 1] Gen 420: Cost=6.75M$ | P=30.12m [OK] | Sims=76243 | Time=18m 12s
+    [Run 1] Gen 430: Cost=6.75M$ | P=30.12m [OK] | Sims=78039 | Time=18m 37s
+    [Run 1] Gen 440: Cost=6.75M$ | P=30.12m [OK] | Sims=79855 | Time=19m 4s
+    [Run 1] Gen 450: Cost=6.75M$ | P=30.12m [OK] | Sims=81652 | Time=19m 30s
+    [Run 1] Gen 460: Cost=6.75M$ | P=30.12m [OK] | Sims=83453 | Time=19m 57s
+    [Run 1] Gen 470: Cost=6.75M$ | P=30.12m [OK] | Sims=85250 | Time=20m 25s
+    [Run 1] Gen 480: Cost=6.75M$ | P=30.12m [OK] | Sims=87070 | Time=20m 51s
+    [Run 1] Gen 490: Cost=6.75M$ | P=30.12m [OK] | Sims=88902 | Time=21m 18s
+    [Run 1] Gen 500: Cost=6.75M$ | P=30.12m [OK] | Sims=90664 | Time=21m 44s
+    [Run 1] Gen 510: Cost=6.75M$ | P=30.12m [OK] | Sims=92450 | Time=22m 9s
+    [Run 1] Gen 520: Cost=6.75M$ | P=30.12m [OK] | Sims=94247 | Time=22m 34s
+Traceback (most recent call last):
+  File "E:\Projects\Python\GAPipeDiameterSearch\naive_ga.py", line 536, in <module>
+  File "E:\Projects\Python\GAPipeDiameterSearch\naive_ga.py", line 449, in run_single_trial
+    for mutant in offspring:
+    
+  File "E:\Projects\Python\GAPipeDiameterSearch\naive_ga.py", line 394, in cached_eval
+    return evaluate_network(individual, args.inp, "epsilon", generation, tol, args.gen)
+  File "E:\Projects\Python\GAPipeDiameterSearch\naive_ga.py", line 138, in evaluate_network
+    results = sim.run_sim()
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\wntr\sim\epanet.py", line 115, in run_sim
+    enData.ENopen(inpfile, rptfile, outfile)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\wntr\epanet\toolkit.py", line 195, in ENopen
+    self.errcode = self.ENlib.EN_open(self._project, inpfile, rptfile, binfile)
+                   ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
