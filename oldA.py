@@ -439,6 +439,12 @@ class AnalyticalSolver:
             return [], []
     
     def _loop_balancing_kick(self, solution):
+        """
+        FLOW STEERING (Pure Adaptive Grid Search):
+        Honest search: drops the lazy giant by 1..N sizes, 
+        and boosts the bypass. Only locks the Giant, allowing Squeeze 
+        to perfectly trim the bloated bypass.
+        """
         curr_indices = self._get_current_indices(solution)
         _, _, _, crit_node = self.simulator.get_stats(curr_indices)
         if not crit_node or crit_node == "ERR": return None, None, ""
@@ -451,6 +457,7 @@ class AnalyticalSolver:
 
         unit_losses = self.simulator.get_heuristics(curr_indices)
         best_candidate = -1
+        best_cycle = []
         max_score = -1.0
 
         for cycle_nodes in cycles:
@@ -476,97 +483,67 @@ class AnalyticalSolver:
                     if score > max_score:
                         max_score = score
                         best_candidate = idx
+                        best_cycle = cycle_indices
 
         if best_candidate == -1: return None, None, "No lazy giants found"
 
-        # Знаходимо ВСІ кільця, де є цей Гігант (щоб знайти правильний обхід)
-        target_cycles = []
-        for cycle_nodes in cycles:
-            cycle_indices = []
-            full_cycle = cycle_nodes + [cycle_nodes[0]]
-            for u, v in zip(full_cycle[:-1], full_cycle[1:]):
-                edge_data = self.simulator.graph.get_edge_data(u, v)
-                if edge_data is None: edge_data = self.simulator.graph.get_edge_data(v, u)
-                if edge_data:
-                    idx = -1
-                    for key in edge_data:
-                        if key in self.simulator.component_names:
-                            idx = self.simulator.component_names.index(key)
-                            break
-                    if idx != -1: cycle_indices.append(idx)
-            
-            if best_candidate in cycle_indices:
-                target_cycles.append(cycle_indices)
-
         curr_d_idx = curr_indices[best_candidate]
-        max_drop = min(4, curr_d_idx)
         
         best_combo_sol = None
         best_combo_locked = set()
         best_combo_score = float('inf')
         best_msg = ""
-        best_drop_achieved = -1
 
-        for best_cycle in target_cycles:
-            for drop in range(max_drop, 0, -1):
-                # ПРІОРИТЕТ НА РАДИКАЛЬНІСТЬ: ігноруємо слабкі відрізання, якщо знайшли сильне
-                if drop < best_drop_achieved:
-                    continue
-
-                target_d_idx = curr_d_idx - drop
-                
+        # ADAPTIVE GRID SEARCH
+        max_drop = min(4, curr_d_idx)
+        
+        for drop in range(1, max_drop + 1):
+            target_d_idx = curr_d_idx - drop
+            
+            for boost in range(0, 4):
                 kicked = list(solution)
                 locked = set()
+                
+                # A. Відрізаємо гіганта
                 kicked[best_candidate] = self.diameters[target_d_idx]
-                locked.add(best_candidate) 
+                locked.add(best_candidate) # <--- БЛОКУЄМО ТІЛЬКИ ГІГАНТА
                 
-                feasible = False
-                boosts_applied = 0
-                max_boost_steps = len(best_cycle) * 2 
-                
-                for step in range(max_boost_steps + 1):
-                    test_indices = self._get_current_indices(kicked)
-                    _, t_p, t_feas, _ = self.simulator.get_stats(test_indices)
+                # B. Накачуємо обхід (без блокування!)
+                for idx in best_cycle:
+                    if idx == best_candidate: continue
                     
-                    if t_feas and t_p >= self.simulator.config.h_min:
-                        feasible = True
-                        break
-                        
-                    current_losses = self.simulator.get_heuristics(test_indices)
-                    worst_pipe = -1
-                    max_loss_in_bypass = -1.0
+                    b_curr_d = curr_indices[idx]
+                    b_target = min(b_curr_d + boost, len(self.diameters) - 1)
                     
-                    for idx in best_cycle:
-                        if idx == best_candidate: continue
-                        b_curr_idx = test_indices[idx]
-                        if b_curr_idx < len(self.diameters) - 1: 
-                            if current_losses[idx] > max_loss_in_bypass:
-                                max_loss_in_bypass = current_losses[idx]
-                                worst_pipe = idx
-                    
-                    if worst_pipe != -1:
-                        wp_curr_idx = test_indices[worst_pipe]
-                        kicked[worst_pipe] = self.diameters[wp_curr_idx + 1]
-                        boosts_applied += 1
-                    else:
-                        break 
+                    if b_curr_d < b_target:
+                        kicked[idx] = self.diameters[b_target]
+                        # ТУТ БІЛЬШЕ НЕМАЄ locked.add(idx) - Squeeze зможе їх зрізати!
 
-                if feasible:
-                    test_indices = self._get_current_indices(kicked)
-                    raw_cost, _, _, _ = self.simulator.get_stats(test_indices)
+                # C. Перевірка
+                test_indices = self._get_current_indices(kicked)
+                _, t_p, t_feas, _ = self.simulator.get_stats(test_indices)
+                
+                if t_feas and t_p >= self.simulator.config.h_min:
+                    # Оскільки обхід не заблокований, Squeeze ідеально зріже зайвий жир
+                    # Збільшуємо max_passes до 4, щоб він встиг прибрати всі надлишки для чесної оцінки
+                    test_squeezed = self._gradient_squeeze(kicked, locked_pipes=locked, max_passes=4, quick_mode=True)
+                    sq_indices = self._get_current_indices(test_squeezed)
+                    sq_cost, sq_p, _, _ = self.simulator.get_stats(sq_indices)
                     
-                    # Перемагає найбільший DROP. При рівному Drop - перемагає найдешевший обхід.
-                    if drop > best_drop_achieved or (drop == best_drop_achieved and raw_cost < best_combo_score):
-                        best_drop_achieved = drop
-                        best_combo_score = raw_cost
-                        best_combo_sol = kicked
-                        best_combo_locked = locked
-                        best_msg = f"FLOW STEER: Priority Drop -{drop} on cycle len {len(best_cycle)}. Boosted {boosts_applied} times."
+                    # Оцінюємо по фінальній (оптимізованій) вартості
+                    score = sq_cost 
+                    
+                    if score < best_combo_score:
+                        best_combo_score = score
+                        best_combo_sol = kicked 
+                        best_combo_locked = locked 
+                        best_msg = f"FLOW STEER: Giant -{drop} sizes, Bypass +{boost} sizes. (Est. Cost: {score/1e6:.3f}M)"
+                        break # Знайшли найдешевший boost для цього drop, йдемо до наступного drop
 
         if best_combo_sol:
-            return best_combo_sol, best_combo_locked, best_msg
+             return best_combo_sol, best_combo_locked, best_msg
              
-        return None, None, "FLOW STEER: Failed to balance loop flow iteratively."
+        return None, None, "FLOW STEER: Failed to find feasible drop/boost combination."
 
     def _evaluate_candidate(self, base_solution, pipes_to_mod, mode="upgrade"):
         test_sol = list(base_solution)
@@ -782,3 +759,4 @@ class AnalyticalSolver:
         print(f"[AnalyticalSolver] Фінал: {global_best_cost/1e6:.4f}M$")
         self.best_found_solution = global_best_sol 
         return global_best_sol
+
