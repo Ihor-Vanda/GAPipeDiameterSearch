@@ -1,0 +1,29 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_13-30-17/logs/run_2026-03-03_13-30-17.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] 1. Кінематичний старт...
+[AnalyticalSolver] 2. Градієнтне ущільнення...
+   > База: 6.3855M$
+[AnalyticalSolver] 3. Multipath Flow Redirection...
+Traceback (most recent call last):
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 289, in <module>
+    main()
+    ~~~~^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 182, in main
+    best_solution_meters = solver.solve_standalone()
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 185, in solve_standalone
+    perturbed_solution, locked_pipes = self._multipath_kick(best_solution)
+                                       ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 137, in _multipath_kick
+    curr_d_idx = self.diameters.index(candidate_solution[idx])
+                                      ^^^^^^^^^^^^^^^^^^
+NameError: name 'candidate_solution' is not defined. Did you mean: 'candidate_sol'?

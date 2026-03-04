@@ -1,0 +1,53 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-02_23-59-42/logs/run_2026-03-02_23-59-42.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+[System] Initializing 16 parallel workers (Strict Isolation)...
+
+--- [System] Auto-Configuration ---
+[Auto-Config] Population: 200
+[Config] Max Generations: 150
+[Config] Mode: Deep Dive with post shock
+[Config] Penalties: Linear (Factor=669067)
+-----------------------------------
+
+
+>>> Starting Run #1...
+    [Config] Init: STATIC | Eps: True | Shocks: True | Expand: True | Graphs: True
+    [Warmup] 🛡️ Using GUARANTEED strategy (20% Max, 30% Mid, 50% Rnd)...
+    [Warmup] ✅ Generated 200 items. Valid initial solutions: 0
+    [Gen    0] Cost=5.0318M$ | P=-218.75m | Eps=15.000 | Sims=363 | INVALID (PF↑) | Time: 2.3s (ETA: ...)
+    [Gen   10] Cost=4.7021M$ | P=-648.99m | Eps=15.000 | Sims=2359 | INVALID (PF↑) | Time: 2.8s (ETA: ...)
+    [Gen   20] Cost=4.1874M$ | P=-1410.13m | Eps=15.000 | Sims=4366 | INVALID (PF↑) | Time: 3.2s (ETA: ...)
+    [Gen   30] Cost=2.9208M$ | P=-13780.36m | Eps=15.000 | Sims=6364 | INVALID (PF↑) | Time: 3.5s (ETA: 14.2s)
+    [Gen   40] Cost=2.8355M$ | P=-4548.42m | Eps=15.000 | Sims=8355 | INVALID (PF↑) | Time: 4.0s (ETA: 11.0s)
+    [Gen   50] Cost=2.8891M$ | P=-14798.86m | Eps=15.000 | Sims=10350 | INVALID (PF↑) | Time: 4.4s (ETA: 8.8s)
+    [Gen   60] Cost=2.7139M$ | P=-15620.57m | Eps=15.000 | Sims=12344 | INVALID (PF↑) | Time: 4.8s (ETA: 7.2s)
+    [Gen   70] Cost=2.5169M$ | P=-16422.08m | Eps=15.000 | Sims=14343 | INVALID (PF↑) | Time: 5.2s (ETA: 5.9s)
+    [Gen   80] Cost=2.2777M$ | P=-17174.19m | Eps=15.000 | Sims=16335 | INVALID (PF↑) | Time: 5.6s (ETA: 4.9s)
+    [Gen   90] Cost=2.1077M$ | P=-17116.98m | Eps=15.000 | Sims=18317 | INVALID (PF↑) | Time: 6.0s (ETA: 4.0s)
+    [Gen  100] Cost=2.1277M$ | P=-16836.78m | Eps=15.000 | Sims=20285 | INVALID (PF↑) | Time: 6.4s (ETA: 3.2s)
+    [Gen  110] Cost=1.9794M$ | P=-17076.43m | Eps=15.000 | Sims=22246 | INVALID (PF↑) | Time: 6.8s (ETA: 2.5s)
+    [Gen  120] Cost=1.9616M$ | P=-16868.04m | Eps=15.000 | Sims=24217 | INVALID (PF↑) | Time: 7.2s (ETA: 1.8s)
+    [Gen  130] Cost=2.0700M$ | P=-17490.81m | Eps=15.000 | Sims=26152 | INVALID (PF↑) | Time: 7.6s (ETA: 1.2s)
+    [Gen  140] Cost=2.0404M$ | P=-17259.85m | Eps=15.000 | Sims=28107 | INVALID (PF↑) | Time: 8.0s (ETA: 0.6s)
+
+    [Finalizing] Validating & Polishing...
+    [Polishing] Starting Iterative Squeeze (Eps=0.00)...
+    >> Done in 8.5s. Final Result: 1.9083M$ | P=-17295.85m | Sims=29845 | Time: 8.5s
+    [Post-Process] Refining Solution...
+[System] Shutting down workers pool...
+[System] Cleanup complete.
+
+=== FINAL RESULTS ===
+Run 1: 1.9083M$ | P=-17295.85m | FAIL
+[Output] Saved solution table: OutputDataExperiments\2026-03-02_23-59-42\tables\solution_champion.csv
+[Plot] Generating network map...
+[Plot] Saved network map: OutputDataExperiments\2026-03-02_23-59-42\plots\network_map.png
+[Plot] Saved convergence graph: OutputDataExperiments\2026-03-02_23-59-42\plots\convergence.png

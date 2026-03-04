@@ -1,0 +1,68 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_14-51-22/logs/run_2026-03-03_14-51-22.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Pressure Valuation: $32,355 per meter
+[AnalyticalSolver] 1. Generating Diverse Seeds (Multi-Start)...
+   > Seeds initialized. Best Start: 6.3678M$
+   > [R1] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [R1] 💎 New Record: -$11,726 (6.3561M$)
+   > [R2] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [R3] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [VNS] Stagnation detected. Kicking leader with radius=3...
+   > [VNS] Injection successful. Cost: 6.3974M$
+   > [R4] Searching... 0%   > [R4] Searching... 100%   > [R4] Searching... 100%   > [R{round_idx+1}] Searching... 100%
+   > [R5] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [VNS] Stagnation detected. Kicking leader with radius=3...
+   > [VNS] Injection successful. Cost: 6.3974M$
+   > [R6] Searching... 0%   > [R6] Searching... 100%   > [R6] Searching... 100%   > [R{round_idx+1}] Searching... 100%
+   > [R7] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [VNS] Stagnation detected. Kicking leader with radius=3...
+   > [VNS] Injection successful. Cost: 6.3974M$
+   > [R8] Searching... 0%   > [R8] Searching... 100%   > [R8] Searching... 100%   > [R{round_idx+1}] Searching... 100%
+   > [R9] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [VNS] Stagnation detected. Kicking leader with radius=3...
+   > [VNS] Injection successful. Cost: 6.3974M$
+   > [R10] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [R11] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [VNS] Stagnation detected. Kicking leader with radius=3...
+   > [VNS] Injection successful. Cost: 6.3974M$
+   > [R12] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [R13] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [VNS] Stagnation detected. Kicking leader with radius=3...
+   > [VNS] Injection successful. Cost: 6.3974M$
+   > [R14] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [R15] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [VNS] Stagnation detected. Kicking leader with radius=3...
+   > [VNS] Injection successful. Cost: 6.3974M$
+   > [R16] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [R17] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [VNS] Stagnation detected. Kicking leader with radius=3...
+   > [VNS] Injection successful. Cost: 6.3974M$
+   > [R18] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [R19] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [VNS] Stagnation detected. Kicking leader with radius=3...
+   > [VNS] Injection successful. Cost: 6.3974M$
+   > [R20] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [R21] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [VNS] Stagnation detected. Kicking leader with radius=3...
+   > [VNS] Injection successful. Cost: 6.3974M$
+   > [R22] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [R23] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [VNS] Stagnation detected. Kicking leader with radius=3...
+   > [VNS] Injection successful. Cost: 6.3974M$
+   > [R24] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+   > [R25] Searching... 0%   > [R{round_idx+1}] Searching... 100%
+[AnalyticalSolver] Фінал: 6.3561M$
+
+=== FINAL RESULTS ===
+Analytical Run: 6.3561M$ | P=30.32m | OK | Time: 2m 46s
+[Output] Saved solution table: OutputDataExperiments\2026-03-03_14-51-22\tables\analytical_solution.csv

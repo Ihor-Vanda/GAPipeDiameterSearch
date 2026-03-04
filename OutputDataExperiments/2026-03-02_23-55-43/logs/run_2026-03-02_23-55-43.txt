@@ -1,0 +1,25 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-02_23-55-43/logs/run_2026-03-02_23-55-43.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+[System] Initializing 16 parallel workers (Strict Isolation)...
+
+[Fatal Error] 'int' object has no attribute 'costs'
+Traceback (most recent call last):
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 221, in main
+    optimizer = GeneticOptimizer(sim, args.pop, args.gen, pool=pool, fixed_mode=args.fixed)
+  File "E:\Projects\Python\GAPipeDiameterSearch\ga_optimizer.py", line 23, in __init__
+    self._calibrate_penalties()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\ga_optimizer.py", line 66, in _calibrate_penalties
+    costs = list(self.config.costs.values())
+                 ^^^^^^^^^^^^^^^^^
+AttributeError: 'int' object has no attribute 'costs'
+[System] Shutting down workers pool...
+[System] Cleanup complete.

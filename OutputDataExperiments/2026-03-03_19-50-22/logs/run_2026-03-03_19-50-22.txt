@@ -1,0 +1,117 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_19-50-22/logs/run_2026-03-03_19-50-22.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Pressure Valuation: $43,139 per meter
+[AnalyticalSolver] 1. Generating Diverse Seeds...
+   Creating diverse seeds...
+   Seed 1 (Kinematic): Created.
+   Seed 2 (Max-Start): Created.
+   > Seeds initialized. Best Start: 6.3855M$
+   [SWAP] Success! Pipe 31 (High Friction) <-> Pipe 13 (Low Friction). Savings: -$19,576. New Cost: 6.3659M$
+   [FORCE] Applying 'SHOCK' strategy (Stagnation: 0)...
+   SHOCK: Upgrading Critical Path to 13. Pipes modified: 4. Path: [9-10, 10-11, 11-12, 12-13 | Total: 4 pipes]
+      -> Injection (SHOCK) Successful: 6.5072M$
+   > [R1] Searching... 0%   > [R1] Searching... 100%
+   > [R1] 💎 New Record: -$24,486 (6.3414M$)
+   [SWAP] Success! Pipe 6 (High Friction) <-> Pipe 10 (Low Friction). Savings: -$56,828. New Cost: 6.2846M$
+   > [R2] Searching... 0%   > [R2] Searching... 100%
+   [SWAP] Success! Pipe 26 (High Friction) <-> Pipe 25 (Low Friction). Savings: -$14,510. New Cost: 6.2701M$
+   [FORCE] Applying 'PUSH-PULL' strategy (Stagnation: 0)...
+      -> Injection (PUSH-PULL) Skipped: No valid kick generated.
+   > [R3] Searching... 0%   > [R3] Searching... 100%
+   [SWAP] Success! Pipe 33 (High Friction) <-> Pipe 24 (Low Friction). Savings: -$6,994. New Cost: 6.2631M$
+   > [R4] Searching... 0%   > [R4] Searching... 100%
+   > [R4] 💎 New Record: -$5,582 (6.2575M$)
+   [FORCE] Applying 'SHOCK' strategy (Stagnation: 0)...
+   SHOCK: Upgrading Critical Path to 30. Pipes modified: 4. Path: [23-28, 28-29, 20-23, 29-30 | Total: 4 pipes]
+      -> Injection (SHOCK) Successful: 6.4122M$
+   > [R5] Searching... 0%   > [R5] Searching... 100%
+   [FORCE] Applying 'PUSH-PULL' strategy (Stagnation: 1)...
+      -> Injection (PUSH-PULL) Skipped: No valid kick generated.
+   > [R6] Searching... 0%   > [R6] Searching... 100%
+   [FORCE] Applying 'PUSH-PULL' strategy (Stagnation: 3)...
+      -> Injection (PUSH-PULL) Skipped: No valid kick generated.
+   > [R7] Searching... 0%   > [R7] Searching... 100%
+   [FORCE] Applying 'PUSH-PULL' strategy (Stagnation: 5)...
+      -> Injection (PUSH-PULL) Skipped: No valid kick generated.
+   > [R8] Searching... 0%   > [R8] Searching... 100%
+   [FORCE] Applying 'SHOCK' strategy (Stagnation: 7)...
+   SHOCK: Upgrading Critical Path to 30. Pipes modified: 4. Path: [23-28, 28-29, 20-23, 29-30 | Total: 4 pipes]
+      -> Injection (SHOCK) Successful: 6.4122M$
+   > [R9] Searching... 0%   > [R9] Searching... 100%
+   [FORCE] Applying 'PUSH-PULL' strategy (Stagnation: 1)...
+      -> Injection (PUSH-PULL) Skipped: No valid kick generated.
+   > [R10] Searching... 0%   > [R10] Searching... 100%
+   [FORCE] Applying 'PUSH-PULL' strategy (Stagnation: 3)...
+      -> Injection (PUSH-PULL) Skipped: No valid kick generated.
+   > [R11] Searching... 0%   > [R11] Searching... 100%
+   [FORCE] Applying 'PUSH-PULL' strategy (Stagnation: 5)...
+      -> Injection (PUSH-PULL) Skipped: No valid kick generated.
+   > [R12] Searching... 0%   > [R12] Searching... 100%
+   [FORCE] Applying 'SHOCK' strategy (Stagnation: 7)...
+   SHOCK: Upgrading Critical Path to 30. Pipes modified: 4. Path: [23-28, 28-29, 20-23, 29-30 | Total: 4 pipes]
+      -> Injection (SHOCK) Successful: 6.4122M$
+   > [R13] Searching... 0%   > [R13] Searching... 100%
+   [FORCE] Applying 'PUSH-PULL' strategy (Stagnation: 1)...
+      -> Injection (PUSH-PULL) Skipped: No valid kick generated.
+   > [R14] Searching... 0%   > [R14] Searching... 100%
+   [FORCE] Applying 'PUSH-PULL' strategy (Stagnation: 3)...
+      -> Injection (PUSH-PULL) Skipped: No valid kick generated.
+   > [R15] Searching... 0%   > [R15] Searching... 100%
+   [FORCE] Applying 'PUSH-PULL' strategy (Stagnation: 5)...
+      -> Injection (PUSH-PULL) Skipped: No valid kick generated.
+   > [R16] Searching... 0%   > [R16] Searching... 100%
+   [FORCE] Applying 'SHOCK' strategy (Stagnation: 7)...
+   SHOCK: Upgrading Critical Path to 30. Pipes modified: 4. Path: [23-28, 28-29, 20-23, 29-30 | Total: 4 pipes]
+      -> Injection (SHOCK) Successful: 6.4122M$
+   > [R17] Searching... 0%   > [R17] Searching... 100%
+   [FORCE] Applying 'PUSH-PULL' strategy (Stagnation: 1)...
+      -> Injection (PUSH-PULL) Skipped: No valid kick generated.
+   > [R18] Searching... 0%   > [R18] Searching... 100%
+   [FORCE] Applying 'PUSH-PULL' strategy (Stagnation: 3)...
+      -> Injection (PUSH-PULL) Skipped: No valid kick generated.
+   > [R19] Searching... 0%   > [R19] Searching... 100%
+   [FORCE] Applying 'PUSH-PULL' strategy (Stagnation: 5)...
+      -> Injection (PUSH-PULL) Skipped: No valid kick generated.
+   > [R20] Searching... 0%   > [R20] Searching... 100%
+   [FORCE] Applying 'SHOCK' strategy (Stagnation: 7)...
+   SHOCK: Upgrading Critical Path to 30. Pipes modified: 4. Path: [23-28, 28-29, 20-23, 29-30 | Total: 4 pipes]
+      -> Injection (SHOCK) Successful: 6.4122M$
+   > [R21] Searching... 0%   > [R21] Searching... 100%
+   [FORCE] Applying 'PUSH-PULL' strategy (Stagnation: 1)...
+      -> Injection (PUSH-PULL) Skipped: No valid kick generated.
+   > [R22] Searching... 0%   > [R22] Searching... 100%
+Traceback (most recent call last):
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 289, in <module>
+    main()
+    ~~~~^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 182, in main
+    best_solution_meters = solver.solve_standalone()
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 394, in solve_standalone
+    final_indices = self._get_current_indices(squeezed_sol)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 321, in _swap_search
+    # Встановлюємо надійний середній+ діаметр (наприклад, індекс 3 або +2)
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 128, in _gradient_squeeze
+    _, is_feasible = self.simulator.get_hydraulic_state(test_solution)
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\water_sim.py", line 232, in get_hydraulic_state
+    results = self._run_simulation_core()
+  File "E:\Projects\Python\GAPipeDiameterSearch\water_sim.py", line 161, in _run_simulation_core
+    results = sim.run_sim(file_prefix=prefix)
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\wntr\sim\epanet.py", line 125, in run_sim
+    enData.ENsolveQ()
+    ~~~~~~~~~~~~~~~^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\wntr\epanet\toolkit.py", line 366, in ENsolveQ
+    self.errcode = self.ENlib.EN_solveQ(self._project)
+                   ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+KeyboardInterrupt

@@ -1,0 +1,138 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-04_13-09-19/logs/run_2026-03-04_13-09-19.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Pressure Valuation: $43,139 per meter
+[AnalyticalSolver] 1. Generating Diverse Seeds...
+   > Seeds initialized. Best Start: 6.4255M$
+   [SWAP] 31 <-> 21: -$10,294
+   > [SWAP] 💎 Micro-Optimization: -$10,294 (6.4152M$)
+   [FORCE] Applying 'SHOCK'...
+        -> SHOCK: Upgraded Critical Path [Pipes: 12 count]
+        -> Injection Successful: 6.3437M$
+   > [R1] Searching... 0%   > [R1] Searching... 100%
+   > [R1] 💎 New Record: -$67,308 (6.3479M$)
+   [SWAP] 27 <-> 28: -$3,420
+   > [SWAP] 💎 Micro-Optimization: -$3,420 (6.3444M$)
+   > [R2] Searching... 0%   > [R2] Searching... 100%
+   [SWAP] 25 <-> 27: -$14,774
+   > [SWAP] 💎 Micro-Optimization: -$14,774 (6.3297M$)
+   [FORCE] Applying 'TOPO-DIV'...
+        -> Topo-Kick: Boosting Alt Path (Overlap 0.11, 9 boosted)
+        -> Injection Successful: 6.4184M$
+   > [R3] Searching... 0%   > [R3] Searching... 100%
+   [FORCE] Applying 'TOPO-DIV'...
+        -> Topo-Kick: Boosting Alt Path (Overlap 0.15, 6 boosted)
+        -> Injection Successful: 6.4799M$
+   > [R4] Searching... 0%   > [R4] Searching... 100%
+   [FORCE] Applying 'SHOCK'...
+        -> SHOCK: Upgraded Critical Path [Pipes: 6 count]
+        -> Injection Successful: 6.3582M$
+   > [R5] Searching... 0%   > [R5] Searching... 100%
+   [FORCE] Applying 'TOPO-DIV'...
+        -> Topo-Kick: Boosting Alt Path (Overlap 0.21, 9 boosted)
+        -> Injection Successful: 6.8507M$
+   > [R6] Searching... 0%   > [R6] Searching... 100%
+   [FORCE] Applying 'TOPO-DIV'...
+        -> Topo-Kick: Boosting Alt Path (Overlap 0.31, 6 boosted)
+        -> Injection Successful: 6.3441M$
+   > [R7] Searching... 0%   > [R7] Searching... 100%
+   [FORCE] Applying 'TOPO-DIV'...
+        -> Topo-Kick: Boosting Alt Path (Overlap 0.40, 6 boosted)
+        -> Injection Successful: 6.4821M$
+   > [R8] Searching... 0%   > [R8] Searching... 100%
+   [FORCE] Applying 'SHOCK'...
+        -> SHOCK: Upgraded Critical Path [Pipes: 6 count]
+        -> Injection Successful: 6.3582M$
+   > [R9] Searching... 0%   > [R9] Searching... 100%
+   [FORCE] Applying 'TOPO-DIV'...
+        -> No valid kick generated (All tabu or none found).
+   > [R10] Searching... 0%   > [R10] Searching... 100%
+   [FORCE] Applying 'TOPO-DIV'...
+        -> No valid kick generated (All tabu or none found).
+   > [R11] Searching... 0%   > [R11] Searching... 100%
+   [FORCE] Applying 'TOPO-DIV'...
+        -> No valid kick generated (All tabu or none found).
+   > [R12] Searching... 0%   > [R12] Searching... 100%
+   [FORCE] Applying 'SHOCK'...
+        -> SHOCK: Upgraded Critical Path [Pipes: 6 count]
+        -> Injection Successful: 6.3582M$
+   > [R13] Searching... 0%   > [R13] Searching... 100%
+   [FORCE] Applying 'TOPO-DIV'...
+        -> No valid kick generated (All tabu or none found).
+   > [R14] Searching... 0%   > [R14] Searching... 100%
+   [FORCE] Applying 'TOPO-DIV'...
+        -> No valid kick generated (All tabu or none found).
+   > [R15] Searching... 0%   > [R15] Searching... 100%
+   [FORCE] Applying 'TOPO-DIV'...
+        -> No valid kick generated (All tabu or none found).
+   > [R16] Searching... 0%   > [R16] Searching... 100%
+   [FORCE] Applying 'SHOCK'...
+        -> SHOCK: Upgraded Critical Path [Pipes: 6 count]
+        -> Injection Successful: 6.3582M$
+   > [R17] Searching... 0%   > [R17] Searching... 100%
+   [FORCE] Applying 'TOPO-DIV'...
+        -> No valid kick generated (All tabu or none found).
+   > [R18] Searching... 0%   > [R18] Searching... 100%
+   [FORCE] Applying 'TOPO-DIV'...
+        -> No valid kick generated (All tabu or none found).
+   > [R19] Searching... 0%   > [R19] Searching... 100%
+   [FORCE] Applying 'TOPO-DIV'...
+        -> No valid kick generated (All tabu or none found).
+   > [R20] Searching... 0%   > [R20] Searching... 100%
+   [FORCE] Applying 'SHOCK'...
+        -> SHOCK: Upgraded Critical Path [Pipes: 6 count]
+        -> Injection Successful: 6.3582M$
+   > [R21] Searching... 0%   > [R21] Searching... 100%
+   [FORCE] Applying 'TOPO-DIV'...
+        -> No valid kick generated (All tabu or none found).
+   > [R22] Searching... 0%   > [R22] Searching... 100%
+   [FORCE] Applying 'TOPO-DIV'...
+        -> No valid kick generated (All tabu or none found).
+   > [R23] Searching... 0%   > [R23] Searching... 100%
+   [FORCE] Applying 'TOPO-DIV'...
+        -> No valid kick generated (All tabu or none found).
+   > [R24] Searching... 0%   > [R24] Searching... 100%
+   > [R24] 💎 New Record: -$5,494 (6.3242M$)
+   [FORCE] Applying 'SHOCK'...
+        -> SHOCK: Upgraded Critical Path [Pipes: 7 count]
+        -> Injection Successful: 6.3528M$
+   > [R25] Searching... 0%   > [R25] Searching... 100%
+   [FORCE] Applying 'TOPO-DIV'...
+        -> Topo-Kick: Boosting Alt Path (Overlap 0.11, 9 boosted)
+        -> Injection Failed (Infeasible)
+   > [R26] Searching... 0%   > [R26] Searching... 100%
+   > [R26] 💎 New Record: -$75 (6.3241M$)
+   [FORCE] Applying 'TOPO-DIV'...
+        -> Topo-Kick: Boosting Alt Path (Overlap 0.26, 14 boosted)
+        -> Injection Successful: 6.7673M$
+   > [R27] Searching... 0%   > [R27] Searching... 100%
+   [FORCE] Applying 'TOPO-DIV'...
+        -> Topo-Kick: Boosting Alt Path (Overlap 0.33, 10 boosted)
+        -> Injection Successful: 6.3242M$
+   > [R28] Searching... 0%   > [R28] Searching... 100%
+   > [R28] 💎 New Record: -$29,288 (6.2948M$)
+   [SWAP] 7 <-> 11: -$136,542
+   > [SWAP] 💎 Micro-Optimization: -$136,542 (6.1583M$)
+   [FORCE] Applying 'SHOCK'...
+        -> SHOCK: Upgraded Critical Path [Pipes: 7 count]
+        -> Injection Successful: 6.2333M$
+   > [R29] Searching... 0%   > [R29] Searching... 100%
+   [FORCE] Applying 'TOPO-DIV'...
+        -> Topo-Kick: Boosting Alt Path (Overlap 0.11, 9 boosted)
+        -> Injection Successful: 6.1424M$
+   > [R30] Searching... 0%   > [R30] Searching... 100%
+   > [R30] 💎 New Record: -$3,506 (6.1548M$)
+[AnalyticalSolver] Фінал: 6.1548M$
+
+=== FINAL RESULTS ===
+Analytical Run: 6.1548M$ | P=30.37m | OK | Time: 8m 6s
+[Output] Saved solution table: OutputDataExperiments\2026-03-04_13-09-19\tables\analytical_solution.csv

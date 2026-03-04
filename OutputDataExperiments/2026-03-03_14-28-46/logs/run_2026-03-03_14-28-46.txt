@@ -1,0 +1,45 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_14-28-46/logs/run_2026-03-03_14-28-46.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Adaptive Pressure Bonus set to: $930/m
+[AnalyticalSolver] 1. Кінематичний старт...
+[AnalyticalSolver] 2. Градієнтне ущільнення (Full)...
+   > База: 6.3855M$
+[AnalyticalSolver] 3. Synergy Beam Search (W=5, Bonus=$0.9k)...
+   > [R1] Searching... 0%
+   > [R1] 💎 New Record: -$19,576 (6.3659M$)
+   > [R2] Searching... 0%   > [R2] Searching... 116%
+   > [R3] Searching... 0%   > [R3] Searching... 116%
+   > [R4] Searching... 0%   > [R4] Searching... 116%
+   > [R5] Searching... 0%   > [R5] Searching... 116%
+   > [R5] 💎 New Record: -$8,322 (6.3576M$)
+   > [R6] Searching... 0%   > [R6] Searching... 116%
+   > [R6] 💎 New Record: -$1,400 (6.3562M$)
+   > [R7] Searching... 0%   > [R7] Searching... 116%
+   > [R8] Searching... 0%   > [R8] Searching... 116%
+   > [R9] Searching... 0%   > [R9] Searching... 116%
+   > [R10] Searching... 0%   > [R10] Searching... 116%
+   > [R11] Searching... 0%   > [R11] Searching... 116%
+   > [R12] Searching... 0%   > [R12] Searching... 116%
+   > [R13] Searching... 0%   > [R13] Searching... 116%
+   > [R14] Searching... 0%   > [R14] Searching... 116%
+   > [R15] Searching... 0%   > [R15] Searching... 116%
+   > [R16] Searching... 0%   > [R16] Searching... 116%
+   > [R17] Searching... 0%   > [R17] Searching... 116%
+   > [R18] Searching... 0%   > [R18] Searching... 116%
+   > [R19] Searching... 0%   > [R19] Searching... 116%
+   > [R20] Searching... 0%   > [R20] Searching... 116%
+[AnalyticalSolver] Фінал: 6.3562M$
+
+=== FINAL RESULTS ===
+Analytical Run: 6.3562M$ | P=30.04m | OK | Time: 1m 57s
+[Output] Saved solution table: OutputDataExperiments\2026-03-03_14-28-46\tables\analytical_solution.csv

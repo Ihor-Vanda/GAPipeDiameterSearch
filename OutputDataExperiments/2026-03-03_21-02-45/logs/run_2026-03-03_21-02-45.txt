@@ -1,0 +1,59 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_21-02-45/logs/run_2026-03-03_21-02-45.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Pressure Valuation: $43,139 per meter
+[AnalyticalSolver] 1. Generating Diverse Seeds...
+   Creating diverse seeds...
+   Seed 1 (Kinematic): Created.
+   Seed 2 (Max-Start): Created.
+   > Seeds initialized. Best Start: 6.4255M$
+   [SWAP] Success! Pipe 31 (High Friction) <-> Pipe 21 (Low Friction). Savings: -$10,294. New Cost: 6.4152M$
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> No distinct topology found.
+   > [R1] Searching... 0%   > [R1] Searching... 100%
+   [SWAP] Success! Pipe 32 (High Friction) <-> Pipe 28 (Low Friction). Savings: -$17,914. New Cost: 6.3973M$
+   > [R2] Searching... 0%   > [R2] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> No distinct topology found.
+   > [R3] Searching... 0%   > [R3] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> No distinct topology found.
+   > [R4] Searching... 0%   > [R4] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> No distinct topology found.
+   > [R5] Searching... 0%   > [R5] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> No distinct topology found.
+   > [R6] Searching... 0%   > [R6] Searching... 100%   > [R6] Searching... 100%
+Traceback (most recent call last):
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 289, in <module>
+    main()
+    ~~~~^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 182, in main
+    best_solution_meters = solver.solve_standalone()
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 477, in solve_standalone
+    # print handled inside swap
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 404, in _swap_search
+    if p_min >= self.simulator.config.h_min and cost < curr_cost:
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 164, in _gradient_squeeze
+    _, is_feasible = self.simulator.get_hydraulic_state(test_solution)
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\water_sim.py", line 232, in get_hydraulic_state
+    results = self._run_simulation_core()
+  File "E:\Projects\Python\GAPipeDiameterSearch\water_sim.py", line 165, in _run_simulation_core
+    self._clean_temp(prefix)
+    ~~~~~~~~~~~~~~~~^^^^^^^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\water_sim.py", line 68, in _clean_temp
+    if os.path.exists(fn): os.remove(fn)
+                           ~~~~~~~~~^^^^
+KeyboardInterrupt

@@ -1,0 +1,22 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-02_23-51-23/logs/run_2026-03-02_23-51-23.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Millimeters (converted to meters / 1000)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+Traceback (most recent call last):
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 292, in <module>
+    main()
+    ~~~~^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 182, in main
+    solver = AnalyticalSolver(sim, config.diameters_m, v_opt=config.v_opt)
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 11, in __init__
+    self.num_pipes = simulator.get_num_pipes()
+                     ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'WaterSimulator' object has no attribute 'get_num_pipes'

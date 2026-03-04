@@ -1,0 +1,27 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_15-10-06/logs/run_2026-03-03_15-10-06.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Pressure Valuation: $40,443 per meter
+[AnalyticalSolver] 1. Generating Seeds...
+   > Seeds initialized. Best Start: 6.3855M$
+   > [R1] Searching... 0%   > [R1] Searching... 100%   > [R1] Searching... 100%
+   > [R1] 💎 New Record: -$19,576 (6.3659M$)
+   > [R2] Searching... 0%   > [R2] Searching... 100%
+   > [R3] Searching... 0%   > [R3] Searching... 100%
+   > [VNS-UP] Kicking Bottlenecks (r=3)...
+   > [VNS] Injected 6.3659M$
+   > [R4] Searching... 0%   > [R4] Searching... 100%
+[AnalyticalSolver] Фінал: 6.3659M$
+
+=== FINAL RESULTS ===
+Analytical Run: 6.3659M$ | P=30.04m | OK | Time: 36.7s
+[Output] Saved solution table: OutputDataExperiments\2026-03-03_15-10-06\tables\analytical_solution.csv

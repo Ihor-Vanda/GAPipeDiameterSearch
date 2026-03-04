@@ -1,0 +1,95 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_19-29-38/logs/run_2026-03-03_19-29-38.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Pressure Valuation: $45,836 per meter
+[AnalyticalSolver] 1. Generating Diverse Seeds...
+   > Seeds initialized. Best Start: 6.4255M$
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R1] Searching... 0%   > [R1] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R2] Searching... 0%   > [R2] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> Injection (SHOCK): 6.4699M$ | Critical Path Shock
+   > [R3] Searching... 0%   > [R3] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> Injection (SHOCK): 6.4699M$ | Critical Path Shock
+   > [R4] Searching... 0%   > [R4] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R5] Searching... 0%   > [R5] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R6] Searching... 0%   > [R6] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> Injection (SHOCK): 6.4699M$ | Critical Path Shock
+   > [R7] Searching... 0%   > [R7] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> Injection (SHOCK): 6.4699M$ | Critical Path Shock
+   > [R8] Searching... 0%   > [R8] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R9] Searching... 0%   > [R9] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R10] Searching... 0%   > [R10] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> Injection (SHOCK): 6.4699M$ | Critical Path Shock
+   > [R11] Searching... 0%   > [R11] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> Injection (SHOCK): 6.4699M$ | Critical Path Shock
+   > [R12] Searching... 0%   > [R12] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R13] Searching... 0%   > [R13] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R14] Searching... 0%   > [R14] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> Injection (SHOCK): 6.4699M$ | Critical Path Shock
+   > [R15] Searching... 0%   > [R15] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> Injection (SHOCK): 6.4699M$ | Critical Path Shock
+   > [R16] Searching... 0%   > [R16] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R17] Searching... 0%   > [R17] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R18] Searching... 0%   > [R18] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> Injection (SHOCK): 6.4699M$ | Critical Path Shock
+   > [R19] Searching... 0%   > [R19] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> Injection (SHOCK): 6.4699M$ | Critical Path Shock
+   > [R20] Searching... 0%   > [R20] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R21] Searching... 0%   > [R21] Searching... 100%   > [R21] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R22] Searching... 0%   > [R22] Searching... 100%   > [R22] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> Injection (SHOCK): 6.4699M$ | Critical Path Shock
+   > [R23] Searching... 0%   > [R23] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> Injection (SHOCK): 6.4699M$ | Critical Path Shock
+   > [R24] Searching... 0%   > [R24] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R25] Searching... 0%   > [R25] Searching... 100%   > [R25] Searching... 100%
+[AnalyticalSolver] Фінал: 6.4255M$
+
+=== FINAL RESULTS ===
+Analytical Run: 6.4255M$ | P=30.08m | OK | Time: 4m 12s
+[Output] Saved solution table: OutputDataExperiments\2026-03-03_19-29-38\tables\analytical_solution.csv

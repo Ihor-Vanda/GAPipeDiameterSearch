@@ -1,0 +1,95 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_19-26-36/logs/run_2026-03-03_19-26-36.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Pressure Valuation: $43,139 per meter
+[AnalyticalSolver] 1. Generating Diverse Seeds...
+   > Seeds initialized. Best Start: 6.6006M$
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R1] Searching... 0%   > [R1] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R2] Searching... 0%   > [R2] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R3] Searching... 0%   > [R3] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R4] Searching... 0%   > [R4] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R5] Searching... 0%   > [R5] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R6] Searching... 0%   > [R6] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R7] Searching... 0%   > [R7] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R8] Searching... 0%   > [R8] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R9] Searching... 0%   > [R9] Searching... 100%   > [R9] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R10] Searching... 0%   > [R10] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R11] Searching... 0%   > [R11] Searching... 100%   > [R11] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R12] Searching... 0%   > [R12] Searching... 100%   > [R12] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R13] Searching... 0%   > [R13] Searching... 100%   > [R13] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R14] Searching... 0%   > [R14] Searching... 100%   > [R14] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R15] Searching... 0%   > [R15] Searching... 100%   > [R15] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R16] Searching... 0%   > [R16] Searching... 100%   > [R16] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R17] Searching... 0%   > [R17] Searching... 100%   > [R17] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R18] Searching... 0%   > [R18] Searching... 100%   > [R18] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R19] Searching... 0%   > [R19] Searching... 100%   > [R19] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R20] Searching... 0%   > [R20] Searching... 100%   > [R20] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R21] Searching... 0%   > [R21] Searching... 100%   > [R21] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R22] Searching... 0%   > [R22] Searching... 100%   > [R22] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R23] Searching... 0%   > [R23] Searching... 100%   > [R23] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R24] Searching... 0%   > [R24] Searching... 100%   > [R24] Searching... 100%
+   > [FORCE] Strategic Rebalance...
+     -> No viable alternative paths found.
+   > [R25] Searching... 0%   > [R25] Searching... 100%   > [R25] Searching... 100%
+[AnalyticalSolver] Фінал: 6.6006M$
+
+=== FINAL RESULTS ===
+Analytical Run: 6.6006M$ | P=30.02m | OK | Time: 35.5s
+[Output] Saved solution table: OutputDataExperiments\2026-03-03_19-26-36\tables\analytical_solution.csv

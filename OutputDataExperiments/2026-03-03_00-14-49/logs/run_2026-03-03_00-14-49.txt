@@ -1,0 +1,19 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_00-14-49/logs/run_2026-03-03_00-14-49.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 10 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Balerma.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.5 m/s)...
+[AnalyticalSolver] Збіжність потоків досягнута на ітерації 5
+[AnalyticalSolver] Базовий каркас готовий. Запускаємо ущільнення до H_min...
+[AnalyticalSolver] Стискання завершено (зроблено 761 вдалих звужень).
+
+=== FINAL RESULTS ===
+Analytical Run: 0.7239M$ | P=21.30m | OK | Time: 25.8s
+[Output] Saved solution table: OutputDataExperiments\2026-03-03_00-14-49\tables\analytical_solution.csv

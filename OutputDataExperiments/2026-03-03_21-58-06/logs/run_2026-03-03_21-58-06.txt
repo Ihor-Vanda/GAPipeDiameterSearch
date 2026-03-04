@@ -1,0 +1,144 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_21-58-06/logs/run_2026-03-03_21-58-06.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Pressure Valuation: $43,139 per meter
+[AnalyticalSolver] 1. Generating Diverse Seeds...
+   Creating diverse seeds...
+   Seed 1 (Kinematic): Created.
+   Seed 2 (Max-Start): Created.
+   > Seeds initialized. Best Start: 6.4255M$
+   [SWAP] Success! Pipe 31 (High Friction) <-> Pipe 21 (Low Friction). Savings: -$10,294. New Cost: 6.4152M$
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 4 (12 pipes boosted). No starvation.
+        -> Injection Successful: 6.3817M$
+   > [R1] Searching... 0%   > [R1] Searching... 100%
+   > [R1] 💎 New Record: -$33,434 (6.3817M$)
+   [SWAP] Success! Pipe 27 (High Friction) <-> Pipe 12 (Low Friction). Savings: -$23,284. New Cost: 6.3585M$
+   > [R2] Searching... 0%   > [R2] Searching... 100%
+   [SWAP] Success! Pipe 19 (High Friction) <-> Pipe 29 (Low Friction). Savings: -$17,685. New Cost: 6.3408M$
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (8 pipes boosted). No starvation.
+        -> Injection Successful: 6.3284M$
+   > [R3] Searching... 0%   > [R3] Searching... 100%
+   > [R3] 💎 New Record: -$4,206 (6.3366M$)
+   [SWAP] Success! Pipe 25 (High Friction) <-> Pipe 31 (Low Friction). Savings: -$12,770. New Cost: 6.3238M$
+   > [R4] Searching... 0%   > [R4] Searching... 100%
+   [SWAP] Success! Pipe 8 (High Friction) <-> Pipe 7 (Low Friction). Savings: -$4,876. New Cost: 6.3189M$
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R5] Searching... 0%   > [R5] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R6] Searching... 0%   > [R6] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R7] Searching... 0%   > [R7] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R8] Searching... 0%   > [R8] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R9] Searching... 0%   > [R9] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R10] Searching... 0%   > [R10] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R11] Searching... 0%   > [R11] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R12] Searching... 0%   > [R12] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R13] Searching... 0%   > [R13] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R14] Searching... 0%   > [R14] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R15] Searching... 0%   > [R15] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R16] Searching... 0%   > [R16] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R17] Searching... 0%   > [R17] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R18] Searching... 0%   > [R18] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R19] Searching... 0%   > [R19] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R20] Searching... 0%   > [R20] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R21] Searching... 0%   > [R21] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R22] Searching... 0%   > [R22] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R23] Searching... 0%   > [R23] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R24] Searching... 0%   > [R24] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R25] Searching... 0%   > [R25] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R26] Searching... 0%   > [R26] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R27] Searching... 0%   > [R27] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R28] Searching... 0%   > [R28] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R29] Searching... 0%   > [R29] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+        -> Topo-Kick: Over-provisioning Alt Path to idx 3 (9 pipes boosted). No starvation.
+        -> Injection Successful: 6.5638M$
+   > [R30] Searching... 0%   > [R30] Searching... 100%
+[AnalyticalSolver] Фінал: 6.3189M$
+
+=== FINAL RESULTS ===
+Analytical Run: 6.3189M$ | P=30.01m | OK | Time: 38m 49s
+[Output] Saved solution table: OutputDataExperiments\2026-03-03_21-58-06\tables\analytical_solution.csv

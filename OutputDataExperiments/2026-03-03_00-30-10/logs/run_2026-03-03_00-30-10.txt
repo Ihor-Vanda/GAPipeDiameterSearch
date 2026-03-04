@@ -1,0 +1,24 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_00-30-10/logs/run_2026-03-03_00-30-10.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Збіжність потоків досягнута на ітерації 8
+[AnalyticalSolver] Базовий каркас готовий. Запускаємо розумне фінансове ущільнення...
+Traceback (most recent call last):
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 289, in <module>
+    main()
+    ~~~~^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 182, in main
+    best_solution_meters = solver.solve_standalone()
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 56, in solve_standalone
+    saving_dollars = lengths[i] * (costs_dict[current_d] - costs_dict[smaller_d])
+                                   ~~~~~~~~~~^^^^^^^^^^^
+KeyError: 1.016

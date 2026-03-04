@@ -4,13 +4,13 @@ import warnings
 import os
 import uuid
 import sys
-from ga_config import CONFIG
 
 warnings.filterwarnings("ignore")
 
 class WaterSimulator:
-    def __init__(self, inp_file, temp_dir=None):
+    def __init__(self, inp_file, config, temp_dir=None):
         self.inp_file = inp_file
+        self.config = config
         self.temp_dir = temp_dir 
         
         self.wn = wntr.network.WaterNetworkModel(self.inp_file)
@@ -33,11 +33,12 @@ class WaterSimulator:
             self.sources = self.wn.tank_name_list
 
     def _refresh_config(self):
-        if 'diameters_m' in CONFIG and len(CONFIG['diameters_m']) > 0:
-            self.diams_m = CONFIG['diameters_m']
-            if 'costs' in CONFIG and isinstance(CONFIG['costs'], dict):
-                raw_diams = CONFIG.get('diameters_raw', [])
-                self.costs = [CONFIG['costs'].get(d, 0.0) for d in raw_diams]
+        if self.config:
+            if len(self.config.diameters_m) > 0:
+                self.diams_m = self.config.diameters_m
+            if isinstance(self.config.costs, dict):
+                raw_diams = self.config.diameters_raw
+                self.costs = [self.config.costs.get(d, 0.0) for d in raw_diams]
             else:
                 self.costs = []
             self.n_options = len(self.diams_m)
@@ -46,7 +47,7 @@ class WaterSimulator:
         if not self.diams_m: self._refresh_config()
         
         for i, pipe_name in enumerate(self.component_names):
-            idx = individual[i]
+            idx = int(individual[i])
             if idx < 0: idx = 0
             if idx >= self.n_options: idx = self.n_options - 1
             self.wn.get_link(pipe_name).diameter = self.diams_m[idx]
@@ -67,85 +68,177 @@ class WaterSimulator:
                 if os.path.exists(fn): os.remove(fn)
             except OSError: pass 
 
-    def get_heuristics(self, individual):
-        self._apply_pattern(individual)
+    # def get_heuristics(self, individual):
+    #     self._apply_pattern(individual)
+    #     pid = os.getpid()
+    #     prefix = self._get_path(f"heur_{pid}_{uuid.uuid4().hex[:8]}")
+        
+    #     sim = wntr.sim.EpanetSimulator(self.wn)
+    #     try:
+    #         results = sim.run_sim(file_prefix=prefix)
+    #         headloss = results.link['headloss'].iloc[-1]
+    #         unit_losses = []
+    #         for name, length in zip(self.component_names, self.lengths):
+    #             hl = abs(headloss[name])
+    #             if length > 0: unit_losses.append(hl / length)
+    #             else: unit_losses.append(0.0)
+    #         return unit_losses
+    #     except Exception:
+    #         return [0.0] * self.n_variables
+    #     finally:
+    #         self._clean_temp(prefix)
+
+    # def evaluate(self, individual, penalty_factor=1000.0, epsilon=0.0, file_prefix=None):
+    #     try: total_cost = self._apply_pattern(individual)
+    #     except: return 1e16
+
+    #     cleanup = False
+    #     if file_prefix is None:
+    #         pid = os.getpid()
+    #         file_prefix = self._get_path(f"eval_{pid}_{uuid.uuid4().hex[:8]}")
+    #         cleanup = True
+        
+    #     sim = wntr.sim.EpanetSimulator(self.wn)
+    #     try:
+    #         results = sim.run_sim(file_prefix=file_prefix)
+    #         pressure = results.node['pressure'].iloc[-1]
+            
+    #         min_p = float('inf')
+    #         max_violation = 0.0
+            
+    #         effective_limit = self.config.h_min - epsilon
+            
+    #         for node_name, node in self.wn.junctions():
+    #             p = pressure[node_name]
+    #             if p < min_p: min_p = p
+                
+    #             if p < effective_limit:
+    #                 max_violation += (effective_limit - p)
+
+    #         penalty = max_violation * penalty_factor
+    #         return total_cost + penalty
+
+    #     except Exception as e:
+    #         return 1e15 
+    #     finally:
+    #         if cleanup: self._clean_temp(file_prefix)
+
+    # def get_stats(self, individual):
+    #     cost = self._apply_pattern(individual)
+        
+    #     pid = os.getpid()
+    #     prefix = self._get_path(f"stat_{pid}_{uuid.uuid4().hex[:8]}")
+        
+    #     sim = wntr.sim.EpanetSimulator(self.wn)
+    #     try:
+    #         results = sim.run_sim(file_prefix=prefix)
+    #         pressure = results.node['pressure'].iloc[-1]
+            
+    #         min_p = float('inf')
+    #         max_p = float('-inf')
+    #         crit_node = None
+            
+    #         for node_name, node in self.wn.junctions():
+    #             p = pressure[node_name]
+    #             if p < min_p:
+    #                 min_p = p
+    #                 crit_node = node_name
+    #             if p > max_p: max_p = p
+            
+    #         return cost, min_p, max_p, crit_node
+    #     except:
+    #         return cost, -1.0, -1.0, "ERR"
+    #     finally:
+    #         self._clean_temp(prefix)
+            
+    def _run_simulation_core(self):
         pid = os.getpid()
-        prefix = self._get_path(f"heur_{pid}_{uuid.uuid4().hex[:8]}")
+        prefix = self._get_path(f"sim_{pid}_{uuid.uuid4().hex[:8]}")
         
         sim = wntr.sim.EpanetSimulator(self.wn)
+        results = None
         try:
             results = sim.run_sim(file_prefix=prefix)
-            headloss = results.link['headloss'].iloc[-1]
-            unit_losses = []
-            for name, length in zip(self.component_names, self.lengths):
-                hl = abs(headloss[name])
-                if length > 0: unit_losses.append(hl / length)
-                else: unit_losses.append(0.0)
-            return unit_losses
-        except Exception:
-            return [0.0] * self.n_variables
+        except Exception as e:
+            pass
         finally:
             self._clean_temp(prefix)
+            
+        return results
+    
+    def evaluate(self, individual, penalty_factor=1000.0, epsilon=0.0):
+        try: 
+            total_cost = self._apply_pattern(individual)
+        except Exception: 
+            return 1e16
 
-    def evaluate(self, individual, penalty_factor=1000.0, epsilon=0.0, file_prefix=None):
-        try: total_cost = self._apply_pattern(individual)
-        except: return 1e16
-
-        cleanup = False
-        if file_prefix is None:
-            pid = os.getpid()
-            file_prefix = self._get_path(f"eval_{pid}_{uuid.uuid4().hex[:8]}")
-            cleanup = True
+        results = self._run_simulation_core()
         
-        sim = wntr.sim.EpanetSimulator(self.wn)
-        try:
-            results = sim.run_sim(file_prefix=file_prefix)
-            pressure = results.node['pressure'].iloc[-1]
-            
-            min_p = float('inf')
-            max_violation = 0.0
-            
-            effective_limit = CONFIG.get('h_min', 30.0) - epsilon
-            
-            for node_name, node in self.wn.junctions():
-                p = pressure[node_name]
-                if p < min_p: min_p = p
-                
-                if p < effective_limit:
-                    max_violation += (effective_limit - p)
-
-            penalty = max_violation * penalty_factor
-            return total_cost + penalty
-
-        except Exception as e:
+        if results is None:
             return 1e15 
-        finally:
-            if cleanup: self._clean_temp(file_prefix)
+            
+        pressure = results.node['pressure'].iloc[-1]
+        max_violation = 0.0
+        effective_limit = self.config.h_min - epsilon
+        
+        for node_name in self.wn.junction_name_list:
+            p = pressure[node_name]
+            if p < effective_limit:
+                max_violation += (effective_limit - p)
+
+        penalty = max_violation * penalty_factor
+        return total_cost + penalty
+    
+    def get_heuristics(self, individual):
+        self._apply_pattern(individual)
+        results = self._run_simulation_core()
+        
+        if results is None: 
+            return [0.0] * self.n_variables
+            
+        headloss = results.link['headloss'].iloc[-1]
+        unit_losses = []
+        for name, length in zip(self.component_names, self.lengths):
+            hl = abs(headloss[name])
+            unit_losses.append(hl / length if length > 0 else 0.0)
+        return unit_losses
 
     def get_stats(self, individual):
         cost = self._apply_pattern(individual)
+        results = self._run_simulation_core()
         
-        pid = os.getpid()
-        prefix = self._get_path(f"stat_{pid}_{uuid.uuid4().hex[:8]}")
-        
-        sim = wntr.sim.EpanetSimulator(self.wn)
-        try:
-            results = sim.run_sim(file_prefix=prefix)
-            pressure = results.node['pressure'].iloc[-1]
-            
-            min_p = float('inf')
-            max_p = float('-inf')
-            crit_node = None
-            
-            for node_name, node in self.wn.junctions():
-                p = pressure[node_name]
-                if p < min_p:
-                    min_p = p
-                    crit_node = node_name
-                if p > max_p: max_p = p
-            
-            return cost, min_p, max_p, crit_node
-        except:
+        if results is None:
             return cost, -1.0, -1.0, "ERR"
-        finally:
-            self._clean_temp(prefix)
+            
+        pressure = results.node['pressure'].iloc[-1]
+        min_p = float('inf')
+        max_p = float('-inf')
+        crit_node = None
+        
+        for node_name in self.wn.junction_name_list:
+            p = pressure[node_name]
+            if p < min_p:
+                min_p = p
+                crit_node = node_name
+            if p > max_p: max_p = p
+                
+        return cost, min_p, max_p, crit_node
+
+  
+    def get_hydraulic_state(self, individual_diameters):
+        for i, pipe_name in enumerate(self.component_names):
+            self.wn.get_link(pipe_name).diameter = individual_diameters[i]
+            
+        results = self._run_simulation_core()
+        
+        if results is None:
+            return [0.0] * self.n_variables, False
+            
+        flowrates = results.link['flowrate'].iloc[-1]
+        flows = [flowrates[pipe_name] for pipe_name in self.component_names]
+        
+        pressures = results.node['pressure'].iloc[-1]
+        min_p = min([pressures[node] for node in self.wn.junction_name_list])
+        is_feasible = min_p >= self.config.h_min
+        
+        return flows, is_feasible

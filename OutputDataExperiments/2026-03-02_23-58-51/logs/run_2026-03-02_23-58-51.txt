@@ -1,0 +1,137 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-02_23-58-51/logs/run_2026-03-02_23-58-51.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+[System] Initializing 16 parallel workers (Strict Isolation)...
+
+--- [System] Auto-Configuration ---
+[Auto-Config] Population: 200
+[Config] Max Generations: 150
+[Config] Mode: Deep Dive with post shock
+[Config] Penalties: Linear (Factor=669067)
+-----------------------------------
+
+
+>>> Starting Run #1...
+    [Config] Init: SEP | Eps: True | Shocks: True | Expand: True | Graphs: True
+    [SEP] 🛡️ Generating mixed initial skeletons...
+      > SEP Gen 0: Best infM$ (Inv)
+      > SEP Gen 10: Best infM$ (Inv)
+      > SEP Gen 20: Best infM$ (Inv)
+    [SEP] 🧬 Selecting Zombies & Heroes...
+    [SEP] ✅ Ready to dive with 200 diverse agents.
+    [Gen    0] Cost=7.0418M$ | P=-3209.42m | Eps=15.000 | Sims=53869 | INVALID (PF↑) | Time: 4.8s (ETA: ...)
+    [Gen   10] Cost=5.1997M$ | P=-698.14m | Eps=15.000 | Sims=55868 | INVALID (PF↑) | Time: 5.2s (ETA: ...)
+    [Gen   20] Cost=4.9323M$ | P=-1308.56m | Eps=15.000 | Sims=57877 | INVALID (PF↑) | Time: 5.7s (ETA: ...)
+    [Gen   30] Cost=4.1651M$ | P=-1507.20m | Eps=15.000 | Sims=59876 | INVALID (PF↑) | Time: 6.1s (ETA: 24.5s)
+    [Gen   40] Cost=3.6344M$ | P=-2061.46m | Eps=15.000 | Sims=61879 | INVALID (PF↑) | Time: 6.5s (ETA: 18.0s)
+    [Gen   50] Cost=3.6253M$ | P=-2007.20m | Eps=15.000 | Sims=63872 | INVALID (PF↑) | Time: 6.9s (ETA: 13.9s)
+    [Gen   60] Cost=3.2269M$ | P=-3934.47m | Eps=15.000 | Sims=65868 | INVALID (PF↑) | Time: 7.4s (ETA: 11.0s)
+    [Gen   70] Cost=2.9719M$ | P=-2480.57m | Eps=15.000 | Sims=67866 | INVALID (PF↑) | Time: 7.8s (ETA: 8.9s)
+    [Gen   80] Cost=2.8532M$ | P=-2283.30m | Eps=15.000 | Sims=69862 | INVALID (PF↑) | Time: 8.2s (ETA: 7.1s)
+    [Gen   90] Cost=2.6756M$ | P=-5974.35m | Eps=15.000 | Sims=71859 | INVALID (PF↑) | Time: 8.7s (ETA: 5.8s)
+    [Gen  100] Cost=2.1572M$ | P=-4245.75m | Eps=15.000 | Sims=73851 | INVALID (PF↑) | Time: 9.1s (ETA: 4.5s)
+    [Gen  110] Cost=2.3019M$ | P=-5454.02m | Eps=15.000 | Sims=75828 | INVALID (PF↑) | Time: 9.5s (ETA: 3.4s)
+    [Gen  120] Cost=2.0267M$ | P=-6765.71m | Eps=15.000 | Sims=77794 | INVALID (PF↑) | Time: 10.0s (ETA: 2.5s)
+    [Gen  130] Cost=2.0156M$ | P=-7740.56m | Eps=15.000 | Sims=79764 | INVALID (PF↑) | Time: 10.4s (ETA: 1.6s)
+    [Gen  140] Cost=2.0708M$ | P=-17050.44m | Eps=15.000 | Sims=81735 | INVALID (PF↑) | Time: 10.8s (ETA: 0.8s)
+
+    [Finalizing] Validating & Polishing...
+    [Polishing] Starting Iterative Squeeze (Eps=0.00)...
+    >> Done in 11.3s. Final Result: 1.9813M$ | P=-16412.82m | Sims=83507 | Time: 11.3s
+    [Post-Process] Refining Solution...
+
+>>> Starting Run #2...
+    [Config] Init: SEP | Eps: True | Shocks: True | Expand: True | Graphs: True
+    [SEP] 🛡️ Generating mixed initial skeletons...
+      > SEP Gen 0: Best infM$ (Inv)
+      > SEP Gen 10: Best infM$ (Inv)
+      > SEP Gen 20: Best infM$ (Inv)
+    [SEP] 🧬 Selecting Zombies & Heroes...
+    [SEP] ✅ Ready to dive with 200 diverse agents.
+    [Gen    0] Cost=5.9739M$ | P=-677.83m | Eps=15.000 | Sims=53911 | INVALID (PF↑) | Time: 2.5s (ETA: ...)
+    [Gen   10] Cost=5.2333M$ | P=-1143.83m | Eps=15.000 | Sims=55910 | INVALID (PF↑) | Time: 2.9s (ETA: ...)
+    [Gen   20] Cost=5.1322M$ | P=-695.70m | Eps=15.000 | Sims=57913 | INVALID (PF↑) | Time: 3.3s (ETA: ...)
+    [Gen   30] Cost=4.2084M$ | P=-3879.63m | Eps=15.000 | Sims=59919 | INVALID (PF↑) | Time: 3.7s (ETA: 14.7s)
+    [Gen   40] Cost=3.7749M$ | P=-13510.69m | Eps=15.000 | Sims=61921 | INVALID (PF↑) | Time: 4.1s (ETA: 11.2s)
+    [Gen   50] Cost=3.1739M$ | P=-2970.81m | Eps=15.000 | Sims=63917 | INVALID (PF↑) | Time: 4.5s (ETA: 8.9s)
+    [Gen   60] Cost=2.8336M$ | P=-3141.00m | Eps=15.000 | Sims=65917 | INVALID (PF↑) | Time: 4.9s (ETA: 7.3s)
+    [Gen   70] Cost=3.1449M$ | P=-15475.22m | Eps=15.000 | Sims=67915 | INVALID (PF↑) | Time: 5.4s (ETA: 6.1s)
+    [Gen   80] Cost=2.7812M$ | P=-14334.97m | Eps=15.000 | Sims=69914 | INVALID (PF↑) | Time: 5.8s (ETA: 5.1s)
+    [Gen   90] Cost=2.7450M$ | P=-6764.21m | Eps=15.000 | Sims=71907 | INVALID (PF↑) | Time: 6.2s (ETA: 4.1s)
+    [Gen  100] Cost=2.4359M$ | P=-6626.91m | Eps=15.000 | Sims=73896 | INVALID (PF↑) | Time: 6.6s (ETA: 3.3s)
+    [Gen  110] Cost=2.2926M$ | P=-6329.91m | Eps=15.000 | Sims=75883 | INVALID (PF↑) | Time: 7.0s (ETA: 2.5s)
+    [Gen  120] Cost=2.0984M$ | P=-16688.83m | Eps=15.000 | Sims=77867 | INVALID (PF↑) | Time: 7.3s (ETA: 1.8s)
+    [Gen  130] Cost=1.9926M$ | P=-5906.76m | Eps=15.000 | Sims=79838 | INVALID (PF↑) | Time: 7.7s (ETA: 1.2s)
+    [Gen  140] Cost=2.1627M$ | P=-7732.90m | Eps=15.000 | Sims=81799 | INVALID (PF↑) | Time: 8.1s (ETA: 0.6s)
+
+    [Finalizing] Validating & Polishing...
+    [Polishing] Starting Iterative Squeeze (Eps=0.00)...
+    >> Done in 8.6s. Final Result: 1.8816M$ | P=-17275.74m | Sims=83574 | Time: 8.6s
+    [Post-Process] Refining Solution...
+
+>>> Starting Run #3...
+    [Config] Init: SEP | Eps: True | Shocks: True | Expand: True | Graphs: True
+    [SEP] 🛡️ Generating mixed initial skeletons...
+      > SEP Gen 0: Best infM$ (Inv)
+      > SEP Gen 10: Best infM$ (Inv)
+      > SEP Gen 20: Best infM$ (Inv)
+    [SEP] 🧬 Selecting Zombies & Heroes...
+    [SEP] ✅ Ready to dive with 200 diverse agents.
+    [Gen    0] Cost=5.7531M$ | P=-1186.27m | Eps=15.000 | Sims=53935 | INVALID (PF↑) | Time: 2.5s (ETA: ...)
+    [Gen   10] Cost=5.0503M$ | P=-1452.45m | Eps=15.000 | Sims=55936 | INVALID (PF↑) | Time: 2.9s (ETA: ...)
+    [Gen   20] Cost=4.5446M$ | P=-1540.29m | Eps=15.000 | Sims=57938 | INVALID (PF↑) | Time: 3.4s (ETA: ...)
+    [Gen   30] Cost=3.8097M$ | P=-2633.85m | Eps=15.000 | Sims=59936 | INVALID (PF↑) | Time: 3.8s (ETA: 15.3s)
+    [Gen   40] Cost=3.7144M$ | P=-3559.36m | Eps=15.000 | Sims=61926 | INVALID (PF↑) | Time: 4.2s (ETA: 11.6s)
+    [Gen   50] Cost=3.3395M$ | P=-1495.35m | Eps=15.000 | Sims=63932 | INVALID (PF↑) | Time: 4.6s (ETA: 9.3s)
+    [Gen   60] Cost=3.0805M$ | P=-2393.99m | Eps=15.000 | Sims=65929 | INVALID (PF↑) | Time: 5.0s (ETA: 7.5s)
+    [Gen   70] Cost=2.6744M$ | P=-5513.46m | Eps=15.000 | Sims=67913 | INVALID (PF↑) | Time: 5.4s (ETA: 6.2s)
+    [Gen   80] Cost=2.9235M$ | P=-3679.28m | Eps=15.000 | Sims=69909 | INVALID (PF↑) | Time: 5.8s (ETA: 5.1s)
+    [Gen   90] Cost=2.5336M$ | P=-16033.65m | Eps=15.000 | Sims=71889 | INVALID (PF↑) | Time: 6.2s (ETA: 4.1s)
+    [Gen  100] Cost=2.6027M$ | P=-3212.46m | Eps=15.000 | Sims=73875 | INVALID (PF↑) | Time: 6.6s (ETA: 3.3s)
+    [Gen  110] Cost=2.2196M$ | P=-16831.07m | Eps=15.000 | Sims=75861 | INVALID (PF↑) | Time: 7.0s (ETA: 2.5s)
+    [Gen  120] Cost=2.2642M$ | P=-17040.31m | Eps=15.000 | Sims=77830 | INVALID (PF↑) | Time: 7.5s (ETA: 1.9s)
+    [Gen  130] Cost=2.4480M$ | P=-15889.29m | Eps=15.000 | Sims=79795 | INVALID (PF↑) | Time: 7.9s (ETA: 1.2s)
+    [Gen  140] Cost=2.0507M$ | P=-17069.93m | Eps=15.000 | Sims=81763 | INVALID (PF↑) | Time: 8.3s (ETA: 0.6s)
+
+    [Finalizing] Validating & Polishing...
+    [Polishing] Starting Iterative Squeeze (Eps=0.00)...
+    >> Done in 8.8s. Final Result: 2.1546M$ | P=-16231.38m | Sims=83520 | Time: 8.8s
+    [Post-Process] Refining Solution...
+
+>>> Starting Run #4...
+    [Config] Init: SEP | Eps: True | Shocks: True | Expand: True | Graphs: True
+    [SEP] 🛡️ Generating mixed initial skeletons...
+      > SEP Gen 0: Best infM$ (Inv)
+      > SEP Gen 10: Best infM$ (Inv)
+      > SEP Gen 20: Best infM$ (Inv)
+    [SEP] 🧬 Selecting Zombies & Heroes...
+    [SEP] ✅ Ready to dive with 200 diverse agents.
+    [Gen    0] Cost=6.1572M$ | P=-3707.65m | Eps=15.000 | Sims=53763 | INVALID (PF↑) | Time: 2.5s (ETA: ...)
+    [Gen   10] Cost=5.4229M$ | P=-502.31m | Eps=15.000 | Sims=55754 | INVALID (PF↑) | Time: 2.9s (ETA: ...)
+    [Gen   20] Cost=4.8052M$ | P=-1082.95m | Eps=15.000 | Sims=57757 | INVALID (PF↑) | Time: 3.3s (ETA: ...)
+    [Gen   30] Cost=4.6458M$ | P=-4422.25m | Eps=15.000 | Sims=59752 | INVALID (PF↑) | Time: 3.7s (ETA: 14.9s)
+    [Gen   40] Cost=3.6237M$ | P=-2386.00m | Eps=15.000 | Sims=61749 | INVALID (PF↑) | Time: 4.1s (ETA: 11.3s)
+    [Gen   50] Cost=3.7695M$ | P=-4421.09m | Eps=15.000 | Sims=63743 | INVALID (PF↑) | Time: 4.5s (ETA: 9.0s)
+    [Gen   60] Cost=3.3018M$ | P=-4884.65m | Eps=15.000 | Sims=65753 | INVALID (PF↑) | Time: 4.9s (ETA: 7.4s)
+    [Gen   70] Cost=2.9918M$ | P=-4181.54m | Eps=15.000 | Sims=67740 | INVALID (PF↑) | Time: 5.4s (ETA: 6.2s)
+    [Gen   80] Cost=2.4563M$ | P=-4827.16m | Eps=15.000 | Sims=69737 | INVALID (PF↑) | Time: 5.8s (ETA: 5.1s)
+
+[System] 🛑 User interrupted via Keyboard (Ctrl+C). Terminating...
+[System] Shutting down workers pool...
+[System] Cleanup complete.
+
+=== FINAL RESULTS ===
+Run 1: 1.9813M$ | P=-16412.82m | FAIL
+Run 2: 1.8816M$ | P=-17275.74m | FAIL
+Run 3: 2.1546M$ | P=-16231.38m | FAIL
+[Output] Saved solution table: OutputDataExperiments\2026-03-02_23-58-51\tables\solution_champion.csv
+[Plot] Generating network map...
+[Plot] Saved network map: OutputDataExperiments\2026-03-02_23-58-51\plots\network_map.png
+[Plot] Saved convergence graph: OutputDataExperiments\2026-03-02_23-58-51\plots\convergence.png

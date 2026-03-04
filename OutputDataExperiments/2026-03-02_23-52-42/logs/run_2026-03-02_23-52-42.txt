@@ -1,0 +1,17 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-02_23-52-42/logs/run_2026-03-02_23-52-42.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Millimeters (converted to meters / 1000)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Збіжність досягнута на ітерації 1
+
+=== FINAL RESULTS ===
+Analytical Run: 10.9698M$ | P=-350892544.00m | FAIL | Time: 0.1s
+[Output] Saved solution table: OutputDataExperiments\2026-03-02_23-52-42\tables\analytical_solution.csv

@@ -1,0 +1,155 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_21-40-03/logs/run_2026-03-03_21-40-03.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Pressure Valuation: $43,139 per meter
+[AnalyticalSolver] 1. Generating Diverse Seeds...
+   Creating diverse seeds...
+   Seed 1 (Kinematic): Created.
+   Seed 2 (Max-Start): Created.
+   > Seeds initialized. Best Start: 6.4255M$
+   [SWAP] Success! Pipe 31 (High Friction) <-> Pipe 21 (Low Friction). Savings: -$10,294. New Cost: 6.4152M$
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+      [Topo] Best Alternative found: Overlap 0.26. Path: [1-2, 2-3, 3-20, 20-23, 23-28... | Total: 19 pipes]
+        -> Topo-Kick: Boosting Alt Path (16 pipes) vs Dominant (7 pipes starved)
+        -> Injection Failed (Infeasible)
+   > [R1] Searching... 0%   > [R1] Searching... 100%
+   [SWAP] Success! Pipe 32 (High Friction) <-> Pipe 28 (Low Friction). Savings: -$17,914. New Cost: 6.3973M$
+   > [R2] Searching... 0%   > [R2] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+      [Topo] Best Alternative found: Overlap 0.26. Path: [1-2, 2-3, 3-20, 20-23, 23-28... | Total: 19 pipes]
+        -> Topo-Kick: Boosting Alt Path (16 pipes) vs Dominant (7 pipes starved)
+        -> Injection Failed (Infeasible)
+   > [R3] Searching... 0%   > [R3] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+      [Topo] Best Alternative found: Overlap 0.26. Path: [1-2, 2-3, 3-20, 20-23, 23-28... | Total: 19 pipes]
+        -> Topo-Kick: Boosting Alt Path (16 pipes) vs Dominant (7 pipes starved)
+        -> Injection Failed (Infeasible)
+   > [R4] Searching... 0%   > [R4] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+      [Topo] Best Alternative found: Overlap 0.26. Path: [1-2, 2-3, 3-20, 20-23, 23-28... | Total: 19 pipes]
+        -> Topo-Kick: Boosting Alt Path (16 pipes) vs Dominant (7 pipes starved)
+        -> Injection Failed (Infeasible)
+   > [R5] Searching... 0%   > [R5] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+      [Topo] Best Alternative found: Overlap 0.26. Path: [1-2, 2-3, 3-20, 20-23, 23-28... | Total: 19 pipes]
+        -> Topo-Kick: Boosting Alt Path (16 pipes) vs Dominant (7 pipes starved)
+        -> Injection Failed (Infeasible)
+   > [R6] Searching... 0%   > [R6] Searching... 100%   > [R6] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+      [Topo] Best Alternative found: Overlap 0.26. Path: [1-2, 2-3, 3-20, 20-23, 23-28... | Total: 19 pipes]
+        -> Topo-Kick: Boosting Alt Path (16 pipes) vs Dominant (7 pipes starved)
+        -> Injection Failed (Infeasible)
+   > [R7] Searching... 0%   > [R7] Searching... 100%   > [R7] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+      [Topo] Best Alternative found: Overlap 0.26. Path: [1-2, 2-3, 3-20, 20-23, 23-28... | Total: 19 pipes]
+        -> Topo-Kick: Boosting Alt Path (16 pipes) vs Dominant (7 pipes starved)
+        -> Injection Failed (Infeasible)
+   > [R8] Searching... 0%   > [R8] Searching... 100%   > [R8] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+      [Topo] Best Alternative found: Overlap 0.26. Path: [1-2, 2-3, 3-20, 20-23, 23-28... | Total: 19 pipes]
+        -> Topo-Kick: Boosting Alt Path (16 pipes) vs Dominant (7 pipes starved)
+        -> Injection Failed (Infeasible)
+   > [R9] Searching... 0%   > [R9] Searching... 100%   > [R9] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+      [Topo] Best Alternative found: Overlap 0.26. Path: [1-2, 2-3, 3-20, 20-23, 23-28... | Total: 19 pipes]
+        -> Topo-Kick: Boosting Alt Path (16 pipes) vs Dominant (7 pipes starved)
+        -> Injection Failed (Infeasible)
+   > [R10] Searching... 0%   > [R10] Searching... 100%   > [R10] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+      [Topo] Best Alternative found: Overlap 0.26. Path: [1-2, 2-3, 3-20, 20-23, 23-28... | Total: 19 pipes]
+        -> Topo-Kick: Boosting Alt Path (16 pipes) vs Dominant (7 pipes starved)
+        -> Injection Failed (Infeasible)
+   > [R11] Searching... 0%   > [R11] Searching... 100%   > [R11] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+      [Topo] Best Alternative found: Overlap 0.26. Path: [1-2, 2-3, 3-20, 20-23, 23-28... | Total: 19 pipes]
+        -> Topo-Kick: Boosting Alt Path (16 pipes) vs Dominant (7 pipes starved)
+        -> Injection Failed (Infeasible)
+   > [R12] Searching... 0%   > [R12] Searching... 100%   > [R12] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+      [Topo] Best Alternative found: Overlap 0.26. Path: [1-2, 2-3, 3-20, 20-23, 23-28... | Total: 19 pipes]
+        -> Topo-Kick: Boosting Alt Path (16 pipes) vs Dominant (7 pipes starved)
+        -> Injection Failed (Infeasible)
+   > [R13] Searching... 0%   > [R13] Searching... 100%   > [R13] Searching... 100%
+Traceback (most recent call last):
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 289, in <module>
+    main()
+    ~~~~^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 182, in main
+    best_solution_meters = solver.solve_standalone()
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 468, in solve_standalone
+    p_surplus = p - self.simulator.config.h_min
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 395, in _swap_search
+    self._log(f"[SWAP] Success! Pipe {h_pipe} (High Friction) <-> Pipe {l_pipe} (Low Friction). Savings: -${diff:,.0f}. New Cost: {cost/1e6:.4f}M$")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 164, in _gradient_squeeze
+    _, is_feasible = self.simulator.get_hydraulic_state(test_solution)
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\water_sim.py", line 232, in get_hydraulic_state
+    results = self._run_simulation_core()
+  File "E:\Projects\Python\GAPipeDiameterSearch\water_sim.py", line 161, in _run_simulation_core
+    results = sim.run_sim(file_prefix=prefix)
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\wntr\sim\epanet.py", line 133, in run_sim
+    results = self.reader.read(outfile, convergence_error, self._wn.options.hydraulic.headloss=='D-W')
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\wntr\epanet\io.py", line 2808, in read
+    self.results.link['velocity'] = HydParam.Velocity._to_si(self.flow_units, df['velocity'])
+                                                                              ~~^^^^^^^^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\frame.py", line 4092, in __getitem__
+    return self._getitem_multilevel(key)
+           ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\frame.py", line 4174, in _getitem_multilevel
+    result = self.iloc[:, loc]
+             ~~~~~~~~~^^^^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\indexing.py", line 1185, in __getitem__
+    return self._getitem_tuple(key)
+           ~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\indexing.py", line 1693, in _getitem_tuple
+    return self._getitem_lowerdim(tup)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\indexing.py", line 1042, in _getitem_lowerdim
+    return self._getitem_nested_tuple(tup)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\indexing.py", line 1154, in _getitem_nested_tuple
+    obj = getattr(obj, self.name)._getitem_axis(key, axis=axis)
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\indexing.py", line 1740, in _getitem_axis
+    return self._getbool_axis(key, axis=axis)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\indexing.py", line 1212, in _getbool_axis
+    return self.obj._take_with_is_copy(inds, axis=axis)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\generic.py", line 4175, in _take_with_is_copy
+    result = self.take(indices=indices, axis=axis)
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\generic.py", line 4155, in take
+    new_data = self._mgr.take(
+        indices,
+        axis=self._get_block_manager_axis(axis),
+        verify=True,
+    )
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\internals\managers.py", line 912, in take
+    new_labels = self.axes[axis].take(indexer)
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\indexes\multi.py", line 2282, in take
+    return MultiIndex(
+        levels=self.levels, codes=taken, names=self.names, verify_integrity=False
+    )
+KeyboardInterrupt

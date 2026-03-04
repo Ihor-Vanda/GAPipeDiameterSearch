@@ -1,0 +1,79 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_20-33-29/logs/run_2026-03-03_20-33-29.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Pressure Valuation: $43,139 per meter
+[AnalyticalSolver] 1. Generating Diverse Seeds...
+   Creating diverse seeds...
+   Seed 1 (Kinematic): Created.
+   Seed 2 (Max-Start): Created.
+   > Seeds initialized. Best Start: 6.3855M$
+   [SWAP] Success! Pipe 31 (High Friction) <-> Pipe 13 (Low Friction). Savings: -$19,576. New Cost: 6.3659M$
+   [FORCE] Applying 'Topological Diversity' strategy...
+   Topology Scan: Found 0 distinct alternative backbones vs Dominant Path.
+        -> No distinct topology found.
+   > [R1] Searching... 0%   > [R1] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+   Topology Scan: Found 0 distinct alternative backbones vs Dominant Path.
+        -> No distinct topology found.
+   > [R2] Searching... 0%   > [R2] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+   Topology Scan: Found 0 distinct alternative backbones vs Dominant Path.
+        -> No distinct topology found.
+   > [R3] Searching... 0%   > [R3] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+   Topology Scan: Found 0 distinct alternative backbones vs Dominant Path.
+        -> No distinct topology found.
+   > [R4] Searching... 0%   > [R4] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+   Topology Scan: Found 0 distinct alternative backbones vs Dominant Path.
+        -> No distinct topology found.
+   > [R5] Searching... 0%   > [R5] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+   Topology Scan: Found 0 distinct alternative backbones vs Dominant Path.
+        -> No distinct topology found.
+   > [R6] Searching... 0%   > [R6] Searching... 100%
+Traceback (most recent call last):
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 289, in <module>
+    main()
+    ~~~~^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 182, in main
+    best_solution_meters = solver.solve_standalone()
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 434, in solve_standalone
+    if forced_sol and locked:
+          ^^^^^^^^^^^^^^^^^^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 361, in _swap_search
+    if mode == "upgrade":
+                       ^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 98, in _gradient_squeeze
+    unit_losses = self.simulator.get_heuristics(curr_indices)
+  File "E:\Projects\Python\GAPipeDiameterSearch\water_sim.py", line 194, in get_heuristics
+    results = self._run_simulation_core()
+  File "E:\Projects\Python\GAPipeDiameterSearch\water_sim.py", line 161, in _run_simulation_core
+    results = sim.run_sim(file_prefix=prefix)
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\wntr\sim\epanet.py", line 133, in run_sim
+    results = self.reader.read(outfile, convergence_error, self._wn.options.hydraulic.headloss=='D-W')
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\wntr\epanet\io.py", line 2833, in read
+    self.results.link['friction_factor'] = df['frictionfactor']
+                                           ~~^^^^^^^^^^^^^^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\frame.py", line 4092, in __getitem__
+    return self._getitem_multilevel(key)
+           ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\frame.py", line 4173, in _getitem_multilevel
+    result_columns = maybe_droplevels(new_columns, key)
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\indexes\multi.py", line 4132, in maybe_droplevels
+    index = index._drop_level_numbers([0])
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\indexes\base.py", line 2207, in _drop_level_numbers
+    result = new_levels[0].take(new_codes[0])
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\pandas\core\indexes\base.py", line 1153, in take
+    @Appender(_index_shared_docs["take"] % _index_doc_kwargs)
+    
+KeyboardInterrupt

@@ -1,0 +1,71 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_14-57-57/logs/run_2026-03-03_14-57-57.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Pressure Valuation: $32,355 per meter
+[AnalyticalSolver] 1. Generating Diverse Seeds...
+   > Seeds initialized. Best Start: 6.3678M$
+   > [R1] Searching... 0%   > [R1] Searching... 100%
+   > [R1] 💎 New Record: -$11,726 (6.3561M$)
+   > [R2] Searching... 0%   > [R2] Searching... 100%
+   > [R3] Searching... 0%   > [R3] Searching... 100%
+   > [VNS] Stagnation. Kicking leader with radius=3...
+   > [R4] Searching... 0%   > [R4] Searching... 100%
+   > [VNS] Stagnation. Kicking leader with radius=5...
+   > [R5] Searching... 0%   > [R5] Searching... 100%
+   > [VNS] Stagnation. Kicking leader with radius=7...
+   > [VNS] Injection successful. Cost: 6.3598M$
+   > [R6] Searching... 0%   > [R6] Searching... 100%   > [R6] Searching... 100%   > [R6] Searching... 100%
+   > [VNS] Stagnation. Kicking leader with radius=9...
+   > [VNS] Injection successful. Cost: 6.4562M$
+   > [R7] Searching... 0%   > [R7] Searching... 100%   > [R7] Searching... 100%   > [R7] Searching... 100%
+   > [VNS] Stagnation. Kicking leader with radius=11...
+   > [VNS] Injection successful. Cost: 6.4335M$
+   > [R8] Searching... 0%   > [R8] Searching... 100%   > [R8] Searching... 100%   > [R8] Searching... 100%
+   > [VNS] Max radius reached. Random restart...
+   > [R9] Searching... 0%   > [R9] Searching... 100%
+   > [VNS] Stagnation. Kicking leader with radius=5...
+   > [R10] Searching... 0%   > [R10] Searching... 100%
+   > [VNS] Stagnation. Kicking leader with radius=7...
+   > [R11] Searching... 0%   > [R11] Searching... 100%
+   > [VNS] Stagnation. Kicking leader with radius=9...
+   > [R12] Searching... 0%   > [R12] Searching... 100%
+   > [VNS] Stagnation. Kicking leader with radius=11...
+   > [R13] Searching... 0%   > [R13] Searching... 100%
+   > [VNS] Max radius reached. Random restart...
+   > [R14] Searching... 0%   > [R14] Searching... 100%
+   > [VNS] Stagnation. Kicking leader with radius=5...
+   > [R15] Searching... 0%   > [R15] Searching... 100%
+   > [VNS] Stagnation. Kicking leader with radius=7...
+   > [R16] Searching... 0%   > [R16] Searching... 100%
+   > [VNS] Stagnation. Kicking leader with radius=9...
+   > [R17] Searching... 0%   > [R17] Searching... 100%
+   > [VNS] Stagnation. Kicking leader with radius=11...
+   > [R18] Searching... 0%   > [R18] Searching... 100%
+   > [VNS] Max radius reached. Random restart...
+   > [R19] Searching... 0%   > [R19] Searching... 100%
+   > [VNS] Stagnation. Kicking leader with radius=5...
+   > [R20] Searching... 0%   > [R20] Searching... 100%
+   > [VNS] Stagnation. Kicking leader with radius=7...
+   > [R21] Searching... 0%   > [R21] Searching... 100%
+   > [VNS] Stagnation. Kicking leader with radius=9...
+   > [R22] Searching... 0%   > [R22] Searching... 100%
+   > [VNS] Stagnation. Kicking leader with radius=11...
+   > [R23] Searching... 0%   > [R23] Searching... 100%
+   > [VNS] Max radius reached. Random restart...
+   > [R24] Searching... 0%   > [R24] Searching... 100%
+   > [VNS] Stagnation. Kicking leader with radius=5...
+   > [R25] Searching... 0%   > [R25] Searching... 100%
+[AnalyticalSolver] Фінал: 6.3561M$
+
+=== FINAL RESULTS ===
+Analytical Run: 6.3561M$ | P=30.32m | OK | Time: 3m 5s
+[Output] Saved solution table: OutputDataExperiments\2026-03-03_14-57-57\tables\analytical_solution.csv

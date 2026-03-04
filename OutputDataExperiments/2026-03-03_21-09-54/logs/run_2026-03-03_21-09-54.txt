@@ -1,0 +1,96 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_21-09-54/logs/run_2026-03-03_21-09-54.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Pressure Valuation: $43,139 per meter
+[AnalyticalSolver] 1. Generating Diverse Seeds...
+   Creating diverse seeds...
+   Seed 1 (Kinematic): Created.
+   Seed 2 (Max-Start): Created.
+   > Seeds initialized. Best Start: 6.4255M$
+   [SWAP] Success! Pipe 31 (High Friction) <-> Pipe 21 (Low Friction). Savings: -$10,294. New Cost: 6.4152M$
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+   Topo-Kick Failed: Path generator error (not implemented for multigraph type)
+        -> No distinct topology found.
+   > [R1] Searching... 0%   > [R1] Searching... 100%
+   [SWAP] Success! Pipe 32 (High Friction) <-> Pipe 28 (Low Friction). Savings: -$17,914. New Cost: 6.3973M$
+   > [R2] Searching... 0%   > [R2] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+   Topo-Kick Failed: Path generator error (not implemented for multigraph type)
+        -> No distinct topology found.
+   > [R3] Searching... 0%   > [R3] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+   Topo-Kick Failed: Path generator error (not implemented for multigraph type)
+        -> No distinct topology found.
+   > [R4] Searching... 0%   > [R4] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+   Topo-Kick Failed: Path generator error (not implemented for multigraph type)
+        -> No distinct topology found.
+   > [R5] Searching... 0%   > [R5] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+   Topo-Kick Failed: Path generator error (not implemented for multigraph type)
+        -> No distinct topology found.
+   > [R6] Searching... 0%   > [R6] Searching... 100%   > [R6] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+   Topo-Kick Failed: Path generator error (not implemented for multigraph type)
+        -> No distinct topology found.
+   > [R7] Searching... 0%   > [R7] Searching... 100%   > [R7] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+   Topo-Kick Failed: Path generator error (not implemented for multigraph type)
+        -> No distinct topology found.
+   > [R8] Searching... 0%   > [R8] Searching... 100%   > [R8] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+   Topo-Kick Failed: Path generator error (not implemented for multigraph type)
+        -> No distinct topology found.
+   > [R9] Searching... 0%   > [R9] Searching... 100%   > [R9] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+   Topo-Kick Failed: Path generator error (not implemented for multigraph type)
+        -> No distinct topology found.
+   > [R10] Searching... 0%   > [R10] Searching... 100%   > [R10] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+   Topo-Kick Failed: Path generator error (not implemented for multigraph type)
+        -> No distinct topology found.
+   > [R11] Searching... 0%   > [R11] Searching... 100%   > [R11] Searching... 100%
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+   Topo-Kick Failed: Path generator error (not implemented for multigraph type)
+        -> No distinct topology found.
+   > [R12] Searching... 0%   > [R12] Searching... 100%   > [R12] Searching... 100%
+Traceback (most recent call last):
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 289, in <module>
+    main()
+    ~~~~^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 182, in main
+    best_solution_meters = solver.solve_standalone()
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 470, in solve_standalone
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 399, in _swap_search
+    test_sol[h_pipe] = self.diameters[h_idx + 1]
+                        ~~~~~~~~~~~~~^^^^^^^^^^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\water_sim.py", line 208, in get_stats
+    results = self._run_simulation_core()
+  File "E:\Projects\Python\GAPipeDiameterSearch\water_sim.py", line 161, in _run_simulation_core
+    results = sim.run_sim(file_prefix=prefix)
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\wntr\sim\epanet.py", line 133, in run_sim
+    results = self.reader.read(outfile, convergence_error, self._wn.options.hydraulic.headloss=='D-W')
+  File "C:\Users\vanda\AppData\Roaming\Python\Python313\site-packages\wntr\epanet\io.py", line 2611, in read
+    with open(filename, 'rb') as fin:
+         ~~~~^^^^^^^^^^^^^^^^
+KeyboardInterrupt

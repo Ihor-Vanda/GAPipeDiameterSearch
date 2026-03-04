@@ -1,0 +1,22 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_14-23-06/logs/run_2026-03-03_14-23-06.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+Traceback (most recent call last):
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 289, in <module>
+    main()
+    ~~~~^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 179, in main
+    solver = AnalyticalSolver(sim, config.diameters_m, v_opt=config.v_opt)
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 24, in __init__
+    costs = list(self.simulator.costs.values())
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'list' object has no attribute 'values'

@@ -1,0 +1,34 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_00-03-20/logs/run_2026-03-03_00-03-20.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+[System] Initializing 16 parallel workers (Strict Isolation)...
+
+--- [System] Auto-Configuration ---
+[Auto-Config] Population: 200
+[Config] Max Generations: 150
+[Config] Mode: Deep Dive with post shock
+[Config] Penalties: Linear (Factor=669067)
+-----------------------------------
+
+
+>>> Starting Run #1...
+    [Config] Init: STATIC | Eps: True | Shocks: True | Expand: True | Graphs: True
+    [Warmup] 🛡️ Using GUARANTEED strategy (20% Max, 30% Mid, 50% Rnd)...
+    [Warmup] ✅ Generated 200 items. Valid initial solutions: 200
+    [Record] 🏆 New Global Best: 10.9698M$ (Valid)
+    [Gen    0] Cost=10.9698M$ | P=49.62m | Eps=15.000 | Sims=203 | OK | Time: 3.0s (ETA: ...)
+    [Record] 🏆 New Global Best: 8.9038M$ (Valid)
+    [Gen   10] Cost=7.6935M$ | P=18.15m | Eps=15.000 | Sims=2011 | OK | Time: 6.6s (ETA: ...)
+    [Gen   20] Cost=7.2611M$ | P=15.01m | Eps=15.000 | Sims=3832 | OK | Time: 11.3s (ETA: ...)
+    [Gen   30] Cost=7.0856M$ | P=19.27m | Eps=15.000 | Sims=5680 | OK | Time: 15.3s (ETA: 1m 1s)
+
+[System] 🛑 User interrupted via Keyboard (Ctrl+C). Terminating...
+[System] Shutting down workers pool...
+[System] Cleanup complete.

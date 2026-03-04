@@ -2,12 +2,12 @@ import matplotlib
 matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.colors as mcolors
 import pandas as pd
 import numpy as np
 import warnings
 import wntr
 import os
-from ga_config import CONFIG
 
 def plot_convergence(history, filename="convergence.png"):
     if not history: return
@@ -29,7 +29,7 @@ def plot_convergence(history, filename="convergence.png"):
     plt.close()
     print(f"[Plot] Saved convergence graph: {filename}")
 
-def plot_network_map(individual, inp_file, filename="solution_map.png"):
+def plot_network_map(individual, inp_file, filename="solution_map.png", config=None):
     print("[Plot] Generating network map...")
     try:
         with warnings.catch_warnings():
@@ -41,10 +41,10 @@ def plot_network_map(individual, inp_file, filename="solution_map.png"):
             print("[PLOT WARN] INP file has no node coordinates. Skipping map generation.")
             return
 
-        diams_raw = CONFIG["diameters_raw"]
+        diams_raw = config.diameters_raw
         pipe_diams = {}
         for i, pipe_name in enumerate(wn.pipe_name_list):
-            idx = individual[i]
+            idx = int(individual[i]) # Гарантуємо цілий індекс
             pipe_diams[pipe_name] = diams_raw[idx]
         
         attr_series = pd.Series(pipe_diams)
@@ -61,7 +61,6 @@ def plot_network_map(individual, inp_file, filename="solution_map.png"):
                                    title="Optimized Pipe Diameters")
         
         unique_diams = sorted(list(set(diams_raw)))
-        import matplotlib.colors as mcolors
         
         cmap = plt.cm.viridis
         norm = mcolors.Normalize(vmin=min(unique_diams), vmax=max(unique_diams))
@@ -71,7 +70,7 @@ def plot_network_map(individual, inp_file, filename="solution_map.png"):
             color = cmap(norm(d))
             patches.append(mpatches.Patch(color=color, label=f"{d}"))
             
-        plt.legend(handles=patches, title=f"Diameters ({CONFIG['unit_system']})", 
+        plt.legend(handles=patches, title=f"Diameters ({config.unit_system})", 
                    bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
         
         plt.tight_layout()
@@ -84,19 +83,19 @@ def plot_network_map(individual, inp_file, filename="solution_map.png"):
     except Exception as e:
         print(f"\n[PLOT ERROR] Failed to generate map: {e}")
 
-def export_solution(individual, history, inp_file, filename_prefix="final_solution"):
+def export_solution(individual, history, inp_file, filename_prefix="final_solution", config=None):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         wn = wntr.network.WaterNetworkModel(inp_file)
         
     pipe_data = []
-    costs = CONFIG["costs"]
-    diams_raw = CONFIG["diameters_raw"]
+    costs = config.costs
+    diams_raw = config.diameters_raw
     
     for i, pipe_name in enumerate(wn.pipe_name_list):
-        idx = individual[i]
+        idx = int(individual[i])
         link = wn.get_link(pipe_name)
-        unit_label = "mm" if CONFIG["unit_system"] == "mm" else "inch"
+        unit_label = "mm" if config.unit_system == "mm" else "inch"
         
         d_val = diams_raw[idx]
         cost_val = link.length * costs[d_val]

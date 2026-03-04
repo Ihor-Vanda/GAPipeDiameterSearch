@@ -1,0 +1,110 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_19-35-24/logs/run_2026-03-03_19-35-24.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Pressure Valuation: $45,836 per meter
+[AnalyticalSolver] 1. Generating Diverse Seeds...
+   > Seeds initialized. Best Start: 6.4255M$
+   > [SWAP] Pipe 31(idx0->1) <-> 21(idx2->1): -$10,294
+   > [SWAP] 💎 Micro-Optimization: -$10,294 (6.4152M$)
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R1] Searching... 0%   > [R1] Searching... 100%
+   > [SWAP] Pipe 32(idx1->2) <-> 28(idx2->1): -$17,914
+   > [SWAP] 💎 Micro-Optimization: -$17,914 (6.3973M$)
+   > [R2] Searching... 0%   > [R2] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> SHOCK: Upgraded Critical Path [1->...->13 (13 nodes) | L=13550m | AvgD idx=4.8]
+     -> Injection Successful: 6.3599M$
+   > [R3] Searching... 0%   > [R3] Searching... 100%
+   > [R3] 💎 New Record: -$67,308 (6.3299M$)
+   > [R3] 💎 New Record: -$4,198 (6.3257M$)
+   > [SWAP] Pipe 31(idx1->2) <-> 26(idx4->3): -$11,228
+   > [SWAP] 💎 Micro-Optimization: -$11,228 (6.3145M$)
+   > [R4] Searching... 0%   > [R4] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R5] Searching... 0%   > [R5] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R6] Searching... 0%   > [R6] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> SHOCK: Upgraded Critical Path [1->...->29 (7 nodes) | L=9800m | AvgD idx=3.8]
+     -> Injection Successful: 6.3582M$
+   > [R7] Searching... 0%   > [R7] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> SHOCK: Upgraded Critical Path [1->...->29 (7 nodes) | L=9800m | AvgD idx=3.8]
+     -> Injection Successful: 6.3582M$
+   > [R8] Searching... 0%   > [R8] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R9] Searching... 0%   > [R9] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R10] Searching... 0%   > [R10] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> SHOCK: Upgraded Critical Path [1->...->29 (7 nodes) | L=9800m | AvgD idx=3.8]
+     -> Injection Successful: 6.3582M$
+   > [R11] Searching... 0%   > [R11] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> SHOCK: Upgraded Critical Path [1->...->29 (7 nodes) | L=9800m | AvgD idx=3.8]
+     -> Injection Successful: 6.3582M$
+   > [R12] Searching... 0%   > [R12] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R13] Searching... 0%   > [R13] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R14] Searching... 0%   > [R14] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> SHOCK: Upgraded Critical Path [1->...->29 (7 nodes) | L=9800m | AvgD idx=3.8]
+     -> Injection Successful: 6.3582M$
+   > [R15] Searching... 0%   > [R15] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> SHOCK: Upgraded Critical Path [1->...->29 (7 nodes) | L=9800m | AvgD idx=3.8]
+     -> Injection Successful: 6.3582M$
+   > [R16] Searching... 0%   > [R16] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R17] Searching... 0%   > [R17] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R18] Searching... 0%   > [R18] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> SHOCK: Upgraded Critical Path [1->...->29 (7 nodes) | L=9800m | AvgD idx=3.8]
+     -> Injection Successful: 6.3582M$
+   > [R19] Searching... 0%   > [R19] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> SHOCK: Upgraded Critical Path [1->...->29 (7 nodes) | L=9800m | AvgD idx=3.8]
+     -> Injection Successful: 6.3582M$
+   > [R20] Searching... 0%   > [R20] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R21] Searching... 0%   > [R21] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R22] Searching... 0%   > [R22] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> SHOCK: Upgraded Critical Path [1->...->29 (7 nodes) | L=9800m | AvgD idx=3.8]
+     -> Injection Successful: 6.3582M$
+   > [R23] Searching... 0%   > [R23] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+     -> SHOCK: Upgraded Critical Path [1->...->29 (7 nodes) | L=9800m | AvgD idx=3.8]
+     -> Injection Successful: 6.3582M$
+   > [R24] Searching... 0%   > [R24] Searching... 100%
+   > [FORCE] Applying 'PUSH-PULL' strategy...
+     -> No viable path found.
+   > [R25] Searching... 0%   > [R25] Searching... 100%
+[AnalyticalSolver] Фінал: 6.3145M$
+
+=== FINAL RESULTS ===
+Analytical Run: 6.3145M$ | P=30.18m | OK | Time: 12m 47s
+[Output] Saved solution table: OutputDataExperiments\2026-03-03_19-35-24\tables\analytical_solution.csv

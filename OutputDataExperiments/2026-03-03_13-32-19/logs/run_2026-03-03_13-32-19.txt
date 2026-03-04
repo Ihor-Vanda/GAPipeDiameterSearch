@@ -1,0 +1,23 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_13-32-19/logs/run_2026-03-03_13-32-19.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] 1. Кінематичний старт...
+[AnalyticalSolver] 2. Градієнтне ущільнення...
+   > База: 6.3855M$
+[AnalyticalSolver] 3. Multipath Flow Redirection...
+   > [R19] Перенаправлення потоку успішне! -$13,715 (6.3717M$)
+   > [R20] Перенаправлення потоку успішне! -$86,894 (6.2849M$)
+[AnalyticalSolver] Фінал: 6.2849M$
+
+=== FINAL RESULTS ===
+Analytical Run: 6.2849M$ | P=30.26m | OK | Time: 55.7s
+[Output] Saved solution table: OutputDataExperiments\2026-03-03_13-32-19\tables\analytical_solution.csv

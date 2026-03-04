@@ -4,12 +4,13 @@ import statistics
 import networkx as nx
 import numpy as np
 from deap import base, creator, tools
-from ga_config import CONFIG
 from ga_utils import format_time
+from analytical_solver import AnalyticalSolver
 
 class GeneticOptimizer:
-    def __init__(self, simulator, pop_size=None, n_gens=None, pool=None, fixed_mode=False):
+    def __init__(self, simulator, config, pop_size=None, n_gens=None, pool=None, fixed_mode=False):
         self.sim = simulator
+        self.config = config
         self.n_vars = simulator.n_variables
         self.n_opts = simulator.n_options
         self.memo = {} 
@@ -62,7 +63,7 @@ class GeneticOptimizer:
         return self.sim.get_heuristics(ind)
 
     def _calibrate_penalties(self):
-        costs = list(CONFIG['costs'].values())
+        costs = list(self.config.costs.values())
         avg_cost = statistics.mean(costs) if costs else 100.0
         self.HEAVY_PF = avg_cost * 5000.0  
         self.DEATH_LIMIT = 1e16 
@@ -196,10 +197,10 @@ class GeneticOptimizer:
         
         return pop
 
-    def _mixed_warmup(self, start_eps, start_pf):
+    def _init_sep(self, start_eps, start_pf):
         warmup_pop_size = self.pop_size * 10
         warmup_gens = 30
-        print(f"    [Hyper-Warmup] 🛡️ Generating mixed initial skeletons...")
+        print(f"    [SEP] 🛡️ Generating mixed initial skeletons...")
         
         pop = []
         for _ in range(int(warmup_pop_size * 0.5)):
@@ -245,9 +246,9 @@ class GeneticOptimizer:
                 tag = "(Valid)" if best_raw < self.DEATH_LIMIT else "(Inv)"
                 disp = best_raw if best_raw < self.DEATH_LIMIT else (best_raw - self.DEATH_LIMIT)
                 if disp > 1e9: disp = best_raw 
-                print(f"      > Warmup Gen {g}: Best {disp/1e6:.2f}M$ {tag}")
+                print(f"      > SEP Gen {g}: Best {disp/1e6:.2f}M$ {tag}")
 
-        print("    [Hyper-Warmup] 🧬 Selecting Zombies & Heroes...")
+        print("    [SEP] 🧬 Selecting Zombies & Heroes...")
         pop.sort(key=lambda ind: ind.fitness.values[0])
         heroes = pop[:int(self.pop_size * 0.5)]
         pop.sort(key=lambda ind: sum(ind)) 
@@ -260,12 +261,45 @@ class GeneticOptimizer:
         while len(unique_pop) < self.pop_size:
              ind = creator.Individual([random.randint(1, self.n_opts-1) for _ in range(self.n_vars)])
              ind.fitness.values = (self.DEATH_LIMIT + 999,); unique_pop.append(ind)
-        print(f"    [Hyper-Warmup] ✅ Ready to dive with {len(unique_pop)} diverse agents.")
+        print(f"    [SEP] ✅ Ready to dive with {len(unique_pop)} diverse agents.")
         return unique_pop
+    
+    def initialize_population(self):
+        start_eps = self.config.h_min * 0.50
+        start_pf = self.HEAVY_PF
+        
+        if self.config.init_method == 'random':
+            pop = self._random_warmup(start_eps, start_pf)
+            
+        elif self.config.init_method == 'static':
+            pop = self._guaranteed_warmup(start_eps, start_pf)
+            
+        elif self.config.init_method == 'sep':
+            pop = self._init_sep(start_eps, start_pf)
+            
+        elif self.config.init_method == 'analytical':
+            solver = AnalyticalSolver(self.sim, self.config.diameters_m, v_opt=self.config.v_opt)
+            pop = solver.generate_population(
+                pop_size=self.config.pop_size, 
+                mutation_rate=self.config.analytical_mutation_rate
+            )
+            deap_pop = []
+            for ind_meters in pop:
+                ind_indices = []
+                for d in ind_meters:
+                    try:
+                        idx = self.config.diameters_m.index(d)
+                    except ValueError:
+                        idx = self.n_opts - 1
+                    ind_indices.append(idx)
+                deap_pop.append(creator.Individual(ind_indices))
+            pop = deap_pop
+    
+        return pop
 
     def _smart_repair(self, individual, epsilon, max_steps=20):
         current = list(individual)
-        eff_limit = CONFIG['h_min'] - epsilon
+        eff_limit = self.config.h_min - epsilon
         
         _, init_p, _, _ = self._get_stats(current)
         if init_p >= eff_limit: return current, "NO-OP"
@@ -308,13 +342,13 @@ class GeneticOptimizer:
 
     def run_local_search(self, individual, limit_pipes=None, epsilon=0.0):
         current = list(individual)
-        eff_limit = CONFIG['h_min'] - epsilon
+        eff_limit = self.config.h_min - epsilon
         unit_losses = self._get_heuristics(current)
         for _ in range(5):
             cost, min_p, _, _ = self._get_stats(current)
             if min_p < eff_limit: return current 
-            diams_raw = CONFIG["diameters_raw"]
-            costs = CONFIG["costs"]
+            diams_raw = self.config.diameters_raw
+            costs = self.config.costs
             scores = []
             for i in range(self.n_vars):
                 if current[i] > 0:
@@ -338,7 +372,7 @@ class GeneticOptimizer:
     def _iterative_squeeze(self, individual, epsilon=0.0, silent=False):
         if not silent: print(f"    [Polishing] Starting Iterative Squeeze (Eps={epsilon:.2f})...")
         current = list(individual)
-        eff_limit = CONFIG['h_min'] - epsilon
+        eff_limit = self.config.h_min - epsilon
         while True:
             indices = sorted(range(self.n_vars), key=lambda i: current[i], reverse=True)
             improved = False
@@ -372,7 +406,7 @@ class GeneticOptimizer:
         print(f"\n>>> Starting Run #{run_id + 1}...")
         print(f"    [Config] Init: {init_mode.upper()} | Eps: {use_epsilon} | Shocks: {use_shocks} | Expand: {use_expansion} | Graphs: {use_graph_heuristics}")
 
-        CONFIG['h_min'] = h_min 
+        self.config.h_min = h_min 
         current_pf = self.HEAVY_PF
         
         if use_epsilon:
@@ -382,12 +416,7 @@ class GeneticOptimizer:
             start_eps = 0.0
             steps = [0.0]
             
-        if init_mode == 'static':
-            pop = self._guaranteed_warmup(start_eps, current_pf)
-        elif init_mode == 'random':
-            pop = self._random_warmup(start_eps, current_pf)
-        else:
-            pop = self._mixed_warmup(start_eps, current_pf)
+        pop = self.initialize_population()
             
         hof = tools.HallOfFame(10)
         
@@ -693,7 +722,7 @@ class GeneticOptimizer:
         final_cost, final_p, _, _ = self._get_stats(hof[0])
         
         if global_valid_ind is not None:
-            if final_p < CONFIG['h_min'] or final_cost > global_valid_cost:
+            if final_p < self.config.h_min or final_cost > global_valid_cost:
                 print(f"    [Memory] ⏪ Restoring GLOBAL best valid solution ({global_valid_cost/1e6:.4f}M$)")
                 hof.clear(); hof.update([global_valid_ind])
         

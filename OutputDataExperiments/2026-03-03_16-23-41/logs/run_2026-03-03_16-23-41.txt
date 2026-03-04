@@ -1,0 +1,84 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_16-23-41/logs/run_2026-03-03_16-23-41.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Pressure Valuation: $43,139 per meter
+[AnalyticalSolver] 1. Generating Diverse Seeds...
+   > Seeds initialized. Best Start: 6.3855M$
+   > [SWAP] Rebalance 31 <-> 13: -$19,576
+   > [SWAP] 💎 Micro-Optimization: -$19,576 (6.3659M$)
+   > [R1] Searching... 0%   > [R1] Searching... 100%
+   > [R2] Searching... 0%   > [R2] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+   > [FORCE] Injection (SHOCK): 6.5072M$
+   > [R3] Searching... 0%   > [R3] Searching... 100%
+   > [R3] 💎 New Record: -$24,486 (6.3414M$)
+   > [SWAP] Rebalance 6 <-> 10: -$56,828
+   > [SWAP] 💎 Micro-Optimization: -$56,828 (6.2846M$)
+   > [R4] Searching... 0%   > [R4] Searching... 100%
+   > [SWAP] Rebalance 26 <-> 25: -$14,510
+   > [SWAP] 💎 Micro-Optimization: -$14,510 (6.2701M$)
+   > [R5] Searching... 0%   > [R5] Searching... 100%
+   > [SWAP] Rebalance 33 <-> 24: -$6,994
+   > [SWAP] 💎 Micro-Optimization: -$6,994 (6.2631M$)
+   > [R6] Searching... 0%   > [R6] Searching... 100%
+   > [R6] 💎 New Record: -$5,582 (6.2575M$)
+   > [R7] Searching... 0%   > [R7] Searching... 100%
+   > [R8] Searching... 0%   > [R8] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+   > [FORCE] Injection (SHOCK): 6.4122M$
+   > [R9] Searching... 0%   > [R9] Searching... 100%
+   > [R10] Searching... 0%   > [R10] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+   > [FORCE] Injection (SHOCK): 6.4122M$
+   > [R11] Searching... 0%   > [R11] Searching... 100%
+   > [R12] Searching... 0%   > [R12] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+   > [FORCE] Injection (SHOCK): 6.4122M$
+   > [R13] Searching... 0%   > [R13] Searching... 100%
+   > [R14] Searching... 0%   > [R14] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+   > [FORCE] Injection (SHOCK): 6.4122M$
+   > [R15] Searching... 0%   > [R15] Searching... 100%
+   > [R16] Searching... 0%   > [R16] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+   > [FORCE] Injection (SHOCK): 6.4122M$
+   > [R17] Searching... 0%   > [R17] Searching... 100%
+   > [R18] Searching... 0%   > [R18] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+   > [FORCE] Injection (SHOCK): 6.4122M$
+   > [R19] Searching... 0%   > [R19] Searching... 100%
+   > [R20] Searching... 0%   > [R20] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+   > [FORCE] Injection (SHOCK): 6.4122M$
+   > [R21] Searching... 0%   > [R21] Searching... 100%
+   > [R22] Searching... 0%   > [R22] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+   > [FORCE] Injection (SHOCK): 6.4122M$
+   > [R23] Searching... 0%   > [R23] Searching... 100%
+   > [R24] Searching... 0%   > [R24] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+   > [FORCE] Injection (SHOCK): 6.4122M$
+   > [R25] Searching... 0%   > [R25] Searching... 100%
+   > [R26] Searching... 0%   > [R26] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+   > [FORCE] Injection (SHOCK): 6.4122M$
+   > [R27] Searching... 0%   > [R27] Searching... 100%
+   > [R28] Searching... 0%   > [R28] Searching... 100%
+   > [FORCE] Applying 'SHOCK' strategy...
+   > [FORCE] Injection (SHOCK): 6.4122M$
+   > [R29] Searching... 0%   > [R29] Searching... 100%
+   > [R30] Searching... 0%   > [R30] Searching... 100%
+[AnalyticalSolver] Фінал: 6.2575M$
+
+=== FINAL RESULTS ===
+Analytical Run: 6.2575M$ | P=30.14m | OK | Time: 1h 0m
+[Output] Saved solution table: OutputDataExperiments\2026-03-03_16-23-41\tables\analytical_solution.csv

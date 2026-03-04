@@ -1,0 +1,10 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-02_23-49-16/logs/run_2026-03-02_23-49-16.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Millimeters (converted to meters / 1000)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[CRITICAL] PRE-FLIGHT CHECK FAILED: WaterSimulator.__init__() missing 1 required positional argument: 'config'
+Traceback (most recent call last):
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 163, in main
+    sim = WaterSimulator(args.inp, temp_dir=main_proc_temp)
+TypeError: WaterSimulator.__init__() missing 1 required positional argument: 'config'

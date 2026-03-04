@@ -1,0 +1,34 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_21-26-53/logs/run_2026-03-03_21-26-53.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Pressure Valuation: $43,139 per meter
+[AnalyticalSolver] 1. Generating Diverse Seeds...
+   Creating diverse seeds...
+   Seed 1 (Kinematic): Created.
+   Seed 2 (Max-Start): Created.
+   > Seeds initialized. Best Start: 6.4255M$
+   [SWAP] Success! Pipe 31 (High Friction) <-> Pipe 21 (Low Friction). Savings: -$10,294. New Cost: 6.4152M$
+   [FORCE] Applying 'Topological Diversity' strategy...
+      [Topo] Dominant Backbone identified: [1-2, 2-3, 3-4, 4-5, 5-6... | Total: 12 pipes]
+Traceback (most recent call last):
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 289, in <module>
+    main()
+    ~~~~^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 182, in main
+    best_solution_meters = solver.solve_standalone()
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 493, in solve_standalone
+    forced_sol, locked, log_msg = self._topological_inversion_kick(global_best_sol)
+                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 322, in _topological_inversion_kick
+    for key in edge_data:
+               ^^^^^^^^^
+TypeError: 'NoneType' object is not iterable

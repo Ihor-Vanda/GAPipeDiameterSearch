@@ -1,0 +1,33 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_20-46-55/logs/run_2026-03-03_20-46-55.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Pressure Valuation: $43,139 per meter
+[AnalyticalSolver] 1. Generating Diverse Seeds...
+   Creating diverse seeds...
+   Seed 1 (Kinematic): Created.
+   Seed 2 (Max-Start): Created.
+   > Seeds initialized. Best Start: 6.3855M$
+   [SWAP] Success! Pipe 31 (High Friction) <-> Pipe 13 (Low Friction). Savings: -$19,576. New Cost: 6.3659M$
+   [FORCE] Applying 'Topological Diversity' strategy...
+Traceback (most recent call last):
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 289, in <module>
+    main()
+    ~~~~^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\main.py", line 182, in main
+    best_solution_meters = solver.solve_standalone()
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 432, in solve_standalone
+    forced_sol, locked, log_msg = self._topological_inversion_kick(global_best_sol)
+                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "E:\Projects\Python\GAPipeDiameterSearch\analytical_solver.py", line 284, in _topological_inversion_kick
+    self._log(f"Topology Scan: Found {len(distinct_paths)} targets (Best Overlap: {scored_paths[0]['overlap']:.2f} vs Dominant).")
+                                                                                   ~~~~~~~~~~~~^^^
+IndexError: list index out of range

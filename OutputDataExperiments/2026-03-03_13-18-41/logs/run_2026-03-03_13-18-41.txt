@@ -1,0 +1,22 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_13-18-41/logs/run_2026-03-03_13-18-41.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] 1. Створення каркасу (flow-based)...
+[AnalyticalSolver] 2. Максимальне стискання...
+   > База: 6.3857M$
+[AnalyticalSolver] 3. Інвестиційний цикл (пошук ROI > 1.0)...
+   > [R1] Інвестиційних можливостей не знайдено. Зупинка.
+[AnalyticalSolver] Фінал: 6.3857M$
+
+=== FINAL RESULTS ===
+Analytical Run: 6.3857M$ | P=30.09m | OK | Time: 17.0s
+[Output] Saved solution table: OutputDataExperiments\2026-03-03_13-18-41\tables\analytical_solution.csv

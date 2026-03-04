@@ -1,0 +1,68 @@
+[System] Log file initiated: OutputDataExperiments\2026-03-03_15-45-10/logs/run_2026-03-03_15-45-10.txt
+[System] Loading configuration in Main Process...
+[Config] Units: Inches (converted to meters * 0.0254)
+[Config] Loaded 6 pipe types.
+[System] Pre-flight simulation check...
+[System] Pre-flight check PASSED ✅
+==============================================
+   EVOLUTIONARY OPTIMIZER: Hanoi.inp
+   System: NT | Cores: Auto
+==============================================
+
+[Mode] Running Fast Analytical Solver (v_opt = 1.0 m/s)...
+[AnalyticalSolver] Pressure Valuation: $43,139 per meter
+[AnalyticalSolver] 1. Generating Diverse Seeds...
+   > Seeds initialized. Best Start: 6.3855M$
+   > [R1] Searching... 0%   > [R1] Searching... 100%
+   > [R1] 💎 New Record: -$19,576 (6.3659M$)
+   > [R2] Searching... 0%   > [R2] Searching... 100%
+   > [R3] Searching... 0%   > [R3] Searching... 100%
+   > [FORCE] Applying 'Lock & Starve' to change topology...
+   > [FORCE] Topology Shift Successful: 6.5072M$
+   > [R4] Searching... 0%   > [R4] Searching... 100%
+   > [R4] 💎 New Record: -$24,486 (6.3414M$)
+   > [R5] Searching... 0%   > [R5] Searching... 100%
+   > [R5] 💎 New Record: -$23,404 (6.3180M$)
+   > [R6] Searching... 0%   > [R6] Searching... 100%
+   > [R7] Searching... 0%   > [R7] Searching... 100%
+   > [FORCE] Applying 'Lock & Starve' to change topology...
+   > [FORCE] Topology Shift Successful: 6.3992M$
+   > [R8] Searching... 0%   > [R8] Searching... 100%
+   > [R9] Searching... 0%   > [R9] Searching... 100%
+   > [FORCE] Applying 'Lock & Starve' to change topology...
+   > [FORCE] Topology Shift Successful: 6.3992M$
+   > [R10] Searching... 0%   > [R10] Searching... 100%
+   > [R11] Searching... 0%   > [R11] Searching... 100%
+   > [R11] 💎 New Record: -$31,769 (6.2862M$)
+   > [R11] 💎 New Record: -$466 (6.2858M$)
+   > [R12] Searching... 0%   > [R12] Searching... 100%
+   > [R12] 💎 New Record: -$5,115 (6.2806M$)
+   > [R13] Searching... 0%   > [R13] Searching... 100%
+   > [R14] Searching... 0%   > [R14] Searching... 100%
+   > [FORCE] Applying 'Lock & Starve' to change topology...
+   > [FORCE] Topology Shift Successful: 6.4046M$
+   > [R15] Searching... 0%   > [R15] Searching... 100%
+   > [R16] Searching... 0%   > [R16] Searching... 100%
+   > [FORCE] Applying 'Lock & Starve' to change topology...
+   > [FORCE] Topology Shift Successful: 6.4046M$
+   > [R17] Searching... 0%   > [R17] Searching... 100%
+   > [R18] Searching... 0%   > [R18] Searching... 100%
+   > [FORCE] Applying 'Lock & Starve' to change topology...
+   > [FORCE] Topology Shift Successful: 6.4046M$
+   > [R19] Searching... 0%   > [R19] Searching... 100%
+   > [R20] Searching... 0%   > [R20] Searching... 100%
+   > [R20] 💎 New Record: -$19,477 (6.2612M$)
+   > [R21] Searching... 0%   > [R21] Searching... 100%
+   > [R22] Searching... 0%   > [R22] Searching... 100%
+   > [FORCE] Applying 'Lock & Starve' to change topology...
+   > [FORCE] Topology Shift Successful: 6.3570M$
+   > [R23] Searching... 0%   > [R23] Searching... 100%
+   > [R24] Searching... 0%   > [R24] Searching... 100%
+   > [FORCE] Applying 'Lock & Starve' to change topology...
+   > [FORCE] Topology Shift Successful: 6.3570M$
+   > [R25] Searching... 0%   > [R25] Searching... 100%
+[AnalyticalSolver] Фінал: 6.2612M$
+
+=== FINAL RESULTS ===
+Analytical Run: 6.2612M$ | P=30.07m | OK | Time: 2m 36s
+[Output] Saved solution table: OutputDataExperiments\2026-03-03_15-45-10\tables\analytical_solution.csv
