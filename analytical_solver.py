@@ -266,6 +266,8 @@ class AnalyticalSolver:
         target_idx = min(len(self.diameters)-1, curr_d_idx + 2)
         if best_candidate in path_pipes[:2]: target_idx = max(target_idx, len(self.diameters)-2)
 
+        if target_idx == curr_d_idx: return None, None, "" # Запобіжник від холостих ходів
+
         kicked[best_candidate] = self.diameters[target_idx]
         locked.add(best_candidate)
         
@@ -418,111 +420,93 @@ class AnalyticalSolver:
         return best_sol
     
     def _get_dominant_path(self, curr_indices, crit_node):
-        source = self.simulator.sources[0]
-        G_flow = nx.Graph()
-        for u, v, k in self.simulator.graph.edges(keys=True):
-            if k in self.simulator.component_names:
-                idx = self.simulator.component_names.index(k)
-                # Вода тече туди, де ширше (вага обернена діаметру)
-                weight = 100.0 / (curr_indices[idx] + 1)
-                G_flow.add_edge(u, v, weight=weight, id=idx)
-        
         try:
+            source = self.simulator.sources[0]
+            G_flow = nx.Graph()
+            edge_to_pipe = {}
+            
+            for u, v, k in self.simulator.graph.edges(keys=True):
+                if k in self.simulator.component_names:
+                    idx = self.simulator.component_names.index(k)
+                    weight = 100.0 / (curr_indices[idx] + 1)
+                    G_flow.add_edge(u, v, weight=weight)
+                    # Зберігаємо мапінг для швидкого пошуку
+                    edge_to_pipe[(u, v)] = idx
+                    edge_to_pipe[(v, u)] = idx
+                    
             path_nodes = nx.shortest_path(G_flow, source, crit_node, weight='weight')
             path_pipes = []
             for u, v in zip(path_nodes[:-1], path_nodes[1:]):
-                edge_data = G_flow.get_edge_data(u, v)
-                if edge_data and 'id' in edge_data:
-                    path_pipes.append(edge_data['id'])
+                if (u, v) in edge_to_pipe:
+                    path_pipes.append(edge_to_pipe[(u, v)])
             return path_pipes, path_nodes
-        except:
+        except Exception as e:
             return [], []
     
     def _loop_balancing_kick(self, solution):
+        """
+        FLOW STEERING (True Bypass Method):
+        Finds a Lazy Giant, removes it from the graph to force water to find 
+        the *real* shortest alternative route, and dynamically boosts that route.
+        """
         curr_indices = self._get_current_indices(solution)
         _, _, _, crit_node = self.simulator.get_stats(curr_indices)
         if not crit_node or crit_node == "ERR": return None, None, ""
 
-        G_simple = nx.Graph()
-        for u, v in self.simulator.graph.edges(): G_simple.add_edge(u, v)
-        try: cycles = nx.cycle_basis(G_simple)
-        except: return None, None, ""
-        if not cycles: return None, None, "No cycles found"
-
         unit_losses = self.simulator.get_heuristics(curr_indices)
-        best_candidate = -1
-        max_score = -1.0
-
-        for cycle_nodes in cycles:
-            cycle_indices = []
-            full_cycle = cycle_nodes + [cycle_nodes[0]]
-            for u, v in zip(full_cycle[:-1], full_cycle[1:]):
-                edge_data = self.simulator.graph.get_edge_data(u, v)
-                if edge_data is None: edge_data = self.simulator.graph.get_edge_data(v, u)
-                if edge_data:
-                    idx = -1
-                    for key in edge_data:
-                        if key in self.simulator.component_names:
-                            idx = self.simulator.component_names.index(key)
-                            break
-                    if idx != -1: cycle_indices.append(idx)
-
-            for idx in cycle_indices:
-                d_idx = curr_indices[idx]
-                loss = unit_losses[idx]
-                cost = self.simulator.costs[d_idx]
-                if d_idx > 2: 
-                    score = cost / (loss + 1e-9)
-                    if score > max_score:
-                        max_score = score
-                        best_candidate = idx
-
-        if best_candidate == -1: return None, None, "No lazy giants found"
-
-        # Знаходимо ВСІ кільця, де є цей Гігант (щоб знайти правильний обхід)
-        target_cycles = []
-        for cycle_nodes in cycles:
-            cycle_indices = []
-            full_cycle = cycle_nodes + [cycle_nodes[0]]
-            for u, v in zip(full_cycle[:-1], full_cycle[1:]):
-                edge_data = self.simulator.graph.get_edge_data(u, v)
-                if edge_data is None: edge_data = self.simulator.graph.get_edge_data(v, u)
-                if edge_data:
-                    idx = -1
-                    for key in edge_data:
-                        if key in self.simulator.component_names:
-                            idx = self.simulator.component_names.index(key)
-                            break
-                    if idx != -1: cycle_indices.append(idx)
-            
-            if best_candidate in cycle_indices:
-                target_cycles.append(cycle_indices)
-
-        curr_d_idx = curr_indices[best_candidate]
-        max_drop = min(4, curr_d_idx)
         
-        best_combo_sol = None
-        best_combo_locked = set()
-        best_combo_score = float('inf')
-        best_msg = ""
-        best_drop_achieved = -1
+        # 1. Знаходимо Топ-5 "Лінивих Гігантів" (Дорогі труби без навантаження)
+        candidates = []
+        for i in range(self.num_pipes):
+            d_idx = curr_indices[i]
+            if d_idx > 2: 
+                score = self.simulator.costs[d_idx] / (unit_losses[i] + 1e-9)
+                candidates.append((i, score))
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        
+        # 2. Перевіряємо кандидатів
+        for giant_idx, _ in candidates[:5]:
+            G_simple = nx.Graph()
+            edge_to_pipe = {}
+            giant_u, giant_v = None, None
+            
+            for u, v, k in self.simulator.graph.edges(keys=True):
+                if k in self.simulator.component_names:
+                    idx = self.simulator.component_names.index(k)
+                    G_simple.add_edge(u, v)
+                    edge_to_pipe[(u, v)] = idx
+                    edge_to_pipe[(v, u)] = idx
+                    if idx == giant_idx:
+                        giant_u, giant_v = u, v
+                        
+            if not giant_u or not giant_v: continue
+            
+            # ВІДРИВАЄМО ГІГАНТА, щоб знайти Справжній Обхід 
 
-        for best_cycle in target_cycles:
+            G_simple.remove_edge(giant_u, giant_v)
+            try:
+                bypass_nodes = nx.shortest_path(G_simple, giant_u, giant_v)
+                bypass_pipes = []
+                for u, v in zip(bypass_nodes[:-1], bypass_nodes[1:]):
+                    bypass_pipes.append(edge_to_pipe[(u, v)])
+            except:
+                continue # Якщо шляху немає - це тупикова гілка, а не кільце. Ігноруємо.
+
+            curr_d_idx = curr_indices[giant_idx]
+            max_drop = min(4, curr_d_idx)
+            
+            # РАДИКАЛЬНИЙ ПОШУК (Починаємо з найбільшого відрізання)
             for drop in range(max_drop, 0, -1):
-                # ПРІОРИТЕТ НА РАДИКАЛЬНІСТЬ: ігноруємо слабкі відрізання, якщо знайшли сильне
-                if drop < best_drop_achieved:
-                    continue
-
                 target_d_idx = curr_d_idx - drop
-                
                 kicked = list(solution)
                 locked = set()
-                kicked[best_candidate] = self.diameters[target_d_idx]
-                locked.add(best_candidate) 
+                
+                kicked[giant_idx] = self.diameters[target_d_idx]
+                locked.add(giant_idx)
                 
                 feasible = False
                 boosts_applied = 0
-                max_boost_steps = len(best_cycle) * 2 
+                max_boost_steps = len(bypass_pipes) * 3
                 
                 for step in range(max_boost_steps + 1):
                     test_indices = self._get_current_indices(kicked)
@@ -536,10 +520,10 @@ class AnalyticalSolver:
                     worst_pipe = -1
                     max_loss_in_bypass = -1.0
                     
-                    for idx in best_cycle:
-                        if idx == best_candidate: continue
+                    # Шукаємо найвужче місце саме в Справжньому Обході
+                    for idx in bypass_pipes:
                         b_curr_idx = test_indices[idx]
-                        if b_curr_idx < len(self.diameters) - 1: 
+                        if b_curr_idx < len(self.diameters) - 1:
                             if current_losses[idx] > max_loss_in_bypass:
                                 max_loss_in_bypass = current_losses[idx]
                                 worst_pipe = idx
@@ -550,23 +534,11 @@ class AnalyticalSolver:
                         boosts_applied += 1
                     else:
                         break 
-
+                        
                 if feasible:
-                    test_indices = self._get_current_indices(kicked)
-                    raw_cost, _, _, _ = self.simulator.get_stats(test_indices)
+                    return kicked, locked, f"FLOW STEER: True Bypass. Giant {giant_idx} (-{drop}). Boosted {boosts_applied}x."
                     
-                    # Перемагає найбільший DROP. При рівному Drop - перемагає найдешевший обхід.
-                    if drop > best_drop_achieved or (drop == best_drop_achieved and raw_cost < best_combo_score):
-                        best_drop_achieved = drop
-                        best_combo_score = raw_cost
-                        best_combo_sol = kicked
-                        best_combo_locked = locked
-                        best_msg = f"FLOW STEER: Priority Drop -{drop} on cycle len {len(best_cycle)}. Boosted {boosts_applied} times."
-
-        if best_combo_sol:
-            return best_combo_sol, best_combo_locked, best_msg
-             
-        return None, None, "FLOW STEER: Failed to balance loop flow iteratively."
+        return None, None, "FLOW STEER: Failed to find valid bypass steering."
 
     def _evaluate_candidate(self, base_solution, pipes_to_mod, mode="upgrade"):
         test_sol = list(base_solution)
