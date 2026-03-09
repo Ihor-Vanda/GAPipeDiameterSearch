@@ -45,7 +45,17 @@ def worker_init(inp_file, config_obj):
 
         os.chdir(worker_temp_dir)
 
-        worker_sim_instance = WaterSimulator(inp_file, config_obj)
+        import shutil
+        # ГЕНЕРУЄМО УНІКАЛЬНЕ ІМ'Я ФАЙЛУ ДЛЯ КОЖНОГО ВОРКЕРА
+        # Замість "Hanoi.inp" буде "Hanoi_worker_14523.inp"
+        base_name = os.path.splitext(os.path.basename(inp_file))[0]
+        local_inp = f"{base_name}_worker_{pid}.inp"
+        local_inp = os.path.abspath(local_inp)
+        
+        shutil.copy2(inp_file, local_inp)
+        
+        # Симулятор працює з гарантовано унікальним файлом
+        worker_sim_instance = WaterSimulator(local_inp, config_obj)
         
     except Exception as e:
         log_err(f"!!! WORKER {os.getpid()} INIT CRASH: {e}")
@@ -88,6 +98,64 @@ def setup_run_directory(base_dir="OutputDataExperiments"):
     
     print(f"[System] Created new output directory: {run_dir}")
     return run_dir
+
+def analytical_worker_task(args):
+    """
+    Запускається в окремому процесі.
+    """
+    diameters, v_opt, time_budget, global_best_cost, global_archive, seed_modifier, worker_id, shared_progress, log_dir, epoch = args
+    global worker_sim_instance
+    
+    if worker_sim_instance is None:
+        return (float('inf'), None, seed_modifier, 0)
+
+    import sys, os
+    os.makedirs(os.path.join(log_dir, "worker_logs"), exist_ok=True)
+    log_file = os.path.join(log_dir, "worker_logs", f"worker_{worker_id+1:02d}_epoch_{epoch+1}.txt")
+    
+    worker_logger = open(log_file, "w", encoding="utf-8")
+    sys.stdout = worker_logger
+    sys.stderr = worker_logger
+    # =================================================================
+
+    import random
+    import numpy as np
+    from analytical_solver import AnalyticalSolver
+    
+    random.seed(seed_modifier * 137 + 42)
+    np.random.seed(seed_modifier * 137 + 42)
+    
+    local_solver = AnalyticalSolver(worker_sim_instance, diameters, v_opt=v_opt)
+    
+    # =================================================================
+    # ЗОЛОТИЙ ПЕРЕРІЗ БЮДЖЕТУ (70% Розвідка / 30% Експлуатація)
+    # =================================================================
+    base_budget = local_solver.max_sims
+    if epoch == 0:
+        local_solver.max_sims = int(base_budget * 0.70)  # Епоха 1: Більше часу на пошук долин
+    else:
+        local_solver.max_sims = int(base_budget * 0.30)  # Епоха 2+: Швидке шліфування лідерів
+
+    if not global_archive:
+        seeds = local_solver._make_diverse_seeds()
+    else:
+        # =================================================================
+        # КАСТОВА СИСТЕМА (Передаємо worker_id для розподілу ролей)
+        # =================================================================
+        seeds = local_solver._make_warm_seeds(global_archive, worker_id=worker_id)
+        
+    # Передаємо shared_progress та ID, щоб воркер міг звітувати
+    res_cost, res_sol = local_solver._run_single_search(
+        seeds, time_budget, global_best_cost, 
+        worker_id=worker_id, shared_progress=shared_progress
+    )
+    
+    # Закриваємо локальний лог
+    sys.stdout.flush()
+    worker_logger.close()
+    sys.stdout = sys.__stdout__ 
+    
+    return (res_cost, res_sol, seed_modifier, local_solver.ctx.sim_count)
 
 def main():
     multiprocessing.freeze_support()
@@ -174,33 +242,6 @@ def main():
     print(f"   System: {os.name.upper()} | Cores: {args.cores if args.cores > 0 else 'Auto'}")
     print("==============================================")
     
-    if config.run_mode == 'analytical':
-        print(f"\n[Mode] Running Fast Analytical Solver (v_opt = {config.v_opt} m/s)...")
-        solver = AnalyticalSolver(sim, config.diameters_m, v_opt=config.v_opt)
-        
-        start_t = time.time()
-        best_solution_meters = solver.solve_standalone()
-        duration = time.time() - start_t
-        
-        best_indices = []
-        for d in best_solution_meters:
-            try:
-                idx = config.diameters_m.index(d)
-            except ValueError:
-                idx = len(config.diameters_m) - 1
-            best_indices.append(idx)
-            
-        final_cost, final_p, _, _ = sim.get_stats(best_indices)
-        is_feasible = (final_p >= args.hmin)
-        status = "OK" if is_feasible else "FAIL"
-        
-        print("\n=== FINAL RESULTS ===")
-        print(f"Analytical Run: {final_cost/1e6:.4f}M$ | P={final_p:.2f}m | {status} | Time: {format_time(duration)}")
-       
-        export_solution(best_indices, [], args.inp, os.path.join(base_dir, "tables", "analytical_solution"), config)
-            
-        return
-    
     num_cores = args.cores if args.cores > 0 else multiprocessing.cpu_count()
     print(f"[System] Initializing {num_cores} parallel workers (Strict Isolation)...")
     
@@ -213,43 +254,70 @@ def main():
         )
 
         WaterSimulator.worker_eval_wrapper = staticmethod(worker_eval_task)
-
-        results = []
-        optimizer = GeneticOptimizer(sim, config, pop_size=args.pop, n_gens=args.gen, pool=pool, fixed_mode=args.fixed)
+        AnalyticalSolver.worker_task = staticmethod(analytical_worker_task)
         
-        use_epsilon = not args.no_eps
-        use_shocks = not args.no_shocks
-        use_expansion = not args.no_expansion
-        use_graphs = not args.no_graphs
+        results = []
+        
+        if config.run_mode == 'analytical':
+            print(f"\n[Mode] Running Fast Analytical Solver (v_opt = {config.v_opt} m/s)...")
+            
+            abs_log_dir = os.path.abspath(base_dir)
+            solver = AnalyticalSolver(sim, config.diameters_m, v_opt=config.v_opt, pool=pool, log_dir=abs_log_dir, n_workers=num_cores)
+            
+            start_t = time.time()
+            best_solution_meters = solver.solve_standalone()
+            duration = time.time() - start_t
+            
+            best_indices = []
+            for d in best_solution_meters:
+                try: idx = config.diameters_m.index(d)
+                except ValueError: idx = len(config.diameters_m) - 1
+                best_indices.append(idx)
+                
+            final_cost, final_p, _, _ = sim.get_stats(best_indices)
+            is_feasible = (final_p >= args.hmin)
+            status = "OK" if is_feasible else "FAIL"
+            
+            print("\n=== FINAL RESULTS ===")
+            print(f"Analytical Run: {final_cost/1e6:.4f}M$ | P={final_p:.2f}m | {status} | Time: {format_time(duration)}")
+            export_solution(best_indices, [], args.inp, os.path.join(base_dir, "tables", "analytical_solution"), config)
+            
+        else:
+            optimizer = GeneticOptimizer(sim, config, pop_size=args.pop, n_gens=args.gen, pool=pool, fixed_mode=args.fixed)
+            
+            use_epsilon = not args.no_eps
+            use_shocks = not args.no_shocks
+            use_expansion = not args.no_expansion
+            use_graphs = not args.no_graphs
 
-        for i in range(args.runs):
-            optimizer.total_sims = 0
-            optimizer.total_sims = 0
-            ind, _, _, dur, hist = optimizer.run(
-                run_id=i, 
-                h_min=args.hmin, 
-                init_mode=args.init, 
-                use_epsilon=use_epsilon,
-                use_shocks=use_shocks,
-                use_expansion=use_expansion,
-                use_graph_heuristics=use_graphs
-            )
-            
-            print("    [Post-Process] Refining Solution...")
-            if use_graphs:
-                polished_ind = optimizer.run_local_search(ind, limit_pipes=500)
-            else:
-                polished_ind = list(ind)
-            
-            final_cost, final_p, _, _ = sim.get_stats(polished_ind)
-            is_feasible = (final_p >= args.hmin + 0.000001)
-            
-            results.append({
-                "run_id": i+1, "cost": final_cost, "pressure": final_p,
-                "feasible": is_feasible, "time": dur, "individual": polished_ind, "history": hist
-            })
+            for i in range(args.runs):
+                optimizer.total_sims = 0
+                optimizer.total_sims = 0
+                ind, _, _, dur, hist = optimizer.run(
+                    run_id=i, 
+                    h_min=args.hmin, 
+                    init_mode=args.init, 
+                    use_epsilon=use_epsilon,
+                    use_shocks=use_shocks,
+                    use_expansion=use_expansion,
+                    use_graph_heuristics=use_graphs
+                )
+                
+                print("    [Post-Process] Refining Solution...")
+                if use_graphs:
+                    polished_ind = optimizer.run_local_search(ind, limit_pipes=500)
+                else:
+                    polished_ind = list(ind)
+                
+                final_cost, final_p, _, _ = sim.get_stats(polished_ind)
+                is_feasible = (final_p >= args.hmin + 0.000001)
+                
+                results.append({
+                    "run_id": i+1, "cost": final_cost, "pressure": final_p,
+                    "feasible": is_feasible, "time": dur, "individual": polished_ind, "history": hist
+                })
 
-            pd.DataFrame(hist).to_csv(os.path.join(base_dir, "tables", f"run_{i+1}_history.csv"), index=False)
+                pd.DataFrame(hist).to_csv(os.path.join(base_dir, "tables", f"run_{i+1}_history.csv"), index=False)
             
     except KeyboardInterrupt:
         print("\n[System] 🛑 User interrupted via Keyboard (Ctrl+C). Terminating...")

@@ -1,10 +1,13 @@
 import math
 import random
 import sys
+import time
+import bisect
 import numpy as np
 import itertools
 import networkx as nx
-from collections import deque
+import multiprocessing  # <--- ДОДАТИ ЦЕЙ РЯДОК
+from collections import OrderedDict
 
 class AnalyticalSolver:
     def __init__(self, simulator, available_diameters, v_opt=1.0, max_iters=10):
