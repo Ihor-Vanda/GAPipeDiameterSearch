@@ -562,11 +562,13 @@ class KickStrategies:
         if not periphery_pipes: return None, None, ""
         candidates = []
         
-        combo_limit = min(30, max(10, self.ctx.num_pipes // 3))
+        combo_limit = min(100, max(10, self.ctx.num_pipes // 3)) 
         all_pairs = list(itertools.combinations(periphery_pipes[:combo_limit], 2))
         random.shuffle(all_pairs)
         
-        for d1, d2 in all_pairs[:60]: 
+        max_checks = min(500, max(60, self.ctx.num_pipes))
+        
+        for d1, d2 in all_pairs[:max_checks]:
             if indices_copy[d1] == 0 or indices_copy[d2] == 0: continue
             
             test_sol = list(indices_copy)
@@ -651,9 +653,9 @@ class KickStrategies:
             
         kicked, locked = list(indices), set()
         
-        # ПАТЧ: Адаптивна інтенсивність! Чим довше застрягли, тим більше труб міняємо
-        base_n = max(3, self.ctx.num_pipes // 8)
-        n_to_change = min(self.ctx.num_pipes // 2, base_n + int(stagnation_counter * 0.5))
+        base_n = max(3, int(self.ctx.num_pipes * 0.10))
+        aggression_step = max(0.5, self.ctx.num_pipes / 100.0) 
+        n_to_change = min(self.ctx.num_pipes // 2, base_n + int(stagnation_counter * aggression_step))
         
         pipes_to_change = random.sample(range(self.ctx.num_pipes), n_to_change)
         
@@ -677,8 +679,8 @@ class KickStrategies:
         _, _, _, crit_node = self.ctx.get_cached_stats(indices)
         if not crit_node or crit_node == "ERR": return None, None, ""
 
-        # Адаптивний радіус руйнування (від 1 до 3 ребер навколо вузла)
-        radius = 1 if stagnation_counter < 5 else (2 if stagnation_counter < 12 else 3)
+        base_rad = min(5, 1 + (self.ctx.num_pipes // 150))
+        radius = base_rad if stagnation_counter < 5 else (base_rad + 1 if stagnation_counter < 12 else base_rad + 2)
         
         try:
             # BFS пошук сусідів
@@ -743,7 +745,8 @@ class AnalyticalSolver:
         if time_limit_sec is not None:
             self.time_limit_sec = time_limit_sec
         else:
-            self.time_limit_sec = 3600
+            estimated_time_needed = self.max_sims / 10.0
+            self.time_limit_sec = max(3600, estimated_time_needed)
 
         print(f"[Config] Network: {self.network_class} ({self.ctx.num_pipes} pipes)")
         print(f"  Target Budget: {self.max_sims:,} sims (≈{self.time_limit_sec/60:.1f} min)")
@@ -777,7 +780,7 @@ class AnalyticalSolver:
         self.BASE_SIM_BUDGET = {
             "SMALL": 30000, 
             "MEDIUM": 100000, 
-            "LARGE": 1000000, # 1 Мільйон для Balerma!
+            "LARGE": 1000000,
             "XLARGE": 3000000
         }[cls]
 
