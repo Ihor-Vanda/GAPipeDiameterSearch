@@ -54,8 +54,7 @@ def worker_init(inp_file, config_obj):
         
         shutil.copy2(inp_file, local_inp)
         
-        # Симулятор працює з гарантовано унікальним файлом
-        worker_sim_instance = WaterSimulator(local_inp, config_obj)
+        worker_sim_instance = WaterSimulator(local_inp, config_obj, temp_dir=worker_temp_dir)
         
     except Exception as e:
         log_err(f"!!! WORKER {os.getpid()} INIT CRASH: {e}")

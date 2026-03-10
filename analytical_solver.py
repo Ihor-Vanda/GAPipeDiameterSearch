@@ -639,7 +639,7 @@ class KickStrategies:
         chosen = random.choice(candidates[:3])
         return chosen[1], chosen[2], chosen[3]
     
-    def diameter_diversity_kick(self, indices):
+    def diameter_diversity_kick(self, indices, stagnation_counter): # ПАТЧ: додали stagnation_counter
         from collections import Counter
         import random
         
@@ -650,7 +650,11 @@ class KickStrategies:
             return None, None, "" 
             
         kicked, locked = list(indices), set()
-        n_to_change = max(3, min(20, self.ctx.num_pipes // 8)) 
+        
+        # ПАТЧ: Адаптивна інтенсивність! Чим довше застрягли, тим більше труб міняємо
+        base_n = max(3, self.ctx.num_pipes // 8)
+        n_to_change = min(self.ctx.num_pipes // 2, base_n + int(stagnation_counter * 0.5))
+        
         pipes_to_change = random.sample(range(self.ctx.num_pipes), n_to_change)
         
         for i in pipes_to_change:
@@ -663,7 +667,51 @@ class KickStrategies:
         healed, is_feas, _ = self.ls.heal_network(kicked, locked)
         if not is_feas: return None, None, ""
             
-        return healed, locked, f"DIAM-DIVERSITY: Injected {len(locked)} varied diameters and healed"
+        return healed, locked, f"DIAM-DIVERSITY: Injected {len(locked)} varied diams (Intensity: {n_to_change})"
+    
+    def ruin_and_recreate_kick(self, indices, stagnation_counter):
+        """
+        LNS (Large Neighborhood Search): Вирізає кластер навколо критичного вузла
+        і жадібно відбудовує його з нуля.
+        """
+        _, _, _, crit_node = self.ctx.get_cached_stats(indices)
+        if not crit_node or crit_node == "ERR": return None, None, ""
+
+        # Адаптивний радіус руйнування (від 1 до 3 ребер навколо вузла)
+        radius = 1 if stagnation_counter < 5 else (2 if stagnation_counter < 12 else 3)
+        
+        try:
+            # BFS пошук сусідів
+            cluster_nodes = list(nx.single_source_shortest_path_length(self.ctx.base_G_flow, crit_node, cutoff=radius).keys())
+        except:
+            return None, None, ""
+
+        cluster_pipes = set()
+        for u in cluster_nodes:
+            for p in self.ctx.node_to_pipes.get(u, []):
+                cluster_pipes.add(p)
+
+        if not cluster_pipes: return None, None, ""
+
+        kicked = list(indices)
+        ruined_count = 0
+        
+        # RUIN (Руйнування): Скидаємо всі труби кластера в мінімальний діаметр (0)
+        for p in cluster_pipes:
+            if kicked[p] > 0:
+                kicked[p] = 0
+                ruined_count += 1
+
+        if ruined_count == 0: return None, None, ""
+
+        # RECREATE (Відбудова): Дозволяємо heal_network жадібно підняти ТІЛЬКИ ті труби, які дійсно потрібні
+        # Важливо: ми передаємо порожній set(), щоб heal міг змінювати зруйновані труби
+        healed_sol, is_feas, boosts = self.ls.heal_network(kicked, set())
+        
+        if not is_feas: return None, None, ""
+
+        # Повертаємо cluster_pipes як 'locked', щоб gradient_squeeze тимчасово не чіпав нашу нову відбудову
+        return healed_sol, cluster_pipes, f"R&R (LNS): Ruined {ruined_count} pipes (Rad: {radius}). Rebuilt {boosts}x."
 
 # =============================================================================
 # 5. ORCHESTRATOR (Parallel Island Model Architecture)
@@ -705,6 +753,7 @@ class AnalyticalSolver:
         if nx.is_tree(self.ctx.base_G_flow):
             self.strategies.remove("LOOP_BALANCE")
         self.strategies.append("DIAM_DIVERSITY")
+        self.strategies.append("RUIN_RECREATE") # ПАТЧ: Додали нову стратегію
         
         self.strat_wins = {s: 1.0 for s in self.strategies}
         self.strat_tries = {s: 1.0 for s in self.strategies}
@@ -719,10 +768,18 @@ class AnalyticalSolver:
     def _configure_for_scale(self):
         n = self.ctx.num_pipes
         cls = self.network_class
-        self.BEAM_WIDTH = {"SMALL": max(5, n//10), "MEDIUM": max(4, n//20), "LARGE": 3, "XLARGE": 3}[cls]
-        self.SINGLE_CANDIDATES = {"SMALL": max(6, n//5), "MEDIUM": max(6, n//10), "LARGE": max(6, n//20), "XLARGE": 6}[cls]
+        
+        self.BEAM_WIDTH = {"SMALL": max(5, n//10), "MEDIUM": 5, "LARGE": 5, "XLARGE": 5}[cls]
+        self.SINGLE_CANDIDATES = {"SMALL": max(6, n//5), "MEDIUM": max(6, n//10), "LARGE": max(6, n//20), "XLARGE": 10}[cls]
         self.N_RESTARTS = {"SMALL": 4, "MEDIUM": 3, "LARGE": 2, "XLARGE": 1}[cls]
-        self.BASE_SIM_BUDGET = {"SMALL": 30000, "MEDIUM": 75000, "LARGE": 150000, "XLARGE": 300000}[cls]
+        
+        # ЗБІЛЬШЕНО БЮДЖЕТИ:
+        self.BASE_SIM_BUDGET = {
+            "SMALL": 30000, 
+            "MEDIUM": 100000, 
+            "LARGE": 1000000, # 1 Мільйон для Balerma!
+            "XLARGE": 3000000
+        }[cls]
 
     def _calculate_ideal_d(self, flow, target_v):
         if abs(flow) < 1e-6: return 0 # Повертає індекс
@@ -751,21 +808,77 @@ class AnalyticalSolver:
             squeezed_sol = self.ls.gradient_squeeze(idx_sol, quick_mode=True)
             seeds.append(squeezed_sol)
         return seeds
+    
+    def _make_relinked_seeds(self, archive):
+        """
+        PATH-RELINKING: Плавно перетворює одне хороше рішення на інше,
+        збираючи валідні проміжні стани як нові насіння.
+        """
+        import random
+        import itertools
+        seeds = []
+        
+        # Якщо в архіві менше 2 рішень, перелінкування неможливе
+        if len(archive) < 2:
+            return []
+
+        # Беремо Топ-4 рішення і створюємо всі можливі пари (А, Б)
+        top_sols = [x[1] for x in archive[:4]]
+        pairs = list(itertools.combinations(top_sols, 2))
+        random.shuffle(pairs)
+
+        for sol_A, sol_B in pairs:
+            # Знаходимо індекси труб, які відрізняються
+            diff_indices = [i for i in range(self.ctx.num_pipes) if sol_A[i] != sol_B[i]]
+            random.shuffle(diff_indices) # Випадковий порядок заміни
+
+            current_path_sol = list(sol_A)
+            
+            # Крокуємо від А до Б
+            for idx in diff_indices:
+                current_path_sol[idx] = sol_B[idx]
+                
+                # Перевіряємо проміжний стан
+                _, p, feas, _ = self.ctx.get_cached_stats(current_path_sol)
+                if feas and p >= self.ctx.simulator.config.h_min:
+                    # Якщо проміжний крок валідний - зжимаємо його і беремо в роботу!
+                    squeezed = self.ls.gradient_squeeze(current_path_sol, quick_mode=True)
+                    seeds.append(squeezed)
+                    
+                if len(seeds) >= self.BEAM_WIDTH:
+                    break
+            if len(seeds) >= self.BEAM_WIDTH:
+                break
+                
+        # Якщо перелінкування не дало достатньо валідних кроків, добиваємо лідерами
+        while len(seeds) < self.BEAM_WIDTH:
+            seeds.append(list(top_sols[0]))
+            
+        return seeds
 
     def _make_warm_seeds(self, archive, worker_id=0):
         import random
         seeds = []
         
+        # ДЕТЕРМІНОВАНИЙ РОЗПОДІЛ ДЛЯ МАЛИХ ПУЛІВ
         if worker_id == 0: role = "EXPLOITER"
-        elif worker_id in (1, 2): role = "EXPLORER"
+        elif worker_id == 1: role = "RELINKER"   # ПАТЧ: Worker 1 тепер робить Path-Relinking!
+        elif worker_id == 2: role = "EXPLORER"
         elif worker_id == 3: role = "ADVENTURER"
         else:
+            # ЙМОВІРНІСНИЙ РОЗПОДІЛ ДЛЯ ВЕЛИКИХ ПУЛІВ
             caste_roll = random.random()
-            if caste_roll < 0.40: role = "EXPLOITER"
-            elif caste_roll < 0.80: role = "EXPLORER"
+            if caste_roll < 0.30: role = "EXPLOITER"
+            elif caste_roll < 0.60: role = "RELINKER" # 30% воркерів зшивають топології
+            elif caste_roll < 0.85: role = "EXPLORER"
             else: role = "ADVENTURER"
             
-        if role == "EXPLOITER":
+        # Застосування ролей
+        if role == "RELINKER" and len(archive) >= 2:
+            self.ctx.log(f"[CASTE] Worker {worker_id+1:02d} -> 🧬 RELINKER (Path-Relinking between Top-4)")
+            return self._make_relinked_seeds(archive)
+            
+        elif role == "EXPLOITER" or (role == "RELINKER" and len(archive) < 2):
             self.ctx.log(f"[CASTE] Worker {worker_id+1:02d} -> 🎯 EXPLOITER (Micro-mutations on Top-2)")
             top_sols = [x[1] for x in archive[:2]]
             n_perturb = max(1, self.ctx.num_pipes // 15) 
@@ -781,6 +894,7 @@ class AnalyticalSolver:
             self.ctx.log(f"[CASTE] Worker {worker_id+1:02d} -> 🏴‍☠️ ADVENTURER (Cold Start - Ignored Archive)")
             return self._make_diverse_seeds()
             
+        # Генерація збурених рішень (для EXPLOITER та EXPLORER)
         for _ in range(self.BEAM_WIDTH):
             base_sol = random.choice(top_sols)
             perturbed = list(base_sol)
@@ -795,7 +909,7 @@ class AnalyticalSolver:
                 squeezed = self.ls.gradient_squeeze(healed_sol, quick_mode=True)
                 seeds.append(squeezed)
             else:
-                seeds.append(base_sol) 
+                seeds.append(base_sol) # Захист від infeasible fallback
             
         return seeds
 
@@ -884,10 +998,14 @@ class AnalyticalSolver:
                 
                 forced_sol, locked, path_sig = None, None, None
                 
+                # ПАТЧ: Фіксуємо витрати симуляцій до виклику стратегії
+                sims_before_kick = self.ctx.sim_count
+                
                 if strategy == "SHOCK": forced_sol, locked, log_msg = self.kicker.forcing_hand_kick(kick_target)
                 elif strategy == "BOTTLENECK": forced_sol, locked, log_msg = self.kicker.upstream_bottleneck_kick(kick_target)
                 elif strategy == "LOOP_BALANCE": forced_sol, locked, log_msg = self.kicker.loop_balancing_kick(kick_target, dyn_bonus)
-                elif strategy == "DIAM_DIVERSITY": forced_sol, locked, log_msg = self.kicker.diameter_diversity_kick(kick_target)
+                elif strategy == "DIAM_DIVERSITY": forced_sol, locked, log_msg = self.kicker.diameter_diversity_kick(kick_target, stagnation_counter) # ПАТЧ
+                elif strategy == "RUIN_RECREATE": forced_sol, locked, log_msg = self.kicker.ruin_and_recreate_kick(kick_target, stagnation_counter) # ПАТЧ
                 elif strategy == "FINISHER": forced_sol, locked, log_msg = self.kicker.micro_trim_kick(kick_target)
                 elif strategy == "SYNC_TRIM": forced_sol, locked, log_msg = self.kicker.sync_trim_kick(kick_target, dyn_bonus)
                 else: forced_sol, locked, log_msg, path_sig = self.kicker.topological_inversion_kick(kick_target, self.pool.kick_tabu_set)
@@ -910,6 +1028,12 @@ class AnalyticalSolver:
                             just_flushed = True 
                             
                         self.pool.active_pool.insert(0, (score, c, final_sol))
+                        
+                        # ПАТЧ (ALNS): Розрахунок ROI (Return on Investment)
+                        sims_used = max(1, self.ctx.sim_count - sims_before_kick)
+                        # Множник: еталон 20 симуляцій = множник 1.0. Витратив 100 симуляцій = множник 0.2
+                        efficiency_multiplier = min(2.0, 20.0 / sims_used) 
+                        
                         if c < run_best_cost:
                             is_ghost = False
                             if (run_best_cost - c) > (run_best_cost * 0.02):
@@ -920,10 +1044,11 @@ class AnalyticalSolver:
                             else:
                                 diff = run_best_cost - c
                                 run_best_cost, run_best_sol = c, final_sol
-                                self.strat_wins[strategy] += 2.0 
-                                self.ctx.log(f"   > [FORCE] 💎 Direct Record Update: -${diff:,.0f} ({run_best_cost/1e6:.4f}M$)")
+                                # Нагорода нормалізована!
+                                self.strat_wins[strategy] += (3.0 * efficiency_multiplier) 
+                                self.ctx.log(f"   > [FORCE] 💎 Direct Record Update: -${diff:,.0f} ({run_best_cost/1e6:.4f}M$) | ROI: {efficiency_multiplier:.2f}x")
                         elif c <= run_best_cost * 1.001: 
-                            self.strat_wins[strategy] += 0.2 
+                            self.strat_wins[strategy] += (0.5 * efficiency_multiplier) 
                             self.ctx.log(f"     -> Injection Acceptable: {c/1e6:.4f}M$")
                         else:
                             self.ctx.log(f"     -> Injection Poor: {c/1e6:.4f}M$ (No Reward)")
