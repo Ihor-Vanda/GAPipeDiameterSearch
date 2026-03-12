@@ -102,11 +102,12 @@ def analytical_worker_task(args):
     """
     Запускається в окремому процесі.
     """
-    diameters, v_opt, time_budget, global_best_cost, global_archive, seed_modifier, worker_id, shared_progress, log_dir, epoch = args
+    # 🔴 ОНОВЛЕНО: Додано global_failed_basins для Basin Avoidance (Ідея #3)
+    diameters, v_opt, time_budget, global_best_cost, global_archive, seed_modifier, worker_id, shared_progress, log_dir, epoch, global_failed_basins = args
     global worker_sim_instance
     
     if worker_sim_instance is None:
-        return (float('inf'), None, seed_modifier, 0)
+        return (float('inf'), None, seed_modifier, 0, set())
 
     import sys, os
     os.makedirs(os.path.join(log_dir, "worker_logs"), exist_ok=True)
@@ -126,35 +127,29 @@ def analytical_worker_task(args):
     
     local_solver = AnalyticalSolver(worker_sim_instance, diameters, v_opt=v_opt)
     
-    # =================================================================
-    # ЗОЛОТИЙ ПЕРЕРІЗ БЮДЖЕТУ (70% Розвідка / 30% Експлуатація)
-    # =================================================================
     base_budget = local_solver.max_sims
     if epoch == 0:
-        local_solver.max_sims = int(base_budget * 0.70)  # Епоха 1: Більше часу на пошук долин
+        local_solver.max_sims = int(base_budget * 0.70)  
     else:
-        local_solver.max_sims = int(base_budget * 0.30)  # Епоха 2+: Швидке шліфування лідерів
+        local_solver.max_sims = int(base_budget * 0.30)  
 
     if not global_archive:
         seeds = local_solver._make_diverse_seeds()
     else:
-        # =================================================================
-        # КАСТОВА СИСТЕМА (Передаємо worker_id для розподілу ролей)
-        # =================================================================
-        seeds = local_solver._make_warm_seeds(global_archive, worker_id=worker_id)
+        # 🔴 ОНОВЛЕНО: Передаємо failed_basins у генератор насіння
+        seeds = local_solver._make_warm_seeds(global_archive, worker_id=worker_id, failed_basins=global_failed_basins)
         
-    # Передаємо shared_progress та ID, щоб воркер міг звітувати
     res_cost, res_sol = local_solver._run_single_search(
         seeds, time_budget, global_best_cost, 
         worker_id=worker_id, shared_progress=shared_progress
     )
     
-    # Закриваємо локальний лог
     sys.stdout.flush()
     worker_logger.close()
     sys.stdout = sys.__stdout__ 
     
-    return (res_cost, res_sol, seed_modifier, local_solver.ctx.sim_count)
+    # 🔴 ОНОВЛЕНО: Повертаємо basin_tabu Оркестратору
+    return (res_cost, res_sol, seed_modifier, local_solver.ctx.sim_count, local_solver.pool.basin_tabu)
 
 def main():
     multiprocessing.freeze_support()

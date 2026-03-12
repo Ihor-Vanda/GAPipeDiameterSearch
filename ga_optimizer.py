@@ -5,7 +5,6 @@ import networkx as nx
 import numpy as np
 from deap import base, creator, tools
 from ga_utils import format_time
-from analytical_solver_old import AnalyticalSolver
 
 class GeneticOptimizer:
     def __init__(self, simulator, config, pop_size=None, n_gens=None, pool=None, fixed_mode=False):
