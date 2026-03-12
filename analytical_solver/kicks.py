@@ -332,6 +332,37 @@ class KickStrategies:
         
         msg = f"ILS-PERTURB: Random jump on {n_perturb} pipes ({pct:.0%}), new basin entry."
         return healed, set(pipes), msg
+    
+    def vns_structured_kick(self, indices, stagnation_level):
+        """Variable Neighborhood Search: збільшує розмір і радіус удару зі зростанням стагнації"""
+        n = self.ctx.num_pipes
+        # Розміри околиці залежно від рівня стагнації (від 5% до 25%)
+        neighborhood_sizes = [0.05, 0.10, 0.15, 0.20, 0.25]
+        k_idx = min(stagnation_level // 2, len(neighborhood_sizes) - 1)
+        pct = neighborhood_sizes[k_idx]
+        
+        n_change = max(3, int(n * pct))
+        
+        # Структурована зміна: вибираємо найгірші труби за unit_loss
+        unit_losses = self.ctx.get_cached_heuristics(indices)
+        worst_pipes = sorted(range(n), key=lambda i: unit_losses[i], reverse=True)[:n_change + max(5, n//10)]
+        target_pipes = random.sample(worst_pipes, n_change)
+        
+        kicked = list(indices)
+        locked = set()
+        
+        # Сила удару теж зростає зі стагнацією
+        jump_size = 1 if k_idx < 2 else (2 if k_idx < 4 else 3)
+        
+        for p in target_pipes:
+            direction = random.choice([-jump_size, jump_size])
+            kicked[p] = max(0, min(self.ctx.max_d_idx, kicked[p] + direction))
+            locked.add(p)
+            
+        healed, ok, boosts = self.ls.heal_network(kicked, locked)
+        if not ok: return None, None, ""
+        
+        return healed, locked, f"VNS-KICK (Level {k_idx}): Shifted {n_change} high-loss pipes by ±{jump_size}. Healed {boosts}x."
 
     # 🔴 ВИПРАВЛЕНО: Додано аргумент dyn_bonus
     def segment_restart_kick(self, indices, dyn_bonus):

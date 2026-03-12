@@ -50,14 +50,17 @@ class AnalyticalSolver:
         print(f"  Target Budget: {self.max_sims:,} sims (≈{self.time_limit_sec/60:.1f} min)")
         print(f"  BeamWidth={self.BEAM_WIDTH}")
         
+        # Стратегії для локального UCB1-бандита
         self.strategies = ["TOPO-DIV", "LOOP_BALANCE", "SYNC_TRIM", "FINISHER", "BOTTLENECK", "SHOCK"]
         if nx.is_tree(self.ctx.base_G_flow):
             self.strategies.remove("LOOP_BALANCE")
         self.strategies.append("DIAM_DIVERSITY")
         self.strategies.append("RUIN_RECREATE")
         
-        self.strat_wins = {s: 1.0 for s in self.strategies}
-        self.strat_tries = {s: 1 for s in self.strategies}
+        # 🔴 ПАТЧ: Відстежуємо успішність абсолютно всіх методів, включно з важкими кіками
+        all_tracked_strats = self.strategies + ["VNS_KICK", "ILS_PERTURBATION", "SEGMENT_RESTART", "IPC_CROSSOVER", "CORRIDOR_SEARCH"]
+        self.strat_wins = {s: 1.0 for s in all_tracked_strats}
+        self.strat_tries = {s: 1 for s in all_tracked_strats}
 
     def _configure_for_scale(self):
         n = self.ctx.num_pipes
@@ -158,21 +161,54 @@ class AnalyticalSolver:
             return self._make_diverse_seeds()
         
         seeds = []
-        if worker_id in [3, 7, 11, 15, 19]: role = "ADVENTURER"
-        elif worker_id == 0: role = "EXPLOITER"
-        elif worker_id == 1: role = "RELINKER"
-        elif worker_id == 2: role = "EXPLORER"
+        
+        # 🔴 ПАТЧ: Масштабований та безконфліктний розподіл каст
+        if worker_id % 4 == 3: 
+            role = "ADVENTURER" 
         else:
-            caste_roll = random.random()
-            if caste_roll < 0.30: role = "EXPLOITER"
-            elif caste_roll < 0.60: role = "RELINKER"
-            elif caste_roll < 0.85: role = "EXPLORER"
-            else: role = "ADVENTURER"
+            adjusted_id = worker_id - (worker_id // 4)
+            elite_roles = ["EXPLOITER", "RELINKER", "ARCHITECT", "EXPLORER"]
+            role = elite_roles[adjusted_id % 4]
             
         if role == "RELINKER" and len(archive) >= 2:
             self.ctx.log(f"[CASTE] Worker {worker_id+1:02d} -> 🧬 RELINKER (Path-Relinking between Top-4)")
             return self._make_relinked_seeds(archive)
-        elif role == "EXPLOITER" or (role == "RELINKER" and len(archive) < 2):
+            
+        # 🔴 ПАТЧ: Логіка ARCHITECT (Partial Solution Fixing)
+        elif role == "ARCHITECT" and len(archive) >= 3:
+            self.ctx.log(f"[CASTE] Worker {worker_id+1:02d} -> 🏛️ ARCHITECT (Consensus Fixing)")
+            top_sols = [x[1] for x in archive[:4]] 
+            
+            for _ in range(self.BEAM_WIDTH):
+                child = [0] * self.ctx.num_pipes
+                locked = set()
+                
+                for i in range(self.ctx.num_pipes):
+                    vals = [s[i] for s in top_sols]
+                    if max(vals) - min(vals) <= 1: 
+                        child[i] = int(round(sum(vals) / len(vals)))
+                        locked.add(i)
+                    else: 
+                        child[i] = random.randint(0, self.ctx.max_d_idx)
+                        
+                unlock_count = int(len(locked) * 0.1)
+                if unlock_count > 0:
+                    for p in random.sample(list(locked), unlock_count):
+                        locked.remove(p)
+
+                healed, ok, _ = self.ls.heal_network(child, locked)
+                if ok:
+                    squeezed = self.ls.gradient_squeeze(healed, locked_pipes=locked, quick_mode=True)
+                    if self.pool.get_basin_signature(squeezed) not in failed_basins:
+                        seeds.append(squeezed)
+            
+            if seeds: 
+                return seeds 
+            else:
+                self.ctx.log(f"[CASTE] Worker {worker_id+1:02d} -> ⚠️ ARCHITECT failed to find unique basin. Fallback to EXPLORER.")
+                role = "EXPLORER"
+
+        if role == "EXPLOITER" or (role == "RELINKER" and len(archive) < 2):
             self.ctx.log(f"[CASTE] Worker {worker_id+1:02d} -> 🎯 EXPLOITER (Micro-mutations on Top-2)")
             top_sols = [x[1] for x in archive[:2]]
             n_perturb = max(1, self.ctx.num_pipes // 15) 
@@ -187,7 +223,6 @@ class AnalyticalSolver:
             return self._make_diverse_seeds()
             
         for _ in range(self.BEAM_WIDTH):
-            # 🔴 ОНОВЛЕНО: Basin Avoidance (До 10 спроб знайти унікальний старт)
             for _ in range(10):
                 base_sol = random.choice(top_sols)
                 perturbed = list(base_sol)
@@ -201,9 +236,8 @@ class AnalyticalSolver:
                     squeezed = self.ls.gradient_squeeze(healed_sol, quick_mode=True)
                     if self.pool.get_basin_signature(squeezed) not in failed_basins:
                         seeds.append(squeezed)
-                        break # Успіх! Знайшли нову долину
+                        break 
             else:
-                # Якщо за 10 спроб не вийшли з ями, беремо як є
                 seeds.append(base_sol) 
             
         return seeds
@@ -310,7 +344,7 @@ class AnalyticalSolver:
                          self.pool.active_pool.insert(0, (c - (p_surplus * eff_bonus) - (run_best_cost * 0.1), c, swapped))
 
             if stagnation_counter >= 1 or round_idx % 2 == 0:
-                n_total = sum(self.strat_tries.values())
+                n_total = sum(self.strat_tries[s] for s in self.strategies)
                 
                 peer_archive = []
                 if shared_progress is not None:
@@ -343,11 +377,13 @@ class AnalyticalSolver:
                     strategy = "ILS_PERTURBATION"
                 elif stagnation_counter > 0 and stagnation_counter % 12 == 0:
                     strategy = "RUIN_RECREATE"
+                elif stagnation_counter > 0 and stagnation_counter % 7 == 0: # 🔴 ПАТЧ: VNS Kick
+                    strategy = "VNS_KICK"
                 else:
-                    valid_strats = [s for s in self.strategies if s not in ["SEGMENT_RESTART", "ILS_PERTURBATION", "IPC_CROSSOVER", "CORRIDOR_SEARCH"]]
-                    strategy = max(valid_strats, key=lambda s: (self.strat_wins[s] / self.strat_tries.get(s, 1)) + math.sqrt(2 * math.log(max(1, n_total)) / self.strat_tries.get(s, 1)))
+                    # 🔴 ПАТЧ: UCB1 використовує ТІЛЬКИ self.strategies (фільтри прибрано)
+                    strategy = max(self.strategies, key=lambda s: (self.strat_wins[s] / self.strat_tries[s]) + math.sqrt(2 * math.log(max(1, n_total)) / self.strat_tries[s]))
                 
-                self.strat_tries[strategy] = self.strat_tries.get(strategy, 0) + 1
+                self.strat_tries[strategy] += 1
                 self.ctx.log(f"[FORCE] Escalation Level: {stagnation_counter}/{stag_limit} -> Applying '{strategy}'...")
                 
                 if stagnation_counter >= stag_limit and self.pool.active_pool:
@@ -370,6 +406,7 @@ class AnalyticalSolver:
                 elif strategy == "IPC_CROSSOVER": forced_sol, locked, log_msg = self.kicker.crossover_with_peer_kick(kick_target, peer_to_cross[1], run_best_cost, peer_to_cross[0])
                 elif strategy == "CORRIDOR_SEARCH": forced_sol, locked, log_msg = self.kicker.corridor_search_kick(kick_target, peer_to_cross[1])
                 elif strategy == "ILS_PERTURBATION": forced_sol, locked, log_msg = self.kicker.ils_perturbation_kick(kick_target, stagnation_counter)
+                elif strategy == "VNS_KICK": forced_sol, locked, log_msg = self.kicker.vns_structured_kick(kick_target, stagnation_counter) # 🔴 ПАТЧ: Виклик VNS
                 elif strategy == "SHOCK": forced_sol, locked, log_msg = self.kicker.forcing_hand_kick(kick_target)
                 elif strategy == "BOTTLENECK": forced_sol, locked, log_msg = self.kicker.upstream_bottleneck_kick(kick_target)
                 elif strategy == "LOOP_BALANCE": forced_sol, locked, log_msg = self.kicker.loop_balancing_kick(kick_target, base_dyn_bonus)
@@ -382,17 +419,28 @@ class AnalyticalSolver:
                 if forced_sol and locked:
                     self.ctx.log(f"     -> {log_msg}")
                     
+                    # 🔴 ПАТЧ: Hyperband Squeeze
                     if strategy == "SEGMENT_RESTART":
                         final_sol = forced_sol 
-                    elif strategy in ["ILS_PERTURBATION", "IPC_CROSSOVER", "CORRIDOR_SEARCH"]:
-                        # 🔴 ПАТЧ 2: М'яка посадка. max_passes=2 замість None. 
-                        # Даємо пулу шанс дослідити "схил" нової долини, перш ніж жадібний пошук скотить його на дно.
-                        final_sol = self.ls.gradient_squeeze(forced_sol, locked_pipes=set(), max_passes=2, quick_mode=True, dyn_bonus=base_dyn_bonus)
-                    elif strategy == "RUIN_RECREATE":
-                        final_sol = self.ls.gradient_squeeze(forced_sol, locked_pipes=locked, max_passes=4, quick_mode=True, dyn_bonus=base_dyn_bonus)
                     else:
-                        starved_sol = self.ls.gradient_squeeze(forced_sol, locked_pipes=locked, max_passes=8, dyn_bonus=base_dyn_bonus)
-                        final_sol = self.ls.gradient_squeeze(starved_sol, dyn_bonus=base_dyn_bonus)
+                        quick_passes = 1 if strategy in ["RUIN_RECREATE", "VNS_KICK"] else 2
+                        locked_for_squeeze = set() if strategy in ["ILS_PERTURBATION", "IPC_CROSSOVER", "CORRIDOR_SEARCH"] else locked
+                        
+                        quick_sol = self.ls.gradient_squeeze(forced_sol, locked_pipes=locked_for_squeeze, max_passes=quick_passes, quick_mode=True, dyn_bonus=base_dyn_bonus)
+                        quick_cost, quick_p, quick_f, _ = self.ctx.get_cached_stats(quick_sol)
+                        
+                        stagnation_relax = min(0.05, (stagnation_counter / max(1, stag_limit)) * 0.015)
+                        water_level = global_best_cost * (1.05 - 0.05 * progress_ratio + stagnation_relax)
+                        
+                        is_promising = quick_f and quick_p >= self.ctx.simulator.config.h_min and (quick_cost < run_best_cost * 1.02 or quick_cost < water_level)
+                        
+                        if is_promising:
+                            # 🔴 ПАТЧ 1: Розумний Hyperband. Важкі кіки отримують "м'яку посадку" (2 проходи), легкі - глибоку (8).
+                            deep_passes = 2 if strategy in ["ILS_PERTURBATION", "VNS_KICK", "RUIN_RECREATE", "IPC_CROSSOVER", "CORRIDOR_SEARCH"] else 8
+                            self.ctx.log(f"        [HYPERBAND] Promising path detected ({quick_cost/1e6:.2f}M$). Deep Squeeze ({deep_passes} passes)...")
+                            final_sol = self.ls.gradient_squeeze(quick_sol, locked_pipes=locked_for_squeeze, max_passes=deep_passes, dyn_bonus=base_dyn_bonus)
+                        else:
+                            final_sol = quick_sol
                     
                     c, p, feas, _ = self.ctx.get_cached_stats(final_sol)
                     
@@ -407,10 +455,6 @@ class AnalyticalSolver:
                             eff_bonus = base_dyn_bonus * 0.3 if p_surplus < 1.0 else base_dyn_bonus
                         
                         score = c - (p_surplus * eff_bonus)
-                        # 🔴 ПАТЧ 1: Tidal Water Level. Чим довше стагнація, тим вище піднімається вода (до +5%), 
-                        # що дозволяє алгоритму "перелитись" через край локальної ями.
-                        stagnation_relax = min(0.05, (stagnation_counter / max(1, stag_limit)) * 0.015)
-                        water_level = global_best_cost * (1.05 - 0.05 * progress_ratio + stagnation_relax)
                         
                         if c < run_best_cost:
                             is_ghost = False
@@ -425,7 +469,7 @@ class AnalyticalSolver:
                                 self.pool.active_pool.insert(0, (score, c, final_sol))
                                 stagnation_counter = 0 
                                 
-                                if strategy in self.strategies: self.strat_wins[strategy] += 3.0 
+                                self.strat_wins[strategy] += 3.0 # 🔴 Пряме нарахування 
                                 self.ctx.log(f"   > [FORCE] 💎 Direct Record Update: -${diff:,.0f} ({run_best_cost/1e6:.4f}M$)")
                                 
                                 if run_best_cost < last_published_cost:
@@ -442,14 +486,14 @@ class AnalyticalSolver:
 
                         elif c < water_level and not self.pool.is_basin_tabu(final_sol):
                             self.pool.active_pool.append((score * 1.05, c, final_sol))
-                            if strategy in ["ILS_PERTURBATION", "IPC_CROSSOVER", "SEGMENT_RESTART", "CORRIDOR_SEARCH", "RUIN_RECREATE"]:
+                            if strategy in ["ILS_PERTURBATION", "IPC_CROSSOVER", "SEGMENT_RESTART", "CORRIDOR_SEARCH", "RUIN_RECREATE", "VNS_KICK"]:
                                 stagnation_counter = 0 
-                            if strategy in self.strategies: self.strat_wins[strategy] += 0.5
+                            self.strat_wins[strategy] += 0.5 # 🔴 Пряме нарахування 
                             self.ctx.log(f"     -> Added to Pool (Water Level Accept): {c/1e6:.4f}M$")
                         else:
                             self.ctx.log(f"     -> Rejected (Poor or Tabu Basin): {c/1e6:.4f}M$")
                             if strategy == "SEGMENT_RESTART":
-                                stagnation_counter = int(stag_limit * 1.5) # Знижуємо ескалацію
+                                stagnation_counter = int(stag_limit * 1.5)
                             
                         if path_sig: self.pool.kick_tabu_set.add(path_sig)
                     else:
@@ -568,7 +612,9 @@ class AnalyticalSolver:
                     pairs = list(itertools.combinations(range(len(sols)), 2))
                     avg_dist = sum(self.pool.hamming_distance(sols[a], sols[b]) for a, b in pairs) / len(pairs)
                     
-                    diversity_threshold = self.ctx.num_pipes // 8
+                    base_div = self.ctx.num_pipes // 8
+                    diversity_threshold = max(1, int(base_div * (1.0 - progress_ratio)))
+                    
                     if avg_dist < diversity_threshold:
                         if not reserve_pool:
                             self.ctx.log(f"   [DIVERSITY] Regenerating reserve pool...")
@@ -583,18 +629,18 @@ class AnalyticalSolver:
                                 score = c - (p_surplus * base_dyn_bonus)
                                 self.pool.active_pool[-1] = (score, c, fresh) 
             else:
-                self.ctx.log("     [EMERGENCY] Beam search deadlocked (no valid/diverse children). Flushing pool!")
+                self.ctx.log("     [EMERGENCY] Beam search deadlocked (no valid/diverse children). Flushing pool & tabu!")
                 self.pool.active_pool.clear()
+                # 🔴 ПАТЧ 2: Очищаємо пам'ять Tabu, щоб розблокувати простір навколо ями
+                self.pool.tabu_fingerprints.clear()
                 stagnation_counter += 1
 
-            # 🔴 ПАТЧ 3: Жорсткий Аварійний Респаун (Безумовне прийняття в пул)
             if not self.pool.active_pool:
                 self.ctx.log("     [EMERGENCY] Pool empty! Forcing ILS respawn...")
                 forced_rescue, locked_rescue, _ = self.kicker.ils_perturbation_kick(run_best_sol, 15)
                 if forced_rescue is not None:
                     c, p, feas, _ = self.ctx.get_cached_stats(forced_rescue)
                     if feas and p >= self.ctx.simulator.config.h_min:
-                        # Штучно робимо score ідеальним, щоб воно гарантовано прижилося в пулі
                         self.pool.active_pool.append((c - 1e6, c, forced_rescue))
                         stagnation_counter = 0 
                 else:
