@@ -14,15 +14,19 @@ class SolutionPool:
         self.basin_tabu.clear()
 
     def get_basin_signature(self, indices):
-        """Створює унікальний підпис долини на основі гідравлічного скелета"""
+        """Створює унікальний підпис долини на основі макро-блоків (chunking)"""
         n = self.ctx.num_pipes
-        top_k = max(3, n // 30)
-        
-        # Визначаємо структурно найважливіші труби для цього рішення
-        unit_losses = self.ctx.get_cached_heuristics(indices)
-        top_pipes = sorted(range(n), key=lambda i: unit_losses[i], reverse=True)[:top_k]
-        
-        return tuple(indices[p] for p in sorted(top_pipes))
+        if n <= 50:
+            return tuple(indices) # Для малих мереж точний збіг
+            
+        # Для великих мереж розбиваємо на сектори і беремо середній діаметр
+        chunk_size = max(1, n // 25)
+        sig = []
+        for i in range(0, n, chunk_size):
+            chunk = indices[i:i+chunk_size]
+            sig.append(round(sum(chunk) / len(chunk)))
+            
+        return tuple(sig)
 
     def is_basin_tabu(self, indices):
         return self.get_basin_signature(indices) in self.basin_tabu

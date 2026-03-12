@@ -419,24 +419,33 @@ class AnalyticalSolver:
                 if forced_sol and locked:
                     self.ctx.log(f"     -> {log_msg}")
                     
-                    # 🔴 ПАТЧ: Hyperband Squeeze
+                    # 🔴 ПАТЧ: Глобальний розрахунок Water Level з ширшими воротами для великих мереж
+                    stagnation_relax = min(0.05, (stagnation_counter / max(1, stag_limit)) * 0.015)
+                    base_margin = 0.08 if self.ctx.num_pipes >= 200 else 0.05
+                    water_level = global_best_cost * (1.0 + base_margin * (1.0 - progress_ratio) + stagnation_relax)
+
                     if strategy == "SEGMENT_RESTART":
                         final_sol = forced_sol 
                     else:
-                        quick_passes = 1 if strategy in ["RUIN_RECREATE", "VNS_KICK"] else 2
+                        is_heavy = strategy in ["ILS_PERTURBATION", "VNS_KICK", "RUIN_RECREATE", "IPC_CROSSOVER", "CORRIDOR_SEARCH"]
+                        
+                        # Для великих мереж 1 проходу недостатньо, щоб оцінити важкий кік
+                        base_quick = 2 if self.ctx.num_pipes >= 200 else 1
+                        quick_passes = base_quick if is_heavy else base_quick + 1
+                        
                         locked_for_squeeze = set() if strategy in ["ILS_PERTURBATION", "IPC_CROSSOVER", "CORRIDOR_SEARCH"] else locked
                         
                         quick_sol = self.ls.gradient_squeeze(forced_sol, locked_pipes=locked_for_squeeze, max_passes=quick_passes, quick_mode=True, dyn_bonus=base_dyn_bonus)
                         quick_cost, quick_p, quick_f, _ = self.ctx.get_cached_stats(quick_sol)
                         
-                        stagnation_relax = min(0.05, (stagnation_counter / max(1, stag_limit)) * 0.015)
-                        water_level = global_best_cost * (1.05 - 0.05 * progress_ratio + stagnation_relax)
+                        # Даємо важким стратегіям більший допуск (вони сильно падають у ціні під час Deep Squeeze)
+                        tolerance = 1.05 if is_heavy else 1.02
+                        hyperband_threshold = max(run_best_cost * tolerance, water_level * 1.02)
                         
-                        is_promising = quick_f and quick_p >= self.ctx.simulator.config.h_min and (quick_cost < run_best_cost * 1.02 or quick_cost < water_level)
+                        is_promising = quick_f and quick_p >= self.ctx.simulator.config.h_min and (quick_cost < hyperband_threshold)
                         
                         if is_promising:
-                            # 🔴 ПАТЧ 1: Розумний Hyperband. Важкі кіки отримують "м'яку посадку" (2 проходи), легкі - глибоку (8).
-                            deep_passes = 2 if strategy in ["ILS_PERTURBATION", "VNS_KICK", "RUIN_RECREATE", "IPC_CROSSOVER", "CORRIDOR_SEARCH"] else 8
+                            deep_passes = 6 if is_heavy else 8
                             self.ctx.log(f"        [HYPERBAND] Promising path detected ({quick_cost/1e6:.2f}M$). Deep Squeeze ({deep_passes} passes)...")
                             final_sol = self.ls.gradient_squeeze(quick_sol, locked_pipes=locked_for_squeeze, max_passes=deep_passes, dyn_bonus=base_dyn_bonus)
                         else:

@@ -66,7 +66,6 @@ class KickStrategies:
         return kicked, locked, f"BOTTLENECK: Boosted Pipe {best_candidate} ({reason})"
 
     def topological_inversion_kick(self, indices, tabu_set):
-        """ПАТЧ: Iterative Penalized Dijkstra замість nx.shortest_simple_paths"""
         _, _, _, crit_node = self.ctx.get_cached_stats(indices)
         if not crit_node or crit_node == "ERR": return None, None, "", None
         
@@ -234,7 +233,6 @@ class KickStrategies:
         return chosen[1], chosen[2], chosen[3]
     
     def diameter_diversity_kick(self, indices, stagnation_counter):
-        # 🔴 ПАТЧ: Стратегія спрацьовує завжди, коли її викликає UCB1
         kicked, locked = list(indices), set()
         
         base_n = max(5, int(self.ctx.num_pipes * 0.12))
@@ -243,7 +241,6 @@ class KickStrategies:
         
         pipes_to_change = random.sample(range(self.ctx.num_pipes), n_to_change)
         
-        # Визначаємо найпопулярніший діаметр для внесення хаосу
         from collections import Counter
         diam_counts = Counter(indices)
         most_common_diam = diam_counts.most_common(1)[0][0]
@@ -268,7 +265,6 @@ class KickStrategies:
         _, _, _, crit_node = self.ctx.get_cached_stats(indices)
         if not crit_node or crit_node == "ERR": return None, None, ""
 
-        # 🔴 ПАТЧ: Ротація точки руйнування при глибокій стагнації
         if stagnation_counter > 8:
             all_nodes = list(self.ctx.base_G_flow.nodes())
             ruin_center = random.choice(all_nodes)
@@ -278,13 +274,16 @@ class KickStrategies:
         max_pct = 0.20 if self.ctx.num_pipes <= 50 else 0.40
         base_pct = random.uniform(0.10, max_pct / 2)
         target_pct = min(max_pct, base_pct + (stagnation_counter * 0.025)) 
+        
         target_pipes = max(3, int(self.ctx.num_pipes * target_pct))
+        
+        # 🔴 ЛІМІТЕР МАСТАБУ: Не більше 35 труб (для великих мереж)
+        target_pipes = min(35, target_pipes)
         
         pipe_with_dist = []
         seen_pipes = set()
         
         try:
-            # Шукаємо від ruin_center замість crit_node
             for node, dist in nx.single_source_shortest_path_length(self.ctx.base_G_flow, ruin_center, cutoff=15).items():
                 for p in self.ctx.node_to_pipes.get(node, []):
                     if p not in seen_pipes:
@@ -318,8 +317,12 @@ class KickStrategies:
     def ils_perturbation_kick(self, indices, stagnation_counter):
         """ILS: Великий сліпий стрибок для виходу з макро-долини"""
         max_pct = 0.15 if self.ctx.num_pipes <= 50 else 0.35
-        pct = min(max_pct, (max_pct / 2) + stagnation_counter * 0.02)
+        pct = min(max_pct, 0.15 + (stagnation_counter * 0.02))
+        
         n_perturb = max(4, int(self.ctx.num_pipes * pct))
+        
+        # 🔴 ЛІМІТЕР МАСТАБУ: Ніколи не ламаємо більше 25 труб за раз, навіть у гігантських мережах
+        n_perturb = min(n_perturb, 25)
         
         perturbed = list(indices)
         pipes = random.sample(range(self.ctx.num_pipes), n_perturb)
@@ -330,20 +333,21 @@ class KickStrategies:
         healed, ok, _ = self.ls.heal_network(perturbed, set())
         if not ok: return None, None, ""
         
-        msg = f"ILS-PERTURB: Random jump on {n_perturb} pipes ({pct:.0%}), new basin entry."
+        msg = f"ILS-PERTURB: Random jump on {n_perturb} pipes ({pct:.0%} bounded), new basin entry."
         return healed, set(pipes), msg
     
     def vns_structured_kick(self, indices, stagnation_level):
         """Variable Neighborhood Search: збільшує розмір і радіус удару зі зростанням стагнації"""
         n = self.ctx.num_pipes
-        # Розміри околиці залежно від рівня стагнації (від 5% до 25%)
         neighborhood_sizes = [0.05, 0.10, 0.15, 0.20, 0.25]
         k_idx = min(stagnation_level // 2, len(neighborhood_sizes) - 1)
         pct = neighborhood_sizes[k_idx]
         
         n_change = max(3, int(n * pct))
         
-        # Структурована зміна: вибираємо найгірші труби за unit_loss
+        # 🔴 ЛІМІТЕР МАСТАБУ: VNS може вдарити трохи сильніше, але макс 30 труб
+        n_change = min(n_change, 30)
+        
         unit_losses = self.ctx.get_cached_heuristics(indices)
         worst_pipes = sorted(range(n), key=lambda i: unit_losses[i], reverse=True)[:n_change + max(5, n//10)]
         target_pipes = random.sample(worst_pipes, n_change)
@@ -351,7 +355,6 @@ class KickStrategies:
         kicked = list(indices)
         locked = set()
         
-        # Сила удару теж зростає зі стагнацією
         jump_size = 1 if k_idx < 2 else (2 if k_idx < 4 else 3)
         
         for p in target_pipes:
@@ -364,26 +367,23 @@ class KickStrategies:
         
         return healed, locked, f"VNS-KICK (Level {k_idx}): Shifted {n_change} high-loss pipes by ±{jump_size}. Healed {boosts}x."
 
-    # 🔴 ВИПРАВЛЕНО: Додано аргумент dyn_bonus
     def segment_restart_kick(self, indices, dyn_bonus):
-        """Segment Restart: Заморожує частину і скидає решту до максимуму"""
+        """Segment Restart: Заморожує частину і частково скидає решту"""
         n = self.ctx.num_pipes
         
         freeze_pct = 0.50 if n <= 50 else 0.20
         n_freeze = max(5, int(n * freeze_pct)) 
         
-        # 🔴 ПАТЧ 1: Додаємо рандомізацію у вибір заморожених труб
         top_candidates = self.ls.get_high_impact_pipes(indices, n_freeze + max(3, n // 10))
         frozen_pipes = set(random.sample(top_candidates, min(n_freeze, len(top_candidates))))
         
         fresh = list(indices)
         for p in range(n):
             if p not in frozen_pipes:
-                # 🔴 ПАТЧ 1: Рандомізація скидання (10% шанс не йти до самого максимуму)
-                if random.random() < 0.1 and self.ctx.max_d_idx > 0:
-                    fresh[p] = self.ctx.max_d_idx - 1
-                else:
-                    fresh[p] = self.ctx.max_d_idx 
+                # 🔴 ПАТЧ: Обережне роздування. Замість вибуху вартості, піднімаємо лише ~35% вільних труб на 1-2 кроки
+                if random.random() < 0.35:
+                    boost = random.choice([1, 2])
+                    fresh[p] = min(self.ctx.max_d_idx, fresh[p] + boost)
                 
         squeezed = self.ls.gradient_squeeze(fresh, locked_pipes=frozen_pipes, max_passes=None, quick_mode=False, dyn_bonus=dyn_bonus)
         
@@ -391,7 +391,7 @@ class KickStrategies:
         if not feas or p_val < self.ctx.simulator.config.h_min:
             return None, None, ""
             
-        return squeezed, frozen_pipes, f"SEGMENT-RESTART: Froze {len(frozen_pipes)} pipes, Top-Down squeeze."
+        return squeezed, frozen_pipes, f"SEGMENT-RESTART: Froze {len(frozen_pipes)} pipes, partial Top-Down squeeze."
 
     def crossover_with_peer_kick(self, my_sol, peer_sol, my_cost, peer_cost):
         """Схрещування з успішним рішенням іншого воркера"""
@@ -406,9 +406,8 @@ class KickStrategies:
             else:
                 chosen = a if random.random() < p_mine else b
                 child.append(chosen)
-                locked.add(i) # Блокуємо змінені труби
+                locked.add(i)
                 
-        # 🔴 ПАТЧ 3 (ВИПРАВЛЕНО): Передаємо locked, щоб heal_network не затер наші свіжі зміни!
         healed, ok, _ = self.ls.heal_network(child, locked)
         if not ok: return None, None, ""
         
@@ -421,7 +420,6 @@ class KickStrategies:
             
         locked = set()
         for i in diff_pipes:
-            # 🔴 Зберігаємо фізичну структуру: беремо ген від А або Б, а не середнє
             if random.random() < 0.5:
                 child[i] = sol_B[i]
             locked.add(i)
