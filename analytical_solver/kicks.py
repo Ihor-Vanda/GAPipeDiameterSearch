@@ -320,9 +320,9 @@ class KickStrategies:
         pct = min(max_pct, 0.15 + (stagnation_counter * 0.02))
         
         n_perturb = max(4, int(self.ctx.num_pipes * pct))
-        
-        # 🔴 ЛІМІТЕР МАСТАБУ: Ніколи не ламаємо більше 25 труб за раз, навіть у гігантських мережах
-        n_perturb = min(n_perturb, 25)
+
+        hard_limit = 12 if self.ctx.num_pipes >= 200 else 25
+        n_perturb = min(n_perturb, hard_limit)
         
         perturbed = list(indices)
         pipes = random.sample(range(self.ctx.num_pipes), n_perturb)
@@ -344,9 +344,8 @@ class KickStrategies:
         pct = neighborhood_sizes[k_idx]
         
         n_change = max(3, int(n * pct))
-        
-        # 🔴 ЛІМІТЕР МАСТАБУ: VNS може вдарити трохи сильніше, але макс 30 труб
-        n_change = min(n_change, 30)
+        hard_limit = 15 if self.ctx.num_pipes >= 200 else 30
+        n_change = min(n_change, hard_limit)
         
         unit_losses = self.ctx.get_cached_heuristics(indices)
         worst_pipes = sorted(range(n), key=lambda i: unit_losses[i], reverse=True)[:n_change + max(5, n//10)]

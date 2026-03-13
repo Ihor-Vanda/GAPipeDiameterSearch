@@ -162,7 +162,6 @@ class AnalyticalSolver:
         
         seeds = []
         
-        # 🔴 ПАТЧ: Масштабований та безконфліктний розподіл каст
         if worker_id % 4 == 3: 
             role = "ADVENTURER" 
         else:
@@ -174,7 +173,6 @@ class AnalyticalSolver:
             self.ctx.log(f"[CASTE] Worker {worker_id+1:02d} -> 🧬 RELINKER (Path-Relinking between Top-4)")
             return self._make_relinked_seeds(archive)
             
-        # 🔴 ПАТЧ: Логіка ARCHITECT (Partial Solution Fixing)
         elif role == "ARCHITECT" and len(archive) >= 3:
             self.ctx.log(f"[CASTE] Worker {worker_id+1:02d} -> 🏛️ ARCHITECT (Consensus Fixing)")
             top_sols = [x[1] for x in archive[:4]] 
@@ -198,7 +196,8 @@ class AnalyticalSolver:
 
                 healed, ok, _ = self.ls.heal_network(child, locked)
                 if ok:
-                    squeezed = self.ls.gradient_squeeze(healed, locked_pipes=locked, quick_mode=True)
+                    c_child, _, _, _ = self.ctx.get_cached_stats(healed)
+                    squeezed = self.ls.gradient_squeeze(healed, locked_pipes=locked, quick_mode=True, dyn_bonus=c_child * 0.001)
                     if self.pool.get_basin_signature(squeezed) not in failed_basins:
                         seeds.append(squeezed)
             
@@ -277,9 +276,13 @@ class AnalyticalSolver:
         stagnation_counter = 0
         self.ctx.log(f"   > Seeds initialized. Baseline Target: {run_best_cost/1e6:.4f}M$")
 
+        stag_limit = 4 
         round_idx = 0
         last_published_cost = float('inf')
         epoch_start_sims = self.ctx.sim_count 
+        
+        last_injected_peer = {} 
+        rescue_fired = False 
         
         while True:
             self.pool.current_round = round_idx 
@@ -292,6 +295,38 @@ class AnalyticalSolver:
                 if gb and gb[0] < global_best_cost:
                     global_best_cost = gb[0]
                     self.ctx.log(f"   > [IPC] 📡 Received new Global Bound from peer: {global_best_cost/1e6:.4f}M$")
+                
+                for i in range(self.n_workers):
+                    if i == worker_id: continue
+                    peer = shared_progress.get(f'best_sol_{i}')
+                    last_cost = last_injected_peer.get(i, float('inf'))
+                    
+                    if peer and peer[0] < run_best_cost * 0.995 and peer[0] < last_cost - 1.0:
+                        peer_sol = list(peer[1])
+                        c_p, p_p, feas_p, _ = self.ctx.get_cached_stats(peer_sol)
+                        if feas_p and p_p >= self.ctx.simulator.config.h_min:
+                            if not self.pool.is_basin_tabu(peer_sol):
+                                p_surplus = p_p - self.ctx.simulator.config.h_min
+                                score = c_p - (p_surplus * base_dyn_bonus)
+                                self.pool.active_pool.append((score, c_p, peer_sol))
+                                self.ctx.log(f"     [IPC] 💉 Passively injected peer W{i+1} solution ({c_p/1e6:.4f}M$)")
+                                last_injected_peer[i] = peer[0] # Оновлюємо трекер
+
+                global_lag = (run_best_cost - global_best_cost) / max(global_best_cost, 1)
+                if global_lag > 0.02 and stagnation_counter >= stag_limit * 2:
+                    if gb and gb[1]:
+                        self.ctx.log(f"   [RESCUE] Worker lagging by {global_lag:.1%}. Abandoning dead basin and adopting Global Best {gb[0]/1e6:.4f}M$!")
+                        gb_sol = list(gb[1])
+                        c_gb, p_gb, feas_gb, _ = self.ctx.get_cached_stats(gb_sol)
+                        if feas_gb and p_gb >= self.ctx.simulator.config.h_min:
+                            run_best_cost = c_gb
+                            run_best_sol = gb_sol
+                            p_surplus = p_gb - self.ctx.simulator.config.h_min
+                            score = c_gb - (p_surplus * base_dyn_bonus)
+                            self.pool.active_pool.insert(0, (score - 1e6, c_gb, gb_sol))
+                            stagnation_counter = 0
+                            self.pool.kick_tabu_set.clear()
+                            rescue_fired = True
 
             if shared_progress is not None and worker_id is not None:
                 shared_progress[worker_id] = {"round": round_idx + 1, "sims": self.ctx.sim_count, "best_cost": run_best_cost}
@@ -301,7 +336,9 @@ class AnalyticalSolver:
             
             if elapsed > time_budget or epoch_sims >= self.max_sims: break
                 
-            just_flushed = False
+            just_flushed = rescue_fired
+            rescue_fired = False
+            
             progress_ratio = min(1.0, epoch_sims / max(1, self.max_sims)) 
             is_late_game = progress_ratio > 0.5 
             stag_limit = 4 + int(4 * progress_ratio) 
@@ -377,10 +414,9 @@ class AnalyticalSolver:
                     strategy = "ILS_PERTURBATION"
                 elif stagnation_counter > 0 and stagnation_counter % 12 == 0:
                     strategy = "RUIN_RECREATE"
-                elif stagnation_counter > 0 and stagnation_counter % 7 == 0: # 🔴 ПАТЧ: VNS Kick
+                elif stagnation_counter > 0 and stagnation_counter % 7 == 0:
                     strategy = "VNS_KICK"
                 else:
-                    # 🔴 ПАТЧ: UCB1 використовує ТІЛЬКИ self.strategies (фільтри прибрано)
                     strategy = max(self.strategies, key=lambda s: (self.strat_wins[s] / self.strat_tries[s]) + math.sqrt(2 * math.log(max(1, n_total)) / self.strat_tries[s]))
                 
                 self.strat_tries[strategy] += 1
@@ -388,8 +424,14 @@ class AnalyticalSolver:
                 
                 if stagnation_counter >= stag_limit and self.pool.active_pool:
                     self.ctx.log("     [DIVERSITY] Stagnation high. Kicking the most diverse solution in pool.")
+                    
+                    valid_pool = [x for x in self.pool.active_pool 
+                                  if self.ctx.get_cached_stats(x[2])[2] and 
+                                     self.ctx.get_cached_stats(x[2])[1] >= self.ctx.simulator.config.h_min]
+                    source_pool = valid_pool if valid_pool else self.pool.active_pool
+                    
                     kick_target = max(
-                        [x[2] for x in self.pool.active_pool],
+                        [x[2] for x in source_pool],
                         key=lambda s: self.pool.hamming_distance(s, run_best_sol)
                     )
                 else:
@@ -406,7 +448,7 @@ class AnalyticalSolver:
                 elif strategy == "IPC_CROSSOVER": forced_sol, locked, log_msg = self.kicker.crossover_with_peer_kick(kick_target, peer_to_cross[1], run_best_cost, peer_to_cross[0])
                 elif strategy == "CORRIDOR_SEARCH": forced_sol, locked, log_msg = self.kicker.corridor_search_kick(kick_target, peer_to_cross[1])
                 elif strategy == "ILS_PERTURBATION": forced_sol, locked, log_msg = self.kicker.ils_perturbation_kick(kick_target, stagnation_counter)
-                elif strategy == "VNS_KICK": forced_sol, locked, log_msg = self.kicker.vns_structured_kick(kick_target, stagnation_counter) # 🔴 ПАТЧ: Виклик VNS
+                elif strategy == "VNS_KICK": forced_sol, locked, log_msg = self.kicker.vns_structured_kick(kick_target, stagnation_counter)
                 elif strategy == "SHOCK": forced_sol, locked, log_msg = self.kicker.forcing_hand_kick(kick_target)
                 elif strategy == "BOTTLENECK": forced_sol, locked, log_msg = self.kicker.upstream_bottleneck_kick(kick_target)
                 elif strategy == "LOOP_BALANCE": forced_sol, locked, log_msg = self.kicker.loop_balancing_kick(kick_target, base_dyn_bonus)
@@ -419,17 +461,17 @@ class AnalyticalSolver:
                 if forced_sol and locked:
                     self.ctx.log(f"     -> {log_msg}")
                     
-                    # 🔴 ПАТЧ: Глобальний розрахунок Water Level з ширшими воротами для великих мереж
                     stagnation_relax = min(0.05, (stagnation_counter / max(1, stag_limit)) * 0.015)
                     base_margin = 0.08 if self.ctx.num_pipes >= 200 else 0.05
-                    water_level = global_best_cost * (1.0 + base_margin * (1.0 - progress_ratio) + stagnation_relax)
+                    base_water = global_best_cost * (1.0 + base_margin * (1.0 - progress_ratio) + stagnation_relax)
+                    local_floor = run_best_cost * 1.03
+                    water_level = max(base_water, local_floor)
 
                     if strategy == "SEGMENT_RESTART":
                         final_sol = forced_sol 
                     else:
                         is_heavy = strategy in ["ILS_PERTURBATION", "VNS_KICK", "RUIN_RECREATE", "IPC_CROSSOVER", "CORRIDOR_SEARCH"]
                         
-                        # Для великих мереж 1 проходу недостатньо, щоб оцінити важкий кік
                         base_quick = 2 if self.ctx.num_pipes >= 200 else 1
                         quick_passes = base_quick if is_heavy else base_quick + 1
                         
@@ -438,8 +480,11 @@ class AnalyticalSolver:
                         quick_sol = self.ls.gradient_squeeze(forced_sol, locked_pipes=locked_for_squeeze, max_passes=quick_passes, quick_mode=True, dyn_bonus=base_dyn_bonus)
                         quick_cost, quick_p, quick_f, _ = self.ctx.get_cached_stats(quick_sol)
                         
-                        # Даємо важким стратегіям більший допуск (вони сильно падають у ціні під час Deep Squeeze)
-                        tolerance = 1.05 if is_heavy else 1.02
+                        if stagnation_counter > stag_limit * 2:
+                            tolerance = 1.15 
+                        else:
+                            tolerance = 1.05 if is_heavy else 1.02
+                            
                         hyperband_threshold = max(run_best_cost * tolerance, water_level * 1.02)
                         
                         is_promising = quick_f and quick_p >= self.ctx.simulator.config.h_min and (quick_cost < hyperband_threshold)
@@ -478,7 +523,7 @@ class AnalyticalSolver:
                                 self.pool.active_pool.insert(0, (score, c, final_sol))
                                 stagnation_counter = 0 
                                 
-                                self.strat_wins[strategy] += 3.0 # 🔴 Пряме нарахування 
+                                self.strat_wins[strategy] += 3.0  
                                 self.ctx.log(f"   > [FORCE] 💎 Direct Record Update: -${diff:,.0f} ({run_best_cost/1e6:.4f}M$)")
                                 
                                 if run_best_cost < last_published_cost:
@@ -497,7 +542,7 @@ class AnalyticalSolver:
                             self.pool.active_pool.append((score * 1.05, c, final_sol))
                             if strategy in ["ILS_PERTURBATION", "IPC_CROSSOVER", "SEGMENT_RESTART", "CORRIDOR_SEARCH", "RUIN_RECREATE", "VNS_KICK"]:
                                 stagnation_counter = 0 
-                            self.strat_wins[strategy] += 0.5 # 🔴 Пряме нарахування 
+                            self.strat_wins[strategy] += 0.5 
                             self.ctx.log(f"     -> Added to Pool (Water Level Accept): {c/1e6:.4f}M$")
                         else:
                             self.ctx.log(f"     -> Rejected (Poor or Tabu Basin): {c/1e6:.4f}M$")
@@ -570,38 +615,48 @@ class AnalyticalSolver:
                     if not is_diverse and not just_flushed: continue
 
                     real_cost, p_min, feas_min, _ = self.ctx.get_cached_stats(refined_sol)
-                    if feas_min and p_min >= self.ctx.simulator.config.h_min:
+                    
+                    if feas_min:
                         real_p_surplus = p_min - self.ctx.simulator.config.h_min
-                        eff_bonus = base_dyn_bonus * 0.3 if real_p_surplus < 1.0 else (base_dyn_bonus * 2.0 if real_p_surplus > 15.0 else base_dyn_bonus)
                         
-                        unique_next_pool.append((real_cost - (real_p_surplus * eff_bonus), real_cost, refined_sol))
-                        self.pool.add_to_tabu(refined_sol, real_cost)
+                        is_strictly_valid = (real_p_surplus >= 0.0)
+                        is_epsilon_valid = (real_p_surplus >= -0.5) 
                         
-                        if real_cost < run_best_cost:
-                            is_ghost = False
-                            if (run_best_cost - real_cost) > (run_best_cost * 0.02):
-                                is_ghost = self.ctx.is_ghost_solution(refined_sol, real_cost)
-                                
-                            if is_ghost:
-                                self.ctx.log(f"   > [SHIELD] Beam illusion blocked ({real_cost/1e6:.4f}M$).")
-                                continue 
-
-                            diff = run_best_cost - real_cost
-                            run_best_cost, run_best_sol = real_cost, refined_sol
-                            found_new_record = True
-                            self.ctx.log(f"   > [R{round_idx+1}] 💎 New Record: -${diff:,.0f} ({run_best_cost/1e6:.4f}M$)")
+                        if is_strictly_valid or is_epsilon_valid:
+                            if is_strictly_valid:
+                                eff_bonus = base_dyn_bonus * 0.3 if real_p_surplus < 1.0 else (base_dyn_bonus * 2.0 if real_p_surplus > 15.0 else base_dyn_bonus)
+                                score = real_cost - (real_p_surplus * eff_bonus)
+                            else:
+                                score = real_cost + (abs(real_p_surplus) * base_dyn_bonus * 50.0)
                             
-                            if run_best_cost < last_published_cost:
-                                if shared_progress is not None:
-                                    shared_progress[f'best_sol_{worker_id}'] = (run_best_cost, list(run_best_sol))
-                                last_published_cost = run_best_cost
+                            unique_next_pool.append((score, real_cost, refined_sol))
+                            self.pool.add_to_tabu(refined_sol, real_cost)
+                            
+                            if is_strictly_valid and real_cost < run_best_cost:
+                                is_ghost = False
+                                if (run_best_cost - real_cost) > (run_best_cost * 0.02):
+                                    is_ghost = self.ctx.is_ghost_solution(refined_sol, real_cost)
+                                    
+                                if is_ghost:
+                                    self.ctx.log(f"   > [SHIELD] Beam illusion blocked ({real_cost/1e6:.4f}M$).")
+                                    continue 
 
-                            if run_best_cost < global_best_cost:
-                                global_best_cost = run_best_cost
-                                if shared_progress is not None:
-                                    current_gb = shared_progress.get('global_best', (float('inf'), []))
-                                    if run_best_cost < current_gb[0]:
-                                        shared_progress['global_best'] = (run_best_cost, list(run_best_sol))
+                                diff = run_best_cost - real_cost
+                                run_best_cost, run_best_sol = real_cost, refined_sol
+                                found_new_record = True
+                                self.ctx.log(f"   > [R{round_idx+1}] 💎 New Record: -${diff:,.0f} ({run_best_cost/1e6:.4f}M$)")
+                                
+                                if run_best_cost < last_published_cost:
+                                    if shared_progress is not None:
+                                        shared_progress[f'best_sol_{worker_id}'] = (run_best_cost, list(run_best_sol))
+                                    last_published_cost = run_best_cost
+
+                                if run_best_cost < global_best_cost:
+                                    global_best_cost = run_best_cost
+                                    if shared_progress is not None:
+                                        current_gb = shared_progress.get('global_best', (float('inf'), []))
+                                        if run_best_cost < current_gb[0]:
+                                            shared_progress['global_best'] = (run_best_cost, list(run_best_sol))
 
             if unique_next_pool:
                 unique_next_pool.sort(key=lambda x: x[0])
@@ -640,7 +695,6 @@ class AnalyticalSolver:
             else:
                 self.ctx.log("     [EMERGENCY] Beam search deadlocked (no valid/diverse children). Flushing pool & tabu!")
                 self.pool.active_pool.clear()
-                # 🔴 ПАТЧ 2: Очищаємо пам'ять Tabu, щоб розблокувати простір навколо ями
                 self.pool.tabu_fingerprints.clear()
                 stagnation_counter += 1
 
@@ -652,12 +706,17 @@ class AnalyticalSolver:
                     if feas and p >= self.ctx.simulator.config.h_min:
                         self.pool.active_pool.append((c - 1e6, c, forced_rescue))
                         stagnation_counter = 0 
-                else:
-                    safe_seed = [random.randint(0, self.ctx.max_d_idx) for _ in range(self.ctx.num_pipes)]
-                    healed_seed, ok, _ = self.ls.heal_network(safe_seed, set())
+                
+                if not self.pool.active_pool:
+                    self.ctx.log("     [EMERGENCY] Random respawn failed. Using Micro-Mutation fallback!")
+                    safe_seed = list(run_best_sol)
+                    p_idx = random.randint(0, self.ctx.num_pipes - 1)
+                    safe_seed[p_idx] = min(self.ctx.max_d_idx, safe_seed[p_idx] + 1)
+                    
+                    healed_seed, ok, _ = self.ls.heal_network(safe_seed, {p_idx})
                     if ok:
                         c, p, feas, _ = self.ctx.get_cached_stats(healed_seed)
-                        if feas and p >= self.ctx.simulator.config.h_min:
+                        if feas:
                             self.pool.active_pool.append((c - 1e6, c, healed_seed))
                             stagnation_counter = 0
 
@@ -686,7 +745,6 @@ class AnalyticalSolver:
         else:
             shared_progress = None
 
-        # 🔴 ОНОВЛЕНО: Глобальний трекер мертвих долин
         global_failed_basins = set()
 
         for epoch in range(epochs):
@@ -698,7 +756,6 @@ class AnalyticalSolver:
             seed_modifier = random.randint(1, 10000)
             tasks = []
             for i in range(self.n_workers):
-                # 🔴 ОНОВЛЕНО: Передаємо global_failed_basins у таску
                 tasks.append((
                     self.ctx.diameters, self.ctx.v_opt, time_per_epoch, 
                     global_best_cost, global_archive, 
@@ -755,7 +812,6 @@ class AnalyticalSolver:
 
                 for wid, res in async_results:
                     try:
-                        # 🔴 ОНОВЛЕНО: Розпаковуємо worker_basins та оновлюємо глобальну пам'ять
                         c, sol, _, sims_done, worker_basins = res.get()
                         if sol is not None: epoch_results.append((c, sol))
                         global_failed_basins.update(worker_basins)
@@ -781,18 +837,26 @@ class AnalyticalSolver:
                     global_best_sol = best_epoch_sol
                     print(f"\n 🏆 [EPOCH {epoch+1}] NEW GLOBAL BEST: {global_best_cost/1e6:.4f}M$ 🏆\n")
 
+                # 🔴 ПАТЧ 4: Фільтрація глобального архіву за унікальністю макро-долин
                 elite_archive = [epoch_results_sorted[0]]
                 diverse_archive = []
-                req_dist = self.ctx.num_pipes // 10
+                
+                # Записуємо підпис найкращого рішення, щоб інші з ним не збігалися
+                archive_signatures = {self.pool.get_basin_signature(epoch_results_sorted[0][1])}
 
                 for cost, sol in epoch_results_sorted[1:]:
-                    min_dist = min(
-                        (sum(a != b for a, b in zip(sol, s)) for _, s in elite_archive + diverse_archive),
-                        default=float('inf')
-                    )
-                    if min_dist > req_dist and len(diverse_archive) < 4:
+                    sig = self.pool.get_basin_signature(sol)
+                    if sig not in archive_signatures:
                         diverse_archive.append((cost, sol))
-                    elif len(elite_archive) < 2 and min_dist <= req_dist:
+                        archive_signatures.add(sig)
+                        
+                    if len(diverse_archive) >= 4:
+                        break # Достатньо 4 унікальних макро-долин
+                
+                # Добираємо елітою, якщо не вистачає різноманітних
+                for cost, sol in epoch_results_sorted[1:]:
+                    if len(elite_archive) + len(diverse_archive) >= 6: break
+                    if (cost, sol) not in diverse_archive:
                         elite_archive.append((cost, sol))
 
                 global_archive = elite_archive + diverse_archive

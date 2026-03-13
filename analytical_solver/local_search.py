@@ -104,6 +104,7 @@ class LocalSearch:
         return current_indices
 
     def heal_network(self, indices, locked_pipes):
+        import random
         kicked = list(indices)
         boosts = 0
         for _ in range(40): 
@@ -114,18 +115,29 @@ class LocalSearch:
             if not path_pipes: return kicked, False, boosts
             
             unit_losses = self.ctx.get_cached_heuristics(kicked)
-            worst_pipe, max_loss = -1, -1.0
             
+            # 🔴 ПАТЧ 1: Стохастичне зцілення (Tournament Selection)
+            candidates = []
             for idx in path_pipes:
                 if idx in locked_pipes: continue 
                 if kicked[idx] < self.ctx.max_d_idx: 
-                    if unit_losses[idx] > max_loss:
-                        max_loss, worst_pipe = unit_losses[idx], idx
+                    candidates.append((idx, unit_losses[idx]))
+                    
+            if not candidates:
+                break
+                
+            candidates.sort(key=lambda x: x[1], reverse=True)
+            pool_size = min(3, len(candidates))
             
-            if worst_pipe != -1:
-                kicked[worst_pipe] += 1
-                boosts += 1
-            else: break
+            # З ймовірністю 70% лікуємо найкритичнішу трубу, з 30% - шукаємо дешевші альтернативи (2-гу чи 3-тю)
+            if random.random() < 0.7:
+                worst_pipe = candidates[0][0]
+            else:
+                worst_pipe = random.choice(candidates[:pool_size])[0]
+            
+            kicked[worst_pipe] += 1
+            boosts += 1
+            
         return kicked, False, boosts
 
     def swap_search(self, indices, dyn_bonus):
