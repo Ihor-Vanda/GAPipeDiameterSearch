@@ -111,7 +111,7 @@ def analytical_worker_task(args):
 
     import sys, os
     os.makedirs(os.path.join(log_dir, "worker_logs"), exist_ok=True)
-    log_file = os.path.join(log_dir, "worker_logs", f"worker_{worker_id+1:02d}_epoch_{epoch+1}.txt")
+    log_file = os.path.join(log_dir, "worker_logs", f"epoch_{epoch+1}_worker_{worker_id+1:02d}.txt")
     
     worker_logger = open(log_file, "w", encoding="utf-8")
     sys.stdout = worker_logger

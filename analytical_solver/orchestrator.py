@@ -51,7 +51,7 @@ class AnalyticalSolver:
         print(f"  BeamWidth={self.BEAM_WIDTH}")
         
         # Стратегії для локального UCB1-бандита
-        self.strategies = ["TOPO-DIV", "LOOP_BALANCE", "SYNC_TRIM", "FINISHER", "BOTTLENECK", "SHOCK"]
+        self.strategies = ["TOPO-DIV", "LOOP_BALANCE", "SYNC_TRIM", "FINISHER", "BOTTLENECK", "SHOCK", "ZERO_SUM"]
         if nx.is_tree(self.ctx.base_G_flow):
             self.strategies.remove("LOOP_BALANCE")
         self.strategies.append("DIAM_DIVERSITY")
@@ -502,6 +502,7 @@ class AnalyticalSolver:
                 elif strategy == "RUIN_RECREATE": forced_sol, locked, log_msg = self.kicker.ruin_and_recreate_kick(kick_target, stagnation_counter) 
                 elif strategy == "FINISHER": forced_sol, locked, log_msg = self.kicker.micro_trim_kick(kick_target)
                 elif strategy == "SYNC_TRIM": forced_sol, locked, log_msg = self.kicker.sync_trim_kick(kick_target, base_dyn_bonus)
+                elif strategy == "ZERO_SUM": forced_sol, locked, log_msg = self.kicker.zero_sum_shift_kick(kick_target)
                 else: forced_sol, locked, log_msg, path_sig = self.kicker.topological_inversion_kick(kick_target, self.pool.kick_tabu_set)
                 
                 if forced_sol and locked:
@@ -537,14 +538,11 @@ class AnalyticalSolver:
                         is_promising = quick_f and quick_p >= self.ctx.simulator.config.h_min and (quick_cost < hyperband_threshold)
                         
                         if is_promising:
-                            # Замініть рядок: deep_passes = 6 if is_heavy else 8
-                            # НА ЦЕЙ БЛОК:
-                            
-                            # 🔴 ПАТЧ 3: Економія симуляцій на пізніх етапах
-                            if is_heavy:
+                            if self.ctx.num_pipes >= 200 and progress_ratio > 0.7:
+                                deep_passes = 10 # 🔴 Екстремальний поліш для Балерми наприкінці епохи
+                            elif is_heavy:
                                 deep_passes = 6
                             else:
-                                # Якщо це пізня гра, легким кікам вистачить 3 проходів замість 8
                                 deep_passes = 3 if progress_ratio > 0.5 else 8
                                 
                             self.ctx.log(f"        [HYPERBAND] Promising path detected ({quick_cost/1e6:.2f}M$). Deep Squeeze ({deep_passes} passes)...")
@@ -965,8 +963,17 @@ class AnalyticalSolver:
             except: global_best_cost = float('inf')
         
         total_time = time.time() - start_time
+        total_cluster_sims = self.ctx.sim_count
+        if self.mp_pool:
+            for wid in range(self.n_workers):
+                prog = shared_progress.get(wid, {})
+                if isinstance(prog, dict):
+                    total_cluster_sims += prog.get('sims', 0)
+        else:
+            total_cluster_sims += sum(res[3] for res in epoch_results) # якщо послідовно
+
         if global_best_cost != float('inf'):
-            print(f"\n[AnalyticalSolver] FINAL RESULT: {global_best_cost/1e6:.4f}M$ (Total Time: {total_time/60:.1f}m | Total Sims: {self.ctx.sim_count:,})")
+            print(f"\n[AnalyticalSolver] FINAL RESULT: {global_best_cost/1e6:.4f}M$ (Total Time: {total_time/60:.1f}m | Total Sims: {total_cluster_sims:,})")
         else:
             print(f"\n[AnalyticalSolver] EXECUTION ABORTED. No valid solutions.")
         
