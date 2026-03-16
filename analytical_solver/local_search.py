@@ -105,32 +105,35 @@ class LocalSearch:
 
         return current_indices
 
-    def heal_network(self, indices, locked_pipes):
-        import random
-        kicked = list(indices)
+    def heal_network(self, kicked, locked_pipes):
         boosts = 0
-        for _ in range(40): 
-            _, t_p, t_feas, crit_node = self.ctx.get_cached_stats(kicked)
-            if t_feas and t_p >= self.ctx.simulator.config.h_min: return kicked, True, boosts
-            
+        while True:
+            _, min_p, feas, crit_node = self.ctx.get_cached_stats(kicked)
+            if feas and min_p >= self.ctx.simulator.config.h_min:
+                return kicked, True, boosts
+                
+            if not crit_node or crit_node == "ERR":
+                return kicked, False, boosts
+                
             path_pipes, _ = self.ctx.get_dominant_path(kicked, crit_node)
-            if not path_pipes: return kicked, False, boosts
-            
+            if not path_pipes:
+                return kicked, False, boosts
+                
             unit_losses = self.ctx.get_cached_heuristics(kicked)
-            
             candidates = []
+            
             for idx in path_pipes:
                 if idx in locked_pipes: continue 
                 curr_d = kicked[idx]
                 if curr_d < self.ctx.max_d_idx: 
                     if self.ctx.num_pipes >= 200:
-                        # 🔴 ПАТЧ: Ідеально точна вартість розширення труби!
+                        # 🔴 ПАТЧ (Bug 2): Ідеальна математична ціна за 1 метр
                         c_curr = self.ctx.simulator.costs[curr_d]
                         c_next = self.ctx.simulator.costs[curr_d + 1]
-                        real_cost_delta = self.ctx.simulator.lengths[idx] * (c_next - c_curr)
+                        delta_c = c_next - c_curr
                         
-                        # Ефективність: скільки втрати тиску ми купуємо за 1 долар
-                        efficiency = (unit_losses[idx] * 10000.0) / max(0.1, real_cost_delta)
+                        # Ефективність = Втрата тиску / Переплата (без множення на довжину)
+                        efficiency = unit_losses[idx] / max(1e-6, delta_c)
                         candidates.append((idx, efficiency))
                     else:
                         candidates.append((idx, unit_losses[idx]))
@@ -138,15 +141,11 @@ class LocalSearch:
             if not candidates:
                 break
                 
-            # Сортуємо за ЕФЕКТИВНІСТЮ (Користь / Вартість), а не просто за втратою тиску
             candidates.sort(key=lambda x: x[1], reverse=True)
-            pool_size = min(4, len(candidates))
+            best_pipe = candidates[0][0]
             
-            # Рандомізація вибору з Топ-4 найефективніших труб
-            weights = [0.5, 0.25, 0.15, 0.1][:pool_size]
-            worst_pipe = random.choices(candidates[:pool_size], weights=weights)[0][0]
-            
-            kicked[worst_pipe] += 1
+            kicked[best_pipe] += 1
+            locked_pipes.add(best_pipe)
             boosts += 1
             
         return kicked, False, boosts
