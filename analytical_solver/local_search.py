@@ -224,33 +224,3 @@ class LocalSearch:
         
         score = cost - (p_surplus * dyn_bonus)
         return score, cost, squeezed_sol
-    
-    def zero_sum_shift_kick(self, indices):
-        """Зменшує одну трубу і відразу збільшує іншу для збереження балансу тиску (1.95M$ Mover)"""
-        unit_losses = self.ctx.get_cached_heuristics(indices)
-        
-        # Шукаємо "товсту" трубу на периферії (з малим падінням тиску)
-        slack_candidates = [i for i in range(self.ctx.num_pipes) if indices[i] > 0 and unit_losses[i] < np.percentile(unit_losses, 40)]
-        # Шукаємо "вузьку" трубу на критичному шляху (з великим падінням)
-        critical_candidates = [i for i in range(self.ctx.num_pipes) if indices[i] < self.ctx.max_d_idx and unit_losses[i] > np.percentile(unit_losses, 80)]
-        
-        if not slack_candidates or not critical_candidates:
-            return None, None, ""
-            
-        kicked = list(indices)
-        locked = set()
-        
-        # Робимо 2-3 такі парні заміни за один раз
-        n_shifts = random.choice([2, 3])
-        for _ in range(n_shifts):
-            s_idx = random.choice(slack_candidates)
-            c_idx = random.choice(critical_candidates)
-            
-            kicked[s_idx] -= 1
-            kicked[c_idx] += 1
-            locked.update([s_idx, c_idx])
-            
-        healed, ok, boosts = self.ls.heal_network(kicked, locked)
-        if not ok: return None, None, ""
-        
-        return healed, locked, f"ZERO-SUM: Shifted {n_shifts} pairs to rebalance costs. Healed {boosts}x."
