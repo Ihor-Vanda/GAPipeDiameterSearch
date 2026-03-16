@@ -116,24 +116,30 @@ class LocalSearch:
             
             unit_losses = self.ctx.get_cached_heuristics(kicked)
             
-            # 🔴 ПАТЧ 1: Стохастичне зцілення (Tournament Selection)
             candidates = []
             for idx in path_pipes:
                 if idx in locked_pipes: continue 
-                if kicked[idx] < self.ctx.max_d_idx: 
-                    candidates.append((idx, unit_losses[idx]))
+                curr_d = kicked[idx]
+                if curr_d < self.ctx.max_d_idx: 
+                    # 🔴 АДАПТАЦІЯ: Економічне зцілення тільки для великих мереж
+                    if self.ctx.num_pipes >= 200:
+                        penalty = (curr_d + 1) * self.ctx.simulator.lengths[idx]
+                        efficiency = (unit_losses[idx] * 1000.0) / max(1.0, penalty)
+                        candidates.append((idx, efficiency))
+                    else:
+                        # Для малих мереж (Ханой) - чиста жадібна гідравліка (б'ємо по найгіршому)
+                        candidates.append((idx, unit_losses[idx]))
                     
             if not candidates:
                 break
                 
+            # Сортуємо за ЕФЕКТИВНІСТЮ (Користь / Вартість), а не просто за втратою тиску
             candidates.sort(key=lambda x: x[1], reverse=True)
-            pool_size = min(3, len(candidates))
+            pool_size = min(4, len(candidates))
             
-            # З ймовірністю 70% лікуємо найкритичнішу трубу, з 30% - шукаємо дешевші альтернативи (2-гу чи 3-тю)
-            if random.random() < 0.7:
-                worst_pipe = candidates[0][0]
-            else:
-                worst_pipe = random.choice(candidates[:pool_size])[0]
+            # Рандомізація вибору з Топ-4 найефективніших труб
+            weights = [0.5, 0.25, 0.15, 0.1][:pool_size]
+            worst_pipe = random.choices(candidates[:pool_size], weights=weights)[0][0]
             
             kicked[worst_pipe] += 1
             boosts += 1

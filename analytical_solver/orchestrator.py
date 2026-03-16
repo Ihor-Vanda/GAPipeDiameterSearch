@@ -68,7 +68,7 @@ class AnalyticalSolver:
         
         self.BEAM_WIDTH = {"SMALL": max(5, n//10), "MEDIUM": max(5, n//20), "LARGE": 8, "XLARGE": 6}[cls]
         self.SINGLE_CANDIDATES = {"SMALL": max(6, n//5), "MEDIUM": max(6, n//10), "LARGE": max(6, n//20), "XLARGE": 10}[cls]
-        self.BASE_SIM_BUDGET = {"SMALL": 30000, "MEDIUM": 100000, "LARGE": 1000000, "XLARGE": 3000000}[cls]
+        self.BASE_SIM_BUDGET = {"SMALL": 100000, "MEDIUM": 300000, "LARGE": 1000000, "XLARGE": 3000000}[cls]
 
     def _calculate_ideal_d(self, flow, target_v):
         if abs(flow) < 1e-6: return 0
@@ -276,13 +276,14 @@ class AnalyticalSolver:
         stagnation_counter = 0
         self.ctx.log(f"   > Seeds initialized. Baseline Target: {run_best_cost/1e6:.4f}M$")
 
+        # 🔴 Ініціалізація трекерів для безпеки станів та табу
         stag_limit = 4 
         round_idx = 0
         last_published_cost = float('inf')
         epoch_start_sims = self.ctx.sim_count 
-        
         last_injected_peer = {} 
         rescue_fired = False 
+        loop_balance_failed_pipes = {}
         
         while True:
             self.pool.current_round = round_idx 
@@ -290,12 +291,14 @@ class AnalyticalSolver:
             jitter_factor = random.uniform(0.70, 1.30)
             base_dyn_bonus = min(run_best_cost, global_best_cost) * 0.001 * jitter_factor
 
+            # 🔴 SWARM INTELLIGENCE: IPC, Ін'єкції та Порятунок Воркерів
             if shared_progress is not None:
                 gb = shared_progress.get('global_best')
                 if gb and gb[0] < global_best_cost:
                     global_best_cost = gb[0]
                     self.ctx.log(f"   > [IPC] 📡 Received new Global Bound from peer: {global_best_cost/1e6:.4f}M$")
                 
+                # Пасивна ін'єкція кращих рішень від сусідів
                 for i in range(self.n_workers):
                     if i == worker_id: continue
                     peer = shared_progress.get(f'best_sol_{i}')
@@ -310,8 +313,9 @@ class AnalyticalSolver:
                                 score = c_p - (p_surplus * base_dyn_bonus)
                                 self.pool.active_pool.append((score, c_p, peer_sol))
                                 self.ctx.log(f"     [IPC] 💉 Passively injected peer W{i+1} solution ({c_p/1e6:.4f}M$)")
-                                last_injected_peer[i] = peer[0] # Оновлюємо трекер
+                                last_injected_peer[i] = peer[0] 
 
+                # Global Best Injection (Порятунок при сильному відставанні)
                 global_lag = (run_best_cost - global_best_cost) / max(global_best_cost, 1)
                 if global_lag > 0.02 and stagnation_counter >= stag_limit * 2:
                     if gb and gb[1]:
@@ -326,7 +330,7 @@ class AnalyticalSolver:
                             self.pool.active_pool.insert(0, (score - 1e6, c_gb, gb_sol))
                             stagnation_counter = 0
                             self.pool.kick_tabu_set.clear()
-                            rescue_fired = True
+                            rescue_fired = True 
 
             if shared_progress is not None and worker_id is not None:
                 shared_progress[worker_id] = {"round": round_idx + 1, "sims": self.ctx.sim_count, "best_cost": run_best_cost}
@@ -343,6 +347,45 @@ class AnalyticalSolver:
             is_late_game = progress_ratio > 0.5 
             stag_limit = 4 + int(4 * progress_ratio) 
             
+            # 🔴 MID-EPOCH MINI-RESTART
+            restart_multiplier = 8 if self.ctx.num_pipes >= 200 else 15
+            MINI_RESTART_THRESHOLD = stag_limit * restart_multiplier
+            if stagnation_counter >= MINI_RESTART_THRESHOLD:
+                self.ctx.log(f"   [MINI-RESTART] {stagnation_counter} rounds without progress. Soft epoch restart.")
+                gb = shared_progress.get('global_best') if shared_progress else None
+                
+                if gb and gb[1]:
+                    archive_sol = list(gb[1])
+                    new_seeds = []
+                    
+                    for _ in range(4): 
+                        perturbed = list(archive_sol)
+                        n_perturb = max(8, self.ctx.num_pipes // 4)
+                        for p_idx in random.sample(range(self.ctx.num_pipes), n_perturb):
+                            delta = random.choice([-2, -1, 1, 2])
+                            perturbed[p_idx] = max(0, min(self.ctx.max_d_idx, perturbed[p_idx] + delta))
+                            
+                        healed, ok, _ = self.ls.heal_network(perturbed, set())
+                        if ok:
+                            squeezed = self.ls.gradient_squeeze(healed, max_passes=2, quick_mode=True, dyn_bonus=base_dyn_bonus)
+                            if not self.pool.is_basin_tabu(squeezed):
+                                new_seeds.append(squeezed)
+                                
+                    if new_seeds:
+                        self.pool.tabu_fingerprints.clear()
+                        self.pool.kick_tabu_set.clear()
+                        self.pool.active_pool.clear()
+                        
+                        for seed in new_seeds:
+                            c, p, feas, _ = self.ctx.get_cached_stats(seed)
+                            if feas and p >= self.ctx.simulator.config.h_min:
+                                p_surplus = p - self.ctx.simulator.config.h_min
+                                score = c - (p_surplus * base_dyn_bonus)
+                                self.pool.active_pool.append((score, c, seed))
+                                
+                        stagnation_counter = 0
+                        self.ctx.log(f"   [MINI-RESTART] Injected {len(new_seeds)} fresh seeds. Tabu cleared.")
+
             if round_idx > 0 and round_idx % 6 == 0: self.pool.kick_tabu_set.clear()
             next_gen = []
             
@@ -425,6 +468,7 @@ class AnalyticalSolver:
                 if stagnation_counter >= stag_limit and self.pool.active_pool:
                     self.ctx.log("     [DIVERSITY] Stagnation high. Kicking the most diverse solution in pool.")
                     
+                    # 🔴 Тільки strictly valid рішення як kick_target
                     valid_pool = [x for x in self.pool.active_pool 
                                   if self.ctx.get_cached_stats(x[2])[2] and 
                                      self.ctx.get_cached_stats(x[2])[1] >= self.ctx.simulator.config.h_min]
@@ -442,7 +486,7 @@ class AnalyticalSolver:
                         pool_sols = [x[2] for x in self.pool.active_pool[:3]]
                         kick_target = random.choice(pool_sols) if pool_sols else run_best_sol
                 
-                forced_sol, locked, path_sig = None, None, None
+                forced_sol, locked, path_sig, failed_pipe_id = None, None, None, -1
                 
                 if strategy == "SEGMENT_RESTART": forced_sol, locked, log_msg = self.kicker.segment_restart_kick(kick_target, base_dyn_bonus)
                 elif strategy == "IPC_CROSSOVER": forced_sol, locked, log_msg = self.kicker.crossover_with_peer_kick(kick_target, peer_to_cross[1], run_best_cost, peer_to_cross[0])
@@ -451,7 +495,9 @@ class AnalyticalSolver:
                 elif strategy == "VNS_KICK": forced_sol, locked, log_msg = self.kicker.vns_structured_kick(kick_target, stagnation_counter)
                 elif strategy == "SHOCK": forced_sol, locked, log_msg = self.kicker.forcing_hand_kick(kick_target)
                 elif strategy == "BOTTLENECK": forced_sol, locked, log_msg = self.kicker.upstream_bottleneck_kick(kick_target)
-                elif strategy == "LOOP_BALANCE": forced_sol, locked, log_msg = self.kicker.loop_balancing_kick(kick_target, base_dyn_bonus)
+                elif strategy == "LOOP_BALANCE": 
+                    # 🔴 Передача словника табу
+                    forced_sol, locked, log_msg, failed_pipe_id = self.kicker.loop_balancing_kick(kick_target, base_dyn_bonus, loop_balance_failed_pipes, round_idx)
                 elif strategy == "DIAM_DIVERSITY": forced_sol, locked, log_msg = self.kicker.diameter_diversity_kick(kick_target, stagnation_counter) 
                 elif strategy == "RUIN_RECREATE": forced_sol, locked, log_msg = self.kicker.ruin_and_recreate_kick(kick_target, stagnation_counter) 
                 elif strategy == "FINISHER": forced_sol, locked, log_msg = self.kicker.micro_trim_kick(kick_target)
@@ -480,6 +526,7 @@ class AnalyticalSolver:
                         quick_sol = self.ls.gradient_squeeze(forced_sol, locked_pipes=locked_for_squeeze, max_passes=quick_passes, quick_mode=True, dyn_bonus=base_dyn_bonus)
                         quick_cost, quick_p, quick_f, _ = self.ctx.get_cached_stats(quick_sol)
                         
+                        # 🔴 РЕЖИМ ВІДЧАЮ (Desperation Mode) для Hyperband
                         if stagnation_counter > stag_limit * 2:
                             tolerance = 1.15 
                         else:
@@ -490,7 +537,16 @@ class AnalyticalSolver:
                         is_promising = quick_f and quick_p >= self.ctx.simulator.config.h_min and (quick_cost < hyperband_threshold)
                         
                         if is_promising:
-                            deep_passes = 6 if is_heavy else 8
+                            # Замініть рядок: deep_passes = 6 if is_heavy else 8
+                            # НА ЦЕЙ БЛОК:
+                            
+                            # 🔴 ПАТЧ 3: Економія симуляцій на пізніх етапах
+                            if is_heavy:
+                                deep_passes = 6
+                            else:
+                                # Якщо це пізня гра, легким кікам вистачить 3 проходів замість 8
+                                deep_passes = 3 if progress_ratio > 0.5 else 8
+                                
                             self.ctx.log(f"        [HYPERBAND] Promising path detected ({quick_cost/1e6:.2f}M$). Deep Squeeze ({deep_passes} passes)...")
                             final_sol = self.ls.gradient_squeeze(quick_sol, locked_pipes=locked_for_squeeze, max_passes=deep_passes, dyn_bonus=base_dyn_bonus)
                         else:
@@ -523,7 +579,15 @@ class AnalyticalSolver:
                                 self.pool.active_pool.insert(0, (score, c, final_sol))
                                 stagnation_counter = 0 
                                 
-                                self.strat_wins[strategy] += 3.0  
+                                improvement_pct = diff / run_best_cost
+                                if improvement_pct > 0.01:
+                                    reward = 5.0  # Супер-стрибок (>1%)
+                                elif improvement_pct > 0.001:
+                                    reward = 3.0  # Нормальний стрибок
+                                else:
+                                    reward = 1.0  # Мікро-крок (LOOP_BALANCE перестане накручувати рейтинг)
+                                
+                                self.strat_wins[strategy] += reward  
                                 self.ctx.log(f"   > [FORCE] 💎 Direct Record Update: -${diff:,.0f} ({run_best_cost/1e6:.4f}M$)")
                                 
                                 if run_best_cost < last_published_cost:
@@ -544,10 +608,18 @@ class AnalyticalSolver:
                                 stagnation_counter = 0 
                             self.strat_wins[strategy] += 0.5 
                             self.ctx.log(f"     -> Added to Pool (Water Level Accept): {c/1e6:.4f}M$")
+                        # 🔴 HAIL MARY ACCEPT (Стрибок відчаю)
+                        elif stagnation_counter >= stag_limit * 3.5 and not self.pool.is_basin_tabu(final_sol):
+                            self.pool.active_pool.append((score * 1.20, c, final_sol))
+                            stagnation_counter = int(stag_limit * 0.5) 
+                            self.ctx.log(f"     -> 🚀 HAIL MARY ACCEPT (Forced Escape): {c/1e6:.4f}M$")
                         else:
                             self.ctx.log(f"     -> Rejected (Poor or Tabu Basin): {c/1e6:.4f}M$")
                             if strategy == "SEGMENT_RESTART":
                                 stagnation_counter = int(stag_limit * 1.5)
+                            # Запис труби в табу, якщо Loop Balance провалився
+                            if strategy == "LOOP_BALANCE" and failed_pipe_id != -1:
+                                loop_balance_failed_pipes[failed_pipe_id] = round_idx
                             
                         if path_sig: self.pool.kick_tabu_set.add(path_sig)
                     else:
@@ -632,6 +704,7 @@ class AnalyticalSolver:
                             unique_next_pool.append((score, real_cost, refined_sol))
                             self.pool.add_to_tabu(refined_sol, real_cost)
                             
+                            # 🔴 Захист: Тільки Strictly Valid можуть оновлювати рекорд
                             if is_strictly_valid and real_cost < run_best_cost:
                                 is_ghost = False
                                 if (run_best_cost - real_cost) > (run_best_cost * 0.02):
@@ -673,8 +746,11 @@ class AnalyticalSolver:
                     
                 if len(self.pool.active_pool) >= 3:
                     sols = [x[2] for x in self.pool.active_pool]
-                    pairs = list(itertools.combinations(range(len(sols)), 2))
-                    avg_dist = sum(self.pool.hamming_distance(sols[a], sols[b]) for a, b in pairs) / len(pairs)
+                    import numpy as np
+                    from .fast_math import fast_avg_hamming
+                    
+                    pool_matrix = np.array(sols, dtype=np.int32)
+                    avg_dist = fast_avg_hamming(pool_matrix)
                     
                     base_div = self.ctx.num_pipes // 8
                     diversity_threshold = max(1, int(base_div * (1.0 - progress_ratio)))
@@ -707,18 +783,30 @@ class AnalyticalSolver:
                         self.pool.active_pool.append((c - 1e6, c, forced_rescue))
                         stagnation_counter = 0 
                 
+                # 🔴 VNS Escape: Розрив Смертельної Петлі
                 if not self.pool.active_pool:
-                    self.ctx.log("     [EMERGENCY] Random respawn failed. Using Micro-Mutation fallback!")
-                    safe_seed = list(run_best_sol)
-                    p_idx = random.randint(0, self.ctx.num_pipes - 1)
-                    safe_seed[p_idx] = min(self.ctx.max_d_idx, safe_seed[p_idx] + 1)
-                    
-                    healed_seed, ok, _ = self.ls.heal_network(safe_seed, {p_idx})
-                    if ok:
+                    self.ctx.log("     [EMERGENCY] Random respawn failed. Using VNS Escape fallback!")
+                    healed_seed, locked_seed, _ = self.kicker.vns_structured_kick(run_best_sol, stagnation_level=8)
+                    if healed_seed is not None:
                         c, p, feas, _ = self.ctx.get_cached_stats(healed_seed)
                         if feas:
                             self.pool.active_pool.append((c - 1e6, c, healed_seed))
                             stagnation_counter = 0
+                            self.pool.kick_tabu_set.clear()
+                    else:
+                        safe_seed = list(run_best_sol)
+                        p_idx = random.randint(0, self.ctx.num_pipes - 1)
+                        safe_seed[p_idx] = min(self.ctx.max_d_idx, safe_seed[p_idx] + 2)
+                        h_seed, ok, _ = self.ls.heal_network(safe_seed, {p_idx})
+                        if ok:
+                            c, _, _, _ = self.ctx.get_cached_stats(h_seed)
+                            self.pool.active_pool.append((c - 1e6, c, h_seed))
+                            stagnation_counter = 0
+
+            if round_idx > 0 and round_idx % 20 == 0:
+                for s in self.strat_wins:
+                    self.strat_wins[s] *= 0.85
+                    self.strat_tries[s] = max(1.0, self.strat_tries[s] * 0.85)
 
             round_idx += 1
                 
@@ -734,7 +822,7 @@ class AnalyticalSolver:
         global_best_sol = None
         global_archive = []
 
-        epochs = {"SMALL": 2, "MEDIUM": 2, "LARGE": 4, "XLARGE": 4}[self.network_class]
+        epochs = {"SMALL": 4, "MEDIUM": 4, "LARGE": 5, "XLARGE": 5}[self.network_class]
         time_per_epoch = self.time_limit_sec / epochs
 
         if self.mp_pool:
@@ -773,7 +861,7 @@ class AnalyticalSolver:
 
                 epoch_start_time = time.time()
                 last_print_time = 0
-                print_interval = {"SMALL": 30.0, "MEDIUM": 60.0, "LARGE": 180.0, "XLARGE": 300.0}[self.network_class]
+                print_interval = {"SMALL": 1.0, "MEDIUM": 15.0, "LARGE": 30.0, "XLARGE": 60.0}[self.network_class]
                 
                 while True:
                     all_done = all(res.ready() for _, res in async_results)

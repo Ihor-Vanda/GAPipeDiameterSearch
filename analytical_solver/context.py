@@ -1,6 +1,8 @@
 import time
 import networkx as nx
+import numpy as np
 from .cache import LRUCache
+from .fast_math import fast_dijkstra
 
 class SolverContext:
     def __init__(self, simulator, available_diameters, v_opt=1.0):
@@ -29,6 +31,28 @@ class SolverContext:
                 self.edge_to_pipe[(v, u)] = idx
                 self.node_to_pipes.setdefault(u, []).append(idx)
                 self.node_to_pipes.setdefault(v, []).append(idx)
+
+        # 🔴 ПАТЧ: Підготовка CSR-графів для Numba Dijkstra
+        self.nodes_list = list(self.base_G_flow.nodes())
+        self.node_to_id = {node: i for i, node in enumerate(self.nodes_list)}
+        self.id_to_node = {i: node for node, i in self.node_to_id.items()}
+        self.num_nodes = len(self.nodes_list)
+        
+        self.source_ids = np.array([self.node_to_id[s] for s in self.simulator.sources if s in self.node_to_id], dtype=np.int32)
+        
+        indptr, indices, edge_pipe_map = [0], [], []
+        curr_ptr = 0
+        for i in range(self.num_nodes):
+            u = self.id_to_node[i]
+            for v in self.base_G_flow.neighbors(u):
+                indices.append(self.node_to_id[v])
+                edge_pipe_map.append(self.edge_to_pipe[(u, v)])
+                curr_ptr += 1
+            indptr.append(curr_ptr)
+        
+        self.csr_indptr = np.array(indptr, dtype=np.int32)
+        self.csr_indices = np.array(indices, dtype=np.int32)
+        self.csr_edge_pipe = np.array(edge_pipe_map, dtype=np.int32)
 
         self.lengths = self.simulator.lengths
         self.costs_array = self.simulator.costs 
@@ -101,28 +125,35 @@ class SolverContext:
         return res
     
     def get_dominant_path(self, indices, crit_node):
+        """Супер-швидкий обхід графа через JIT-компіляцію"""
+        if crit_node not in self.node_to_id:
+            return [], []
+            
         try:
-            for u, v in self.base_G_flow.edges():
-                idx = self.edge_to_pipe[(u, v)]
-                self.base_G_flow[u][v]['weight'] = 100.0 / (indices[idx] + 1)
-                    
-            best_path_nodes = []
-            best_weight = float('inf')
+            target_id = self.node_to_id[crit_node]
             
-            for source in self.simulator.sources:
-                try:
-                    path = nx.shortest_path(self.base_G_flow, source, crit_node, weight='weight')
-                    path_weight = sum(self.base_G_flow[u][v]['weight'] for u, v in zip(path[:-1], path[1:]))
-                    if path_weight < best_weight:
-                        best_weight = path_weight
-                        best_path_nodes = path
-                except nx.NetworkXNoPath:
-                    continue 
+            # Векторне оновлення ваг (працює за наносекунди, без циклу Python)
+            indices_arr = np.array(indices, dtype=np.float64)
+            csr_weights = 100.0 / (indices_arr[self.csr_edge_pipe] + 1.0)
             
-            if not best_path_nodes: return [], []
+            # Виклик C-коду
+            path_ids = fast_dijkstra(
+                self.num_nodes, 
+                self.source_ids, 
+                target_id, 
+                self.csr_indptr, 
+                self.csr_indices, 
+                csr_weights
+            )
+            
+            if not path_ids: 
+                return [], []
+                
+            best_path_nodes = [self.id_to_node[pid] for pid in path_ids]
             path_pipes = [self.edge_to_pipe[(u, v)] for u, v in zip(best_path_nodes[:-1], best_path_nodes[1:])]
             return path_pipes, best_path_nodes
-        except Exception:
+            
+        except Exception as e:
             return [], []
 
     def get_lazy_periphery(self, indices):

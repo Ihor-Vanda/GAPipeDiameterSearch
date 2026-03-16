@@ -1,3 +1,6 @@
+from .fast_math import fast_hamming_distance # 🔴 Додайте імпорт
+import numpy as np
+
 class SolutionPool:
     def __init__(self, ctx):
         self.ctx = ctx
@@ -47,4 +50,7 @@ class SolutionPool:
         return (self.current_round - added_at) < tenure
     
     def hamming_distance(self, sol1, sol2):
-        return sum(1 for a, b in zip(sol1, sol2) if a != b)
+        # Numba вимагає NumPy масиви
+        arr1 = np.array(sol1, dtype=np.int32)
+        arr2 = np.array(sol2, dtype=np.int32)
+        return fast_hamming_distance(arr1, arr2)

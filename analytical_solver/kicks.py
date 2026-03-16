@@ -190,47 +190,47 @@ class KickStrategies:
         
         return best_final_sol, best_locked, f"SYNC-TRIM: Shrunk Pipes {[p+1 for p in best_locked]}. Healed {best_boosts}x."
 
-    def loop_balancing_kick(self, indices, dyn_bonus):
-        _, _, _, crit_node = self.ctx.get_cached_stats(indices)
-        if not crit_node or crit_node == "ERR": return None, None, ""
+    # def loop_balancing_kick(self, indices, dyn_bonus):
+    #     _, _, _, crit_node = self.ctx.get_cached_stats(indices)
+    #     if not crit_node or crit_node == "ERR": return None, None, ""
 
-        try: cycles = nx.cycle_basis(self.ctx.base_G_flow)
-        except: return None, None, ""
-        if not cycles: return None, None, "No cycles found"
+    #     try: cycles = nx.cycle_basis(self.ctx.base_G_flow)
+    #     except: return None, None, ""
+    #     if not cycles: return None, None, "No cycles found"
 
-        best_drop_achieved = -1
-        candidates = []
+    #     best_drop_achieved = -1
+    #     candidates = []
 
-        for cycle_nodes in cycles:
-            cycle_indices = []
-            full_cycle = cycle_nodes + [cycle_nodes[0]]
-            for u, v in zip(full_cycle[:-1], full_cycle[1:]):
-                if (u, v) in self.ctx.edge_to_pipe: cycle_indices.append(self.ctx.edge_to_pipe[(u, v)])
+    #     for cycle_nodes in cycles:
+    #         cycle_indices = []
+    #         full_cycle = cycle_nodes + [cycle_nodes[0]]
+    #         for u, v in zip(full_cycle[:-1], full_cycle[1:]):
+    #             if (u, v) in self.ctx.edge_to_pipe: cycle_indices.append(self.ctx.edge_to_pipe[(u, v)])
 
-            for candidate_idx in cycle_indices:
-                curr_d_idx = indices[candidate_idx]
-                if curr_d_idx < 2: continue 
+    #         for candidate_idx in cycle_indices:
+    #             curr_d_idx = indices[candidate_idx]
+    #             if curr_d_idx < 2: continue 
                 
-                max_drop = min(3, curr_d_idx) 
-                for drop in range(max_drop, 0, -1):
-                    if drop < best_drop_achieved: continue
+    #             max_drop = min(3, curr_d_idx) 
+    #             for drop in range(max_drop, 0, -1):
+    #                 if drop < best_drop_achieved: continue
                         
-                    kicked, locked = list(indices), set()
-                    kicked[candidate_idx] -= drop
-                    locked.add(candidate_idx)
+    #                 kicked, locked = list(indices), set()
+    #                 kicked[candidate_idx] -= drop
+    #                 locked.add(candidate_idx)
                     
-                    healed_sol, is_feasible, boosts = self.ls.heal_network(kicked, locked)
-                    if is_feasible:
-                        test_squeezed = self.ls.gradient_squeeze(healed_sol, locked_pipes=locked, max_passes=4, quick_mode=True, dyn_bonus=dyn_bonus)
-                        sq_cost, _, _, _ = self.ctx.get_cached_stats(test_squeezed)
-                        msg = f"FLOW STEER: Cut Pipe {candidate_idx + 1} (-{drop}). Healed {boosts}x."
-                        candidates.append((sq_cost, healed_sol, locked, msg))
-                        best_drop_achieved = max(best_drop_achieved, drop)
+    #                 healed_sol, is_feasible, boosts = self.ls.heal_network(kicked, locked)
+    #                 if is_feasible:
+    #                     test_squeezed = self.ls.gradient_squeeze(healed_sol, locked_pipes=locked, max_passes=4, quick_mode=True, dyn_bonus=dyn_bonus)
+    #                     sq_cost, _, _, _ = self.ctx.get_cached_stats(test_squeezed)
+    #                     msg = f"FLOW STEER: Cut Pipe {candidate_idx + 1} (-{drop}). Healed {boosts}x."
+    #                     candidates.append((sq_cost, healed_sol, locked, msg))
+    #                     best_drop_achieved = max(best_drop_achieved, drop)
 
-        if not candidates: return None, None, "FLOW STEER: Exhaustive search found no valid bypass."
-        candidates.sort(key=lambda x: x[0])
-        chosen = random.choice(candidates[:3])
-        return chosen[1], chosen[2], chosen[3]
+    #     if not candidates: return None, None, "FLOW STEER: Exhaustive search found no valid bypass."
+    #     candidates.sort(key=lambda x: x[0])
+    #     chosen = random.choice(candidates[:3])
+    #     return chosen[1], chosen[2], chosen[3]
     
     def diameter_diversity_kick(self, indices, stagnation_counter):
         kicked, locked = list(indices), set()
@@ -314,27 +314,107 @@ class KickStrategies:
         
         return healed_sol, cluster_pipes, f"R&R (LNS): Ruined {ruined_count} pipes (~{target_pct:.0%} net, Rad: {actual_radius}). Rebuilt {boosts}x."
 
+    # 🔴 ПАТЧ 1: Slack-aware ILS (Спрямована хірургія)
     def ils_perturbation_kick(self, indices, stagnation_counter):
-        """ILS: Великий сліпий стрибок для виходу з макро-долини"""
-        max_pct = 0.15 if self.ctx.num_pipes <= 50 else 0.35
-        pct = min(max_pct, 0.15 + (stagnation_counter * 0.02))
-        
+        """ILS: Змінює переважно ті труби, які мають запас тиску (slack)"""
+        pct = min(0.35, 0.08 + stagnation_counter * 0.01)
         n_perturb = max(4, int(self.ctx.num_pipes * pct))
-
-        hard_limit = 12 if self.ctx.num_pipes >= 200 else 25
+        
+        # Лімітери масштабу
+        hard_limit = 12 if self.ctx.num_pipes >= 200 else 40
         n_perturb = min(n_perturb, hard_limit)
         
-        perturbed = list(indices)
-        pipes = random.sample(range(self.ctx.num_pipes), n_perturb)
-        
-        for p in pipes:
-            perturbed[p] = random.randint(0, self.ctx.max_d_idx)
+        # 🔴 АДАПТАЦІЯ: Для малих мереж чистий рандом, для великих - Slack-Aware
+        if self.ctx.num_pipes < 200:
+            chosen = random.sample(range(self.ctx.num_pipes), n_perturb)
+        else:
+            unit_losses = self.ctx.get_cached_heuristics(indices)
+            pipe_slack = []
+            for i in range(self.ctx.num_pipes):
+                can_downgrade = indices[i] > 0
+                slack_score = (1.0 / (unit_losses[i] + 1e-6)) if can_downgrade else 0.0
+                pipe_slack.append((i, slack_score))
+                
+            pipe_slack.sort(key=lambda x: x[1], reverse=True)
+            n_slack = int(self.ctx.num_pipes * 0.3) 
+            slack_pool = [p for p, _ in pipe_slack[:n_slack]]
+            tight_pool = [p for p, _ in pipe_slack[n_slack:]]
             
-        healed, ok, _ = self.ls.heal_network(perturbed, set())
+            n_from_slack = max(1, int(n_perturb * 0.7))
+            n_from_tight = n_perturb - n_from_slack
+            
+            chosen = random.sample(slack_pool, min(n_from_slack, len(slack_pool)))
+            if n_from_tight > 0 and tight_pool:
+                chosen += random.sample(tight_pool, min(n_from_tight, len(tight_pool)))
+            
+        kicked = list(indices)
+        locked = set()
+        
+        for p_idx in chosen:
+            # Якщо стагнація глибока, б'ємо сильніше
+            delta = random.choice([-1, 1, 2]) if stagnation_counter > 8 else random.choice([-1, 1])
+            new_val = max(0, min(self.ctx.max_d_idx, kicked[p_idx] + delta))
+            kicked[p_idx] = new_val
+            if delta > 0:
+                locked.add(p_idx)
+                
+        healed, ok, boosts = self.ls.heal_network(kicked, locked)
         if not ok: return None, None, ""
         
-        msg = f"ILS-PERTURB: Random jump on {n_perturb} pipes ({pct:.0%} bounded), new basin entry."
-        return healed, set(pipes), msg
+        msg = f"ILS-PERTURB (Slack-Aware): Shifted {len(chosen)} pipes. Healed {boosts}x."
+        return healed, locked, msg
+
+    # 🔴 ПАТЧ 3: Loop Balance Tabu
+    def loop_balancing_kick(self, indices, dyn_bonus, failed_pipes=None, current_round=0):
+        failed_pipes = failed_pipes or {}
+        LOOP_BALANCE_PIPE_TENURE = min(20, max(3, self.ctx.num_pipes // 5))
+        
+        _, _, _, crit_node = self.ctx.get_cached_stats(indices)
+        if not crit_node or crit_node == "ERR": return None, None, "", -1
+
+        try: cycles = nx.cycle_basis(self.ctx.base_G_flow)
+        except: return None, None, "", -1
+        if not cycles: return None, None, "No cycles found", -1
+
+        best_drop_achieved = -1
+        candidates = []
+
+        for cycle_nodes in cycles:
+            cycle_indices = []
+            full_cycle = cycle_nodes + [cycle_nodes[0]]
+            for u, v in zip(full_cycle[:-1], full_cycle[1:]):
+                if (u, v) in self.ctx.edge_to_pipe: 
+                    cycle_indices.append(self.ctx.edge_to_pipe[(u, v)])
+
+            for candidate_idx in cycle_indices:
+                # Пропускаємо труби, які нещодавно провалили цей кік
+                if (current_round - failed_pipes.get(candidate_idx, -999)) < LOOP_BALANCE_PIPE_TENURE:
+                    continue
+                    
+                curr_d_idx = indices[candidate_idx]
+                if curr_d_idx < 2: continue 
+                
+                max_drop = min(3, curr_d_idx) 
+                for drop in range(max_drop, 0, -1):
+                    if drop < best_drop_achieved: continue
+                        
+                    kicked, locked = list(indices), set()
+                    kicked[candidate_idx] -= drop
+                    locked.add(candidate_idx)
+                    
+                    healed_sol, is_feasible, boosts = self.ls.heal_network(kicked, locked)
+                    if is_feasible:
+                        test_squeezed = self.ls.gradient_squeeze(healed_sol, locked_pipes=locked, max_passes=4, quick_mode=True, dyn_bonus=dyn_bonus)
+                        sq_cost, _, _, _ = self.ctx.get_cached_stats(test_squeezed)
+                        msg = f"FLOW STEER: Cut Pipe {candidate_idx + 1} (-{drop}). Healed {boosts}x."
+                        # Зберігаємо candidate_idx для табу-листа
+                        candidates.append((sq_cost, healed_sol, locked, msg, candidate_idx))
+                        best_drop_achieved = max(best_drop_achieved, drop)
+
+        if not candidates: return None, None, "FLOW STEER: Exhaustive search found no valid bypass.", -1
+        candidates.sort(key=lambda x: x[0])
+        chosen = random.choice(candidates[:3])
+        return chosen[1], chosen[2], chosen[3], chosen[4]
     
     def vns_structured_kick(self, indices, stagnation_level):
         """Variable Neighborhood Search: збільшує розмір і радіус удару зі зростанням стагнації"""
@@ -393,18 +473,25 @@ class KickStrategies:
         return squeezed, frozen_pipes, f"SEGMENT-RESTART: Froze {len(frozen_pipes)} pipes, partial Top-Down squeeze."
 
     def crossover_with_peer_kick(self, my_sol, peer_sol, my_cost, peer_cost):
-        """Схрещування з успішним рішенням іншого воркера"""
-        child = []
+        """Схрещування з успішним рішенням іншого воркера (через JIT)"""
+        import numpy as np
+        from .fast_math import fast_crossover # 🔴 Імпорт Numba-функції
+        
         total = my_cost + peer_cost
         p_mine = peer_cost / total 
         
+        # Конвертуємо у швидкі масиви
+        arr_my = np.array(my_sol, dtype=np.int32)
+        arr_peer = np.array(peer_sol, dtype=np.int32)
+        
+        # Виконуємо JIT-функцію
+        child_arr = fast_crossover(arr_my, arr_peer, float(p_mine))
+        child = child_arr.tolist()
+        
+        # Визначаємо змінені (заблоковані) труби
         locked = set()
-        for i, (a, b) in enumerate(zip(my_sol, peer_sol)):
-            if a == b:
-                child.append(a)
-            else:
-                chosen = a if random.random() < p_mine else b
-                child.append(chosen)
+        for i in range(len(my_sol)):
+            if child[i] != my_sol[i]:
                 locked.add(i)
                 
         healed, ok, _ = self.ls.heal_network(child, locked)
