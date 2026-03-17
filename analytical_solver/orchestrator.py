@@ -820,13 +820,22 @@ class AnalyticalSolver:
         self.BEAM_WIDTH = 8 if self.network_class in ["LARGE", "XLARGE"] else 5
         self.seeder = SeedFactory(self.ctx, self.ls, self.n_workers, self.BEAM_WIDTH)
         self.pool = SolutionPool(self.ctx) 
+        
+        # 🔴 ВІДНОВЛЕНО: Динамічний розрахунок бюджету
+        self.BASE_SIM_BUDGET = {"SMALL": 1000000, "MEDIUM": 3000000, "LARGE": 40000000, "XLARGE": 30000000}[self.network_class]
+        self.EPOCHS = {"SMALL": 4, "MEDIUM": 4, "LARGE": 8, "XLARGE": 5}[self.network_class]
             
         if max_sims is not None:
             self.max_sims = max_sims
-            self.time_limit_sec = float('inf')
         else:
-            self.max_sims = float('inf')
-            self.time_limit_sec = time_limit_sec or 3600.0
+            self.max_sims = self.BASE_SIM_BUDGET
+            
+        if time_limit_sec is not None:
+            self.time_limit_sec = time_limit_sec
+        else:
+            # Справедливий розрахунок часу (якщо хочете обмежувати і часом)
+            cluster_speed = max(self.ctx.sim_speed, 1.0) * self.n_workers
+            self.time_limit_sec = (self.max_sims / cluster_speed) * 1.5
 
     def solve_standalone(self, max_sims=None, time_limit_sec=None):
         print("\n[AnalyticalSolver] ⚡ Initiating Island Model Search...\n")
@@ -837,6 +846,12 @@ class AnalyticalSolver:
 
         epochs = {"SMALL": 4, "MEDIUM": 4, "LARGE": 5, "XLARGE": 5}[self.network_class]
         time_per_epoch = self.time_limit_sec / epochs
+        
+        if self.max_sims == float('inf'):
+            worker_epoch_sims = float('inf')
+        else:
+            worker_epoch_sims = int(self.max_sims // (self.n_workers * self.EPOCHS))
+        print(f"  [Quota] Allocated {worker_epoch_sims:,} sims per worker/epoch.\n")
 
         manager = multiprocessing.Manager() if self.mp_pool else None
         shared_progress = manager.dict() if manager else None
@@ -859,7 +874,7 @@ class AnalyticalSolver:
                     self.ctx.diameters, self.ctx.v_opt, time_per_epoch, 
                     global_best_cost, global_archive, 
                     seed_modifier + i, i, shared_progress, self.log_dir, epoch,
-                    global_failed_basins, self.max_sims, self.n_workers
+                    global_failed_basins, worker_epoch_sims, self.n_workers
                 ))
 
             epoch_results = []
