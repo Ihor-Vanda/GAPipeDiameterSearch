@@ -1,6 +1,7 @@
 import itertools
 import random
 import numpy as np
+import math
 
 class LocalSearch:
     def __init__(self, ctx):
@@ -23,90 +24,79 @@ class LocalSearch:
         impact_scores.sort(key=lambda x: x[1], reverse=True)
         return [i for i, _ in impact_scores[:top_k]]
 
-    def gradient_squeeze(self, indices, locked_pipes=None, max_passes=None, quick_mode=False, dyn_bonus=None):
+    def gradient_squeeze(self, indices, locked_pipes=None, max_passes=None, quick_mode=False, dyn_bonus=None, min_rel_improvement=0.0003):
         if dyn_bonus is None:
             c_start, _, _, _ = self.ctx.get_cached_stats(indices)
             dyn_bonus = c_start * 0.001
-        
+            
         locked_pipes = locked_pipes or set()
         current_indices = list(indices)
         improved = True
         passes = 0
-        active_indices = [i for i in range(self.ctx.num_pipes) if i not in locked_pipes]
         
         cost, p_min, _, _ = self.ctx.get_cached_stats(current_indices)
-        bonus = dyn_bonus if dyn_bonus is not None else self.ctx.baseline_bonus 
+        best_score = cost - ((p_min - self.ctx.simulator.config.h_min) * dyn_bonus) if p_min >= self.ctx.simulator.config.h_min else float('inf')
         
+        # 🔴 ПАТЧ 1: Трекери для детектора спадної віддачі
+        milestone_cost = cost
+        milestone_pass = 0
+
+        active_indices = [i for i in range(self.ctx.num_pipes) if i not in locked_pipes]
+
         while improved:
             improved = False
             passes += 1
             if max_passes and passes > max_passes: break
             
-            unit_losses = self.ctx.get_cached_heuristics(current_indices)
-            savings_candidates = []
-            
-            noise_threshold = max(1.0, bonus * 0.01)
-            
-            for i in active_indices:
-                if quick_mode and unit_losses[i] > 0.05: continue
-                c_idx = current_indices[i]
-                if c_idx > 0:
-                    dollar_save = self.ctx.lengths[i] * (self.ctx.costs_array[c_idx] - self.ctx.costs_array[c_idx - 1])
-                    if dollar_save < noise_threshold: continue
-                    
-                    risk = unit_losses[i] + 1e-9 
-                    
-                    score = dollar_save / risk
-                    savings_candidates.append((i, score, dollar_save))
-            
-            if not savings_candidates: break
-            savings_candidates.sort(key=lambda x: x[1], reverse=True)
-            candidates_to_try = savings_candidates[:5 if quick_mode else 20]
-            batch_count = 0
-            
-            for idx, _, save in candidates_to_try:
-                c_idx = current_indices[idx] 
-                test_indices = list(current_indices)
-                test_indices[idx] = c_idx - 1
-                
-                _, t_p, t_feas, t_crit = self.ctx.get_cached_stats(test_indices)
-                
-                if t_feas and t_p >= self.ctx.simulator.config.h_min:
-                    current_indices = test_indices
-                    p_min = t_p
-                    improved = True
-                    batch_count += 1
-                    if batch_count >= 5: break
-                
-                elif not quick_mode and save > (bonus * 0.5) and t_crit is not None:
-                    neighbors = [i for i in self.ctx.node_to_pipes.get(t_crit, []) if i != idx and i not in locked_pipes]
-                    best_fix, best_net_save, best_p = None, 0, p_min
-                    
-                    for n_idx in neighbors:
-                        n_curr_d = test_indices[n_idx]
-                        if n_curr_d < self.ctx.max_d_idx:
-                            fix_indices = list(test_indices)
-                            fix_indices[n_idx] = n_curr_d + 1 
-                            expansion_cost = self.ctx.lengths[n_idx] * (self.ctx.costs_array[n_curr_d + 1] - self.ctx.costs_array[n_curr_d])
-                            net_save = save - expansion_cost
-                            
-                            if net_save > (bonus * 0.5): 
-                                _, f_p, f_feas, _ = self.ctx.get_cached_stats(fix_indices)
-                                if f_feas and f_p >= self.ctx.simulator.config.h_min:
-                                    if net_save > best_net_save:
-                                        best_net_save, best_fix, best_p = net_save, fix_indices, f_p
+            # 🔴 ПАТЧ 1: Перевіряємо кожні 3 проходи
+            if passes - milestone_pass >= 3:
+                rel_improvement = (milestone_cost - cost) / max(milestone_cost, 1.0)
+                if rel_improvement < min_rel_improvement:
+                    break  # Спадна віддача — виходимо достроково (економимо тисячі симуляцій)
+                milestone_cost = cost
+                milestone_pass = passes
 
-                    if best_fix:
-                        current_indices = best_fix
-                        p_min = best_p
-                        improved = True
-                        batch_count += 1
-                        if batch_count >= 5: break
+            random.shuffle(active_indices)
+            
+            for idx in active_indices:
+                curr_d = current_indices[idx]
+                best_local_sol = None
+                best_local_score = best_score
+                best_local_cost = cost
+                best_local_p = p_min
+                
+                # Перевірка зменшення діаметра (downgrade)
+                if curr_d > 0:
+                    test_sol = list(current_indices)
+                    test_sol[idx] -= 1
+                    c, p_val, feas, _ = self.ctx.get_cached_stats(test_sol)
+                    if feas and p_val >= self.ctx.simulator.config.h_min:
+                        score = c - ((p_val - self.ctx.simulator.config.h_min) * dyn_bonus)
+                        if score < best_local_score or (quick_mode and c < best_local_cost):
+                            best_local_score, best_local_sol, best_local_cost, best_local_p = score, test_sol, c, p_val
+                            
+                # Перевірка збільшення діаметра (upgrade)
+                if curr_d < self.ctx.max_d_idx and not quick_mode:
+                    test_sol = list(current_indices)
+                    test_sol[idx] += 1
+                    c, p_val, feas, _ = self.ctx.get_cached_stats(test_sol)
+                    if feas and p_val >= self.ctx.simulator.config.h_min:
+                        score = c - ((p_val - self.ctx.simulator.config.h_min) * dyn_bonus)
+                        if score < best_local_score:
+                            best_local_score, best_local_sol, best_local_cost, best_local_p = score, test_sol, c, p_val
+                            
+                if best_local_sol is not None:
+                    current_indices = best_local_sol
+                    best_score, cost, p_min = best_local_score, best_local_cost, best_local_p
+                    improved = True
 
         return current_indices
 
     def heal_network(self, kicked, locked_pipes):
+        # 🔴 ПАТЧ: Захисна копія. Запобігає мутації оригінального set() з caller'а
+        locked_pipes_local = set(locked_pipes) 
         boosts = 0
+        
         while True:
             _, min_p, feas, crit_node = self.ctx.get_cached_stats(kicked)
             if feas and min_p >= self.ctx.simulator.config.h_min:
@@ -123,17 +113,21 @@ class LocalSearch:
             candidates = []
             
             for idx in path_pipes:
-                if idx in locked_pipes: continue 
+                # Використовуємо локальну копію для перевірки
+                if idx in locked_pipes_local: continue 
                 curr_d = kicked[idx]
                 if curr_d < self.ctx.max_d_idx: 
                     if self.ctx.num_pipes >= 200:
-                        # 🔴 ПАТЧ (Bug 2): Ідеальна математична ціна за 1 метр
+                        # Ідеальна економічна ефективність
                         c_curr = self.ctx.simulator.costs[curr_d]
                         c_next = self.ctx.simulator.costs[curr_d + 1]
-                        delta_c = c_next - c_curr
+                        delta_c_per_m = c_next - c_curr
                         
-                        # Ефективність = Втрата тиску / Переплата (без множення на довжину)
-                        efficiency = unit_losses[idx] / max(1e-6, delta_c)
+                        abs_cost = delta_c_per_m * self.ctx.simulator.lengths[idx]
+                        
+                        # Ефективність = Втрата тиску / (Переплата за метр * Штраф за гігантський чек)
+                        # math.sqrt м'яко штрафує довгі магістралі, запобігаючи Over-healing
+                        efficiency = unit_losses[idx] / max(1e-6, delta_c_per_m * math.sqrt(max(1.0, abs_cost)))
                         candidates.append((idx, efficiency))
                     else:
                         candidates.append((idx, unit_losses[idx]))
@@ -145,7 +139,8 @@ class LocalSearch:
             best_pipe = candidates[0][0]
             
             kicked[best_pipe] += 1
-            locked_pipes.add(best_pipe)
+            # Мутуємо ТІЛЬКИ локальну копію
+            locked_pipes_local.add(best_pipe) 
             boosts += 1
             
         return kicked, False, boosts

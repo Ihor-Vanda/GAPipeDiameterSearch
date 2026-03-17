@@ -98,58 +98,147 @@ def setup_run_directory(base_dir="OutputDataExperiments"):
     print(f"[System] Created new output directory: {run_dir}")
     return run_dir
 
-def analytical_worker_task(args):
-    """
-    Запускається в окремому процесі.
-    """
-    # 🔴 ОНОВЛЕНО: Додано global_failed_basins для Basin Avoidance (Ідея #3)
-    diameters, v_opt, time_budget, global_best_cost, global_archive, seed_modifier, worker_id, shared_progress, log_dir, epoch, global_failed_basins = args
-    global worker_sim_instance
+# def analytical_worker_task(args):
+#     """
+#     Запускається в окремому процесі.
+#     """
+#     # 🔴 ОНОВЛЕНО: Додано global_failed_basins для Basin Avoidance (Ідея #3)
+#     diameters, v_opt, time_budget, global_best_cost, global_archive, seed_modifier, worker_id, shared_progress, log_dir, epoch, global_failed_basins = args
+#     global worker_sim_instance
     
-    if worker_sim_instance is None:
-        return (float('inf'), None, seed_modifier, 0, set())
+#     if worker_sim_instance is None:
+#         return (float('inf'), None, seed_modifier, 0, set())
 
-    import sys, os
-    os.makedirs(os.path.join(log_dir, "worker_logs"), exist_ok=True)
-    log_file = os.path.join(log_dir, "worker_logs", f"epoch_{epoch+1}_worker_{worker_id+1:02d}.txt")
+#     import sys, os
+#     os.makedirs(os.path.join(log_dir, "worker_logs"), exist_ok=True)
+#     log_file = os.path.join(log_dir, "worker_logs", f"epoch_{epoch+1}_worker_{worker_id+1:02d}.txt")
     
-    worker_logger = open(log_file, "w", encoding="utf-8")
-    sys.stdout = worker_logger
-    sys.stderr = worker_logger
-    # =================================================================
+#     worker_logger = open(log_file, "w", encoding="utf-8")
+#     sys.stdout = worker_logger
+#     sys.stderr = worker_logger
+#     # =================================================================
+
+#     import random
+#     import numpy as np
+#     from analytical_solver import AnalyticalSolver
+    
+#     random.seed(seed_modifier * 137 + 42)
+#     np.random.seed(seed_modifier * 137 + 42)
+    
+#     local_solver = AnalyticalSolver(worker_sim_instance, diameters, v_opt=v_opt)
+    
+#     base_budget = local_solver.max_sims
+#     if epoch == 0:
+#         local_solver.max_sims = int(base_budget * 0.70)  
+#     else:
+#         local_solver.max_sims = int(base_budget * 0.30)  
+
+#     if not global_archive:
+#         seeds = local_solver._make_diverse_seeds()
+#     else:
+#         # 🔴 ОНОВЛЕНО: Передаємо failed_basins у генератор насіння
+#         seeds = local_solver._make_warm_seeds(global_archive, worker_id=worker_id, failed_basins=global_failed_basins)
+        
+#     res_cost, res_sol = local_solver._run_single_search(
+#         seeds, time_budget, global_best_cost, 
+#         worker_id=worker_id, shared_progress=shared_progress
+#     )
+    
+#     sys.stdout.flush()
+#     worker_logger.close()
+#     sys.stdout = sys.__stdout__ 
+    
+#     # 🔴 ОНОВЛЕНО: Повертаємо basin_tabu Оркестратору
+#     return (res_cost, res_sol, seed_modifier, local_solver.ctx.sim_count, local_solver.pool.basin_tabu)
+
+def analytical_worker_task(args):
+    # 1. Безпечне розпакування за індексами
+    diams            = args[0]
+    v_opt            = args[1]
+    time_budget      = args[2]
+    global_best_cost = args[3]
+    global_archive   = args[4]
+    seed_mod         = args[5]
+    worker_id        = args[6]
+    shared_progress  = args[7]
+    log_dir          = args[8]
+    epoch            = args[9]
+    failed_basins    = args[10]
+    max_sims         = args[11] if len(args) > 11 else float('inf')
+    n_workers        = args[12] if len(args) > 12 else (len(shared_progress) if shared_progress else 1)
+
+    # 2. Отримуємо локальний для процесу симулятор
+    global worker_sim_instance
+    if worker_sim_instance is None:
+        raise RuntimeError("Worker simulator not initialized!")
 
     import random
     import numpy as np
-    from analytical_solver import AnalyticalSolver
+    import os
+    import sys
     
-    random.seed(seed_modifier * 137 + 42)
-    np.random.seed(seed_modifier * 137 + 42)
-    
-    local_solver = AnalyticalSolver(worker_sim_instance, diameters, v_opt=v_opt)
-    
-    base_budget = local_solver.max_sims
-    if epoch == 0:
-        local_solver.max_sims = int(base_budget * 0.70)  
-    else:
-        local_solver.max_sims = int(base_budget * 0.30)  
+    random.seed(seed_mod)
+    np.random.seed(seed_mod)
 
-    if not global_archive:
-        seeds = local_solver._make_diverse_seeds()
-    else:
-        # 🔴 ОНОВЛЕНО: Передаємо failed_basins у генератор насіння
-        seeds = local_solver._make_warm_seeds(global_archive, worker_id=worker_id, failed_basins=global_failed_basins)
+    # 🔴 ПАТЧ: Жорстке перехоплення логів (stdout interceptor)
+    original_stdout = sys.stdout # Зберігаємо оригінальну консоль про всяк випадок
+    log_file_path = None
+    log_file_handle = None
+
+    if log_dir:
+        logs_folder = os.path.join(log_dir, "logs") if "logs" not in log_dir else log_dir
+        os.makedirs(logs_folder, exist_ok=True)
+        log_file_path = os.path.join(logs_folder, f"worker_{worker_id+1:02d}.txt")
         
-    res_cost, res_sol = local_solver._run_single_search(
-        seeds, time_budget, global_best_cost, 
-        worker_id=worker_id, shared_progress=shared_progress
-    )
-    
-    sys.stdout.flush()
-    worker_logger.close()
-    sys.stdout = sys.__stdout__ 
-    
-    # 🔴 ОНОВЛЕНО: Повертаємо basin_tabu Оркестратору
-    return (res_cost, res_sol, seed_modifier, local_solver.ctx.sim_count, local_solver.pool.basin_tabu)
+        # Відкриваємо файл у режимі дозапису
+        log_file_handle = open(log_file_path, "a", encoding="utf-8")
+        log_file_handle.write(f"\n\n{'='*50}\n 🚀 STARTING EPOCH {epoch+1} | WORKER {worker_id+1:02d}\n{'='*50}\n")
+        log_file_handle.flush()
+        
+        # Підміняємо стандартний вивід Python на наш файл!
+        class WorkerLogger:
+            def __init__(self, file_handle):
+                self.file_handle = file_handle
+            def write(self, message):
+                self.file_handle.write(message)
+                self.file_handle.flush() # Негайний запис на диск
+            def flush(self):
+                self.file_handle.flush()
+                
+        sys.stdout = WorkerLogger(log_file_handle)
+
+    try:
+        # 3. Динамічно завантажуємо класи
+        from analytical_solver import AnalyticalSolver
+        solver_module = sys.modules[AnalyticalSolver.__module__]
+        
+        SolverContext = solver_module.SolverContext
+        LocalSearch = solver_module.LocalSearch
+        KickStrategies = solver_module.KickStrategies
+        IslandWorker = solver_module.IslandWorker
+
+        # 4. Ініціалізуємо контекст
+        ctx = SolverContext(worker_sim_instance, diams, v_opt=v_opt)
+        ctx.log_file = log_file_path # Про всяк випадок залишаємо і тут
+        
+        ls = LocalSearch(ctx)
+        kicker = KickStrategies(ctx, ls)
+        
+        n = ctx.num_pipes
+        network_class = "SMALL" if n < 50 else ("MEDIUM" if n < 200 else ("LARGE" if n < 1000 else "XLARGE"))
+        beam_width = 8 if network_class in ["LARGE", "XLARGE"] else 5
+        
+        # 5. Запускаємо новий агент-дослідник
+        worker = IslandWorker(ctx, kicker, ls, worker_id, n_workers, max_sims, beam_width, network_class, global_archive, epoch)
+        c_best, sol_best = worker.run(time_budget, global_best_cost, shared_progress)
+        
+        return c_best, sol_best, None, ctx.sim_count, worker.pool.basin_tabu
+        
+    finally:
+        # 🔴 ПАТЧ: Гарантовано повертаємо консоль на місце після завершення
+        sys.stdout = original_stdout
+        if log_file_handle:
+            log_file_handle.close()
 
 def main():
     multiprocessing.freeze_support()

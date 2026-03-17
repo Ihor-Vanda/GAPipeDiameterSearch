@@ -470,7 +470,12 @@ class KickStrategies:
         # 🔴 ПАТЧ (Bug 8): Менше руйнувань на пізніх стадіях
         is_late = stagnation_counter > 8
         base_limit = 12 if self.ctx.num_pipes >= 200 else 40
-        hard_limit = min(5 if is_late else base_limit, base_limit)
+        if stagnation_counter > 15:
+            hard_limit = int(base_limit * 1.5) # Дозволяємо 18 труб для Балерми!
+        else:
+            is_late = stagnation_counter > 8
+            hard_limit = min(5 if is_late else base_limit, base_limit)
+            
         n_perturb = min(n_perturb, hard_limit)
         
         if self.ctx.num_pipes < 200:
@@ -537,8 +542,10 @@ class KickStrategies:
         n_shifts = random.choice([2, 3, 4])
         boosts = 0
         
-        top_down = [x[0] for x in downgrade_eff[:15]]
-        top_up = [x[0] for x in upgrade_eff[:15]]
+        # 🔴 ПАТЧ: Динамічне вікно. Чим довше працює алгоритм, тим глибше він шукає труби
+        window = min(len(downgrade_eff), 10 + self.ctx.sim_count % 50)
+        top_down = [x[0] for x in downgrade_eff[:window]]
+        top_up = [x[0] for x in upgrade_eff[:window]]
         random.shuffle(top_down)
         random.shuffle(top_up)
         
@@ -554,3 +561,39 @@ class KickStrategies:
         if not ok: return None, None, ""
         
         return healed, locked, f"ZERO-SUM: Exchanged {boosts} pairs (Cost-Optimized). Healed {h_boosts}x."
+    
+    def submarine_oscillation_kick(self, indices):
+        """Strategic Oscillation: Радикально ріже магістралі і лікує мережу периферією"""
+        unit_losses = self.ctx.get_cached_heuristics(indices)
+        
+        # Шукаємо "жирні" магістралі (великий діаметр, але відносно низьке падіння тиску на метр)
+        fat_mains = []
+        for i in range(self.ctx.num_pipes):
+            if indices[i] > 3: # Беремо тільки відносно великі труби
+                fat_mains.append((i, unit_losses[i]))
+                
+        # Сортуємо: чим менша втрата тиску, тим безпечніше її різати
+        fat_mains.sort(key=lambda x: x[1]) 
+        
+        if not fat_mains: return None, None, ""
+            
+        kicked = list(indices)
+        locked = set()
+        
+        # КРОК 1: ЗАНУРЕННЯ. Жорстко ріжемо 3-5 магістралей
+        n_cuts = random.choice([3, 4, 5])
+        cut_pipes = [x[0] for x in fat_mains[:n_cuts * 2]] # Беремо з топ-кандидатів
+        chosen_cuts = random.sample(cut_pipes, min(n_cuts, len(cut_pipes)))
+        
+        for p_idx in chosen_cuts:
+            # Зменшуємо діаметр на 2 кроки відразу (глибоке занурення!)
+            kicked[p_idx] = max(0, kicked[p_idx] - 2) 
+            # КРОК 2: БЛОКУВАННЯ. Забороняємо лікувати ці труби
+            locked.add(p_idx) 
+            
+        # КРОК 3: СПЛИВАННЯ. Змушуємо мережу лікуватися через інші труби
+        healed, ok, boosts = self.ls.heal_network(kicked, locked)
+        
+        if not ok: return None, None, ""
+        
+        return healed, locked, f"SUBMARINE: Cut {len(chosen_cuts)} mains (locked). Healed {boosts}x peripheral pipes."
