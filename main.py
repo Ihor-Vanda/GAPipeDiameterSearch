@@ -9,6 +9,7 @@ import signal
 import sys
 import traceback
 import copy
+import json
 
 from ga_config import GAConfig
 from ga_utils import silence_warnings, format_time
@@ -46,8 +47,6 @@ def worker_init(inp_file, config_obj):
         os.chdir(worker_temp_dir)
 
         import shutil
-        # ГЕНЕРУЄМО УНІКАЛЬНЕ ІМ'Я ФАЙЛУ ДЛЯ КОЖНОГО ВОРКЕРА
-        # Замість "Hanoi.inp" буде "Hanoi_worker_14523.inp"
         base_name = os.path.splitext(os.path.basename(inp_file))[0]
         local_inp = f"{base_name}_worker_{pid}.inp"
         local_inp = os.path.abspath(local_inp)
@@ -98,59 +97,6 @@ def setup_run_directory(base_dir="OutputDataExperiments"):
     print(f"[System] Created new output directory: {run_dir}")
     return run_dir
 
-# def analytical_worker_task(args):
-#     """
-#     Запускається в окремому процесі.
-#     """
-#     # 🔴 ОНОВЛЕНО: Додано global_failed_basins для Basin Avoidance (Ідея #3)
-#     diameters, v_opt, time_budget, global_best_cost, global_archive, seed_modifier, worker_id, shared_progress, log_dir, epoch, global_failed_basins = args
-#     global worker_sim_instance
-    
-#     if worker_sim_instance is None:
-#         return (float('inf'), None, seed_modifier, 0, set())
-
-#     import sys, os
-#     os.makedirs(os.path.join(log_dir, "worker_logs"), exist_ok=True)
-#     log_file = os.path.join(log_dir, "worker_logs", f"epoch_{epoch+1}_worker_{worker_id+1:02d}.txt")
-    
-#     worker_logger = open(log_file, "w", encoding="utf-8")
-#     sys.stdout = worker_logger
-#     sys.stderr = worker_logger
-#     # =================================================================
-
-#     import random
-#     import numpy as np
-#     from analytical_solver import AnalyticalSolver
-    
-#     random.seed(seed_modifier * 137 + 42)
-#     np.random.seed(seed_modifier * 137 + 42)
-    
-#     local_solver = AnalyticalSolver(worker_sim_instance, diameters, v_opt=v_opt)
-    
-#     base_budget = local_solver.max_sims
-#     if epoch == 0:
-#         local_solver.max_sims = int(base_budget * 0.70)  
-#     else:
-#         local_solver.max_sims = int(base_budget * 0.30)  
-
-#     if not global_archive:
-#         seeds = local_solver._make_diverse_seeds()
-#     else:
-#         # 🔴 ОНОВЛЕНО: Передаємо failed_basins у генератор насіння
-#         seeds = local_solver._make_warm_seeds(global_archive, worker_id=worker_id, failed_basins=global_failed_basins)
-        
-#     res_cost, res_sol = local_solver._run_single_search(
-#         seeds, time_budget, global_best_cost, 
-#         worker_id=worker_id, shared_progress=shared_progress
-#     )
-    
-#     sys.stdout.flush()
-#     worker_logger.close()
-#     sys.stdout = sys.__stdout__ 
-    
-#     # 🔴 ОНОВЛЕНО: Повертаємо basin_tabu Оркестратору
-#     return (res_cost, res_sol, seed_modifier, local_solver.ctx.sim_count, local_solver.pool.basin_tabu)
-
 def analytical_worker_task(args):
     # 1. Безпечне розпакування за індексами
     diams            = args[0]
@@ -167,7 +113,6 @@ def analytical_worker_task(args):
     max_sims         = args[11] if len(args) > 11 else float('inf')
     n_workers        = args[12] if len(args) > 12 else (len(shared_progress) if shared_progress else 1)
 
-    # 2. Отримуємо локальний для процесу симулятор
     global worker_sim_instance
     if worker_sim_instance is None:
         raise RuntimeError("Worker simulator not initialized!")
@@ -180,8 +125,7 @@ def analytical_worker_task(args):
     random.seed(seed_mod)
     np.random.seed(seed_mod)
 
-    # 🔴 ПАТЧ: Жорстке перехоплення логів (stdout interceptor)
-    original_stdout = sys.stdout # Зберігаємо оригінальну консоль про всяк випадок
+    original_stdout = sys.stdout
     log_file_path = None
     log_file_handle = None
 
@@ -190,25 +134,23 @@ def analytical_worker_task(args):
         os.makedirs(logs_folder, exist_ok=True)
         log_file_path = os.path.join(logs_folder, f"worker_{worker_id+1:02d}.txt")
         
-        # Відкриваємо файл у режимі дозапису
         log_file_handle = open(log_file_path, "a", encoding="utf-8")
         log_file_handle.write(f"\n\n{'='*50}\n 🚀 STARTING EPOCH {epoch+1} | WORKER {worker_id+1:02d}\n{'='*50}\n")
         log_file_handle.flush()
         
-        # Підміняємо стандартний вивід Python на наш файл!
         class WorkerLogger:
             def __init__(self, file_handle):
                 self.file_handle = file_handle
             def write(self, message):
                 self.file_handle.write(message)
-                self.file_handle.flush() # Негайний запис на диск
+                self.file_handle.flush()
             def flush(self):
                 self.file_handle.flush()
-                
-        sys.stdout = WorkerLogger(log_file_handle)
 
     try:
-        # 3. Динамічно завантажуємо класи
+        if log_file_handle:
+            sys.stdout = WorkerLogger(log_file_handle)
+        
         from analytical_solver import AnalyticalSolver
         solver_module = sys.modules[AnalyticalSolver.__module__]
         
@@ -217,9 +159,8 @@ def analytical_worker_task(args):
         KickStrategies = solver_module.KickStrategies
         IslandWorker = solver_module.IslandWorker
 
-        # 4. Ініціалізуємо контекст
         ctx = SolverContext(worker_sim_instance, diams, v_opt=v_opt)
-        ctx.log_file = log_file_path # Про всяк випадок залишаємо і тут
+        ctx.log_file = log_file_path 
         
         ls = LocalSearch(ctx)
         kicker = KickStrategies(ctx, ls)
@@ -228,14 +169,12 @@ def analytical_worker_task(args):
         network_class = "SMALL" if n < 50 else ("MEDIUM" if n < 200 else ("LARGE" if n < 1000 else "XLARGE"))
         beam_width = 8 if network_class in ["LARGE", "XLARGE"] else 5
         
-        # 5. Запускаємо новий агент-дослідник
         worker = IslandWorker(ctx, kicker, ls, worker_id, n_workers, max_sims, beam_width, network_class, global_archive, epoch)
         c_best, sol_best = worker.run(time_budget, global_best_cost, shared_progress)
         
         return c_best, sol_best, None, ctx.sim_count, worker.pool.basin_tabu
         
     finally:
-        # 🔴 ПАТЧ: Гарантовано повертаємо консоль на місце після завершення
         sys.stdout = original_stdout
         if log_file_handle:
             log_file_handle.close()
@@ -244,6 +183,10 @@ def main():
     multiprocessing.freeze_support()
 
     parser = argparse.ArgumentParser(description="Hybrid Genetic Algorithm / Analytical Solver for WDN")
+    
+    parser.add_argument("--config", type=str, default=None, help="Path to JSON config file (overrides other args)")
+    parser.add_argument("--max_sims", type=int, default=None, help="Global simulation budget (e.g., 15000000)")
+    
     parser.add_argument("--inp", type=str, default="InputData/Hanoi/Hanoi.inp", help="Path to EPANET .inp file")
     parser.add_argument("--costs", type=str, default="InputData/Hanoi/costs.csv", help="Path to cost configuration JSON")
     parser.add_argument("--runs", type=int, default=1, help="Number of independent runs")
@@ -265,6 +208,16 @@ def main():
 
     args = parser.parse_args()
 
+    if args.config:
+        if os.path.exists(args.config):
+            print(f"[System] Loading configuration from {args.config}...")
+            with open(args.config, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+                for key, value in config_data.items():
+                    setattr(args, key, value)
+        else:
+            print(f"[Fatal Error] Config file not found: {args.config}")
+            sys.exit(1)
     args.inp = os.path.abspath(args.inp)
     args.costs = os.path.abspath(args.costs)
 
@@ -345,7 +298,15 @@ def main():
             print(f"\n[Mode] Running Fast Analytical Solver (v_opt = {config.v_opt} m/s)...")
             
             abs_log_dir = os.path.abspath(base_dir)
-            solver = AnalyticalSolver(sim, config.diameters_m, v_opt=config.v_opt, pool=pool, log_dir=abs_log_dir, n_workers=num_cores)
+            solver = AnalyticalSolver(
+                sim, 
+                config.diameters_m, 
+                v_opt=config.v_opt, 
+                pool=pool, 
+                log_dir=abs_log_dir, 
+                n_workers=num_cores, 
+                max_sims=args.max_sims
+            )
             
             start_t = time.time()
             best_solution_meters = solver.solve_standalone()
@@ -374,7 +335,6 @@ def main():
             use_graphs = not args.no_graphs
 
             for i in range(args.runs):
-                optimizer.total_sims = 0
                 optimizer.total_sims = 0
                 ind, _, _, dur, hist = optimizer.run(
                     run_id=i, 

@@ -1,0 +1,9 @@
+{
+  "run_mode": "analytical",
+  "units": "mm",
+  "hmin": 20.0,
+  "inp": "InputData/Balerma/Balerma.inp",
+  "costs": "InputData/Balerma/costs.csv",
+  "cores": 5,
+  "max_sims": 15000000
+}

@@ -1,0 +1,9 @@
+{
+  "run_mode": "analytical",
+  "units": "in",
+  "hmin": 30.0,
+  "inp": "InputData/Hanoi/Hanoi.inp",
+  "costs": "InputData/Hanoi/costs.csv",
+  "cores": 5,
+  "max_sims": 1000000
+}

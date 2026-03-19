@@ -37,7 +37,6 @@ class LocalSearch:
         cost, p_min, _, _ = self.ctx.get_cached_stats(current_indices)
         best_score = cost - ((p_min - self.ctx.simulator.config.h_min) * dyn_bonus) if p_min >= self.ctx.simulator.config.h_min else float('inf')
         
-        # 🔴 ПАТЧ 1: Трекери для детектора спадної віддачі
         milestone_cost = cost
         milestone_pass = 0
 
@@ -46,26 +45,40 @@ class LocalSearch:
         while improved:
             improved = False
             passes += 1
+            
+            # 🔴 ФІКС 1: Глобальний пінг. Тепер оркестратор бачить прогрес завжди,
+            # незалежно від того, який метод викликав gradient_squeeze.
+            if getattr(self, 'progress_callback', None):
+                self.progress_callback()
+                
             if max_passes and passes > max_passes: break
             
-            # 🔴 ПАТЧ 1: Перевіряємо кожні 3 проходи
             if passes - milestone_pass >= 3:
                 rel_improvement = (milestone_cost - cost) / max(milestone_cost, 1.0)
                 if rel_improvement < min_rel_improvement:
-                    break  # Спадна віддача — виходимо достроково (економимо тисячі симуляцій)
+                    break
                 milestone_cost = cost
                 milestone_pass = passes
 
             random.shuffle(active_indices)
             
-            for idx in active_indices:
+            if quick_mode:
+                unit_losses = self.ctx.get_cached_heuristics(current_indices)
+                active_indices_pass = [i for i in active_indices if unit_losses[i] < 0.05]
+                
+                if not active_indices_pass:
+                    sorted_by_loss = sorted(active_indices, key=lambda i: unit_losses[i])
+                    active_indices_pass = sorted_by_loss[:max(1, len(active_indices) // 3)]
+            else:
+                active_indices_pass = active_indices
+                
+            for idx in active_indices_pass:
                 curr_d = current_indices[idx]
                 best_local_sol = None
                 best_local_score = best_score
                 best_local_cost = cost
                 best_local_p = p_min
                 
-                # Перевірка зменшення діаметра (downgrade)
                 if curr_d > 0:
                     test_sol = list(current_indices)
                     test_sol[idx] -= 1
@@ -75,7 +88,6 @@ class LocalSearch:
                         if score < best_local_score or (quick_mode and c < best_local_cost):
                             best_local_score, best_local_sol, best_local_cost, best_local_p = score, test_sol, c, p_val
                             
-                # Перевірка збільшення діаметра (upgrade)
                 if curr_d < self.ctx.max_d_idx and not quick_mode:
                     test_sol = list(current_indices)
                     test_sol[idx] += 1
@@ -147,10 +159,16 @@ class LocalSearch:
 
     def swap_search(self, indices, dyn_bonus):
         indices_copy = list(indices)
-        best_cost, best_p, _, crit_node = self.ctx.get_cached_stats(indices_copy)
+        
+        raw_cost, best_p, _, crit_node = self.ctx.get_cached_stats(indices_copy)
         
         if not crit_node or crit_node == "ERR":
             return indices_copy
+            
+        p_surplus = best_p - self.ctx.simulator.config.h_min
+        
+        # 🔴 ГАРАНТОВАНА ІНІЦІАЛІЗАЦІЯ: Якщо мережа невалідна, best_cost = Нескінченність
+        best_cost = raw_cost - (p_surplus * dyn_bonus) if p_surplus >= 0 else float('inf')
             
         path_pipes, _ = self.ctx.get_dominant_path(indices_copy, crit_node)
         unit_losses = self.ctx.get_cached_heuristics(indices_copy)

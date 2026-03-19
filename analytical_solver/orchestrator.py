@@ -45,7 +45,7 @@ class SeedFactory:
             if ok:
                 n_freeze = max(3, self.ctx.num_pipes // 4)
                 frozen = set(random.sample(range(self.ctx.num_pipes), n_freeze))
-                squeezed = self.ls.gradient_squeeze(healed, locked_pipes=frozen, quick_mode=True)
+                squeezed = self.ls.gradient_squeeze(healed, locked_pipes=frozen, max_passes=2, quick_mode=True)
                 reserve.append(squeezed)
         return reserve
 
@@ -64,7 +64,7 @@ class SeedFactory:
             if not feas or p < self.ctx.simulator.config.h_min:
                 idx_sol, is_healed, _ = self.ls.heal_network(idx_sol, set())
                 if not is_healed: continue 
-            squeezed_sol = self.ls.gradient_squeeze(idx_sol, quick_mode=True)
+            squeezed_sol = self.ls.gradient_squeeze(idx_sol, max_passes=12, quick_mode=True)
             seeds.append(squeezed_sol)
         return seeds
 
@@ -104,14 +104,22 @@ class SeedFactory:
         elif role == "RELINKER":
             self.ctx.log(f"[CASTE] Worker {worker_id+1:02d} -> 🧬 RELINKER (Path-Relinking)")
             seeds.append(list(base_sol))
+            
             if len(archive) >= 2:
                 target_sol = archive[(archive_idx + 1) % len(archive)][1]
                 diff_indices = [i for i in range(self.ctx.num_pipes) if base_sol[i] != target_sol[i]]
-                for _ in range(self.BEAM_WIDTH - 1):
-                    child = list(base_sol)
-                    cross_points = random.sample(diff_indices, min(len(diff_indices), max(2, len(diff_indices)//2)))
-                    for idx in cross_points: child[idx] = target_sol[idx]
-                    seeds.append(child)
+                
+                if not diff_indices:
+                    for _ in range(self.BEAM_WIDTH - 1):
+                        seeds.append(list(base_sol))
+                else:
+                    for _ in range(self.BEAM_WIDTH - 1):
+                        child = list(base_sol)
+                        n_cross = min(len(diff_indices), max(2, len(diff_indices) // 2))
+                        cross_points = random.sample(diff_indices, n_cross)
+                        for idx in cross_points: 
+                            child[idx] = target_sol[idx]
+                        seeds.append(child)
             else:
                 div_seeds = self.make_diverse_seeds()
                 while len(seeds) < self.BEAM_WIDTH and div_seeds:
@@ -193,6 +201,7 @@ class IslandWorker:
         self.corridor_pool_streak = 0
         self.loop_balance_failed_pipes = {}
         self._last_global_improvement_sim = 0
+        self.bottleneck_failed_pipes = {}
 
     def run(self, time_budget, global_best_cost, shared_progress):
         self.global_best_cost = global_best_cost
@@ -212,6 +221,29 @@ class IslandWorker:
         epoch_start_sims = self.ctx.sim_count 
         self._last_global_improvement_sim = self.ctx.sim_count
         just_flushed = False
+        
+        self._last_ping_sims = self.ctx.sim_count
+        self._last_ping_time = time.time()
+        
+        def update_progress_ping():
+            if shared_progress is not None:
+                curr_sims = self.ctx.sim_count
+                curr_time = time.time()
+                
+                if (curr_sims - self._last_ping_sims) > 10000 or (curr_time - self._last_ping_time) > 2.0:
+                    self._last_ping_sims = curr_sims
+                    self._last_ping_time = curr_time
+                    
+                    try:
+                        current_data = shared_progress.get(self.worker_id)
+                        if isinstance(current_data, dict):
+                            new_data = dict(current_data)
+                            new_data['sims'] = curr_sims
+                            shared_progress[self.worker_id] = new_data
+                    except Exception:
+                        pass
+                        
+        self.ls.progress_callback = update_progress_ping
         
         while True:
             self.pool.current_round = round_idx 
@@ -267,8 +299,17 @@ class IslandWorker:
             round_idx += 1
                 
         if shared_progress is not None:
-            shared_progress[self.worker_id] = {"round": "DONE", "sims": self.ctx.sim_count, "best_cost": self.run_best_cost}
+            try:
+                current_data = shared_progress.get(self.worker_id, {})
+                if isinstance(current_data, dict):
+                    current_data['sims'] = self.ctx.sim_count
+                    current_data['best_cost'] = self.run_best_cost
+                    shared_progress[self.worker_id] = current_data
+            except Exception:
+                pass
 
+        self.ls.progress_callback = None
+        
         return self.run_best_cost, self.run_best_sol
 
     # ================= ПРИВАТНІ МЕТОДИ ВОКЕРА =================
@@ -279,10 +320,21 @@ class IslandWorker:
             c, p, feas, _ = self.ctx.get_cached_stats(s)
             p_surplus = p - self.ctx.simulator.config.h_min
             score = c - (p_surplus * self.base_dyn_bonus)
+            
             self.pool.active_pool.append((score, c, s))
             self.pool.add_to_tabu(s, c)
+            
             if feas and p >= self.ctx.simulator.config.h_min:
                 valid_sols.append((c, s))
+                
+        if not self.pool.active_pool:
+            self.ctx.log("   > [WARNING] No valid seeds received. Injecting emergency max-diameter seed.")
+            emergency = [self.ctx.max_d_idx] * self.ctx.num_pipes
+            c, p, feas, _ = self.ctx.get_cached_stats(emergency)
+            
+            self.pool.active_pool.append((c, c, emergency))
+            if feas and p >= self.ctx.simulator.config.h_min:
+                valid_sols.append((c, emergency))
                 
         if valid_sols:
             self.run_best_cost = min(x[0] for x in valid_sols)
@@ -357,7 +409,11 @@ class IslandWorker:
             if gb and gb[1]:
                 archive_sol = list(gb[1])
                 new_seeds = []
-                n_perturb = max(10, self.ctx.num_pipes // 3) if self.is_late_game else max(8, self.ctx.num_pipes // 4)
+                
+                base_perturb = max(10, self.ctx.num_pipes // 5)
+                n_perturb = min(30, base_perturb) if self.is_late_game else min(45, base_perturb + 10)
+                # 🔴 ФІКС 1 (Критичний): Захист від ValueError на малих мережах
+                n_perturb = min(n_perturb, self.ctx.num_pipes)
                 
                 for _ in range(4): 
                     perturbed = list(archive_sol)
@@ -371,13 +427,20 @@ class IslandWorker:
                             new_seeds.append(squeezed)
                             
                 if new_seeds:
+                    # 🔴 ПАТЧ 3: Скидаємо стагнацію, тільки якщо реально додали щось у пул
+                    actually_added = 0
                     for seed in new_seeds:
                         c, p, feas, _ = self.ctx.get_cached_stats(seed)
                         if feas and p >= self.ctx.simulator.config.h_min:
                             score = c - ((p - self.ctx.simulator.config.h_min) * self.base_dyn_bonus)
                             self.pool.active_pool.append((score, c, seed))
-                    self.stagnation_counter = 0
-                    self.ctx.log(f"   [MINI-RESTART] Injected {len(new_seeds)} fresh seeds. Tabu cleared.")
+                            actually_added += 1
+                            
+                    if actually_added > 0:
+                        self.stagnation_counter = 0
+                        self.ctx.log(f"   [MINI-RESTART] Injected {actually_added} fresh seeds. Tabu cleared.")
+                    else:
+                        self.ctx.log(f"   [MINI-RESTART] All seeds infeasible. Stagnation persists.")
 
     def _apply_swap(self, round_idx, shared_progress):
         if round_idx > 0 and round_idx % 8 == 0:
@@ -457,13 +520,16 @@ class IslandWorker:
         
         forced_sol, locked, path_sig, failed_pipe_id = None, None, None, -1
         
+        if not hasattr(self, 'bottleneck_failed_pipes'): self.bottleneck_failed_pipes = {}
+        if not hasattr(self, 'loop_balance_failed_pipes'): self.loop_balance_failed_pipes = {}
+        
         if strategy == "SEGMENT_RESTART": forced_sol, locked, log_msg = self.kicker.segment_restart_kick(kick_target, self.base_dyn_bonus)
         elif strategy == "IPC_CROSSOVER": forced_sol, locked, log_msg = self.kicker.crossover_with_peer_kick(kick_target, peer_to_cross[1], self.run_best_cost, peer_to_cross[0])
         elif strategy == "CORRIDOR_SEARCH": forced_sol, locked, log_msg = self.kicker.corridor_search_kick(kick_target, peer_to_cross[1])
         elif strategy == "ILS_PERTURBATION": forced_sol, locked, log_msg = self.kicker.ils_perturbation_kick(kick_target, self.stagnation_counter)
         elif strategy == "VNS_KICK": forced_sol, locked, log_msg = self.kicker.vns_structured_kick(kick_target, self.stagnation_counter)
         elif strategy == "SHOCK": forced_sol, locked, log_msg = self.kicker.forcing_hand_kick(kick_target)
-        elif strategy == "BOTTLENECK": forced_sol, locked, log_msg = self.kicker.upstream_bottleneck_kick(kick_target)
+        elif strategy == "BOTTLENECK": forced_sol, locked, log_msg, failed_pipe_id = self.kicker.upstream_bottleneck_kick(kick_target, self.bottleneck_failed_pipes, round_idx)
         elif strategy == "LOOP_BALANCE": 
             forced_sol, locked, log_msg, failed_pipe_id = self.kicker.loop_balancing_kick(kick_target, self.base_dyn_bonus, self.loop_balance_failed_pipes, round_idx)
         elif strategy == "DIAM_DIVERSITY": forced_sol, locked, log_msg = self.kicker.diameter_diversity_kick(kick_target, self.stagnation_counter) 
@@ -474,8 +540,15 @@ class IslandWorker:
         elif strategy == "SUBMARINE": forced_sol, locked, log_msg = self.kicker.submarine_oscillation_kick(kick_target)
         else: forced_sol, locked, log_msg, path_sig = self.kicker.topological_inversion_kick(kick_target, self.pool.kick_tabu_set)
 
-        if failed_pipe_id != -1: self.loop_balance_failed_pipes[failed_pipe_id] = round_idx
-        if not forced_sol or not locked: return
+        if not forced_sol or not locked:
+            if failed_pipe_id != -1: 
+                if strategy == "BOTTLENECK": self.bottleneck_failed_pipes[failed_pipe_id] = round_idx
+                elif strategy == "LOOP_BALANCE": self.loop_balance_failed_pipes[failed_pipe_id] = round_idx
+            return
+            
+        if failed_pipe_id != -1: 
+            if strategy == "BOTTLENECK": self.bottleneck_failed_pipes[failed_pipe_id] = round_idx
+            elif strategy == "LOOP_BALANCE": self.loop_balance_failed_pipes[failed_pipe_id] = round_idx
 
         self.ctx.log(f"     -> {log_msg}")
         
@@ -500,11 +573,18 @@ class IslandWorker:
             tolerance = 1.15 if self.stagnation_counter > self.stag_limit * 2 else (1.05 if is_heavy else 1.02)
             hyperband_threshold = max(self.run_best_cost * tolerance, water_level * 1.02)
             
-            if quick_f and quick_p >= self.ctx.simulator.config.h_min and (quick_cost < hyperband_threshold):
+            absolute_cap = self.run_best_cost * 1.15 
+            effective_threshold = min(hyperband_threshold, absolute_cap)
+            
+            is_promising = quick_f and quick_p >= self.ctx.simulator.config.h_min and (quick_cost < effective_threshold)
+            
+            if is_promising:
                 if self.ctx.num_pipes >= 200 and self.progress_ratio > 0.7: deep_passes = 6 
-                elif is_heavy: deep_passes = 5
-                else: deep_passes = 3 if self.progress_ratio > 0.5 else 6
+                elif is_heavy: deep_passes = 4
+                else: deep_passes = 3 if self.progress_ratio > 0.5 else 4
+                
                 self.ctx.log(f"        [HYPERBAND] Promising path detected ({quick_cost/1e6:.2f}M$). Deep Squeeze ({deep_passes} passes)...")
+                
                 final_sol = self.ls.gradient_squeeze(quick_sol, locked_pipes=locked_for_squeeze, max_passes=deep_passes, dyn_bonus=self.base_dyn_bonus)
             else:
                 final_sol = quick_sol
@@ -519,8 +599,15 @@ class IslandWorker:
             eff_bonus = self.base_dyn_bonus * 0.3 if p_surplus < 1.0 else (self.base_dyn_bonus * 2.0 if p_surplus > 15.0 else self.base_dyn_bonus)
             
             if p_surplus < 2.0:
+                pre_sq_sol = final_sol 
                 final_sol = self.ls.gradient_squeeze(final_sol, locked_pipes=set(), max_passes=3, quick_mode=True, dyn_bonus=eff_bonus)
                 c, p, feas, _ = self.ctx.get_cached_stats(final_sol)
+                
+                if not feas or p < self.ctx.simulator.config.h_min:
+                    self.ctx.log(f"     -> Post-squeeze became infeasible. Reverting to pre-squeeze state.")
+                    final_sol = pre_sq_sol
+                    c, p, feas, _ = self.ctx.get_cached_stats(final_sol)
+                    
                 p_surplus = p - self.ctx.simulator.config.h_min if feas else p_surplus
                 eff_bonus = self.base_dyn_bonus * 0.3 if p_surplus < 1.0 else self.base_dyn_bonus
             
@@ -550,18 +637,24 @@ class IslandWorker:
                     self.ctx.log(f"   > [FORCE] 💎 Direct Record Update: -${diff:,.0f} ({self.run_best_cost/1e6:.4f}M$)")
                     self._update_global_best(shared_progress)
 
-            elif (c < water_level and not self.pool.is_basin_tabu(final_sol)) or strategy == "SEGMENT_RESTART":
+            elif strategy == "SEGMENT_RESTART":
+                self.pool.active_pool.append((score * 1.05, c, final_sol))
+                self.stagnation_counter = 0 
+                self.corridor_pool_streak = 0
+                self.ctx.log(f"     -> Added to Pool (Segment Restart Accept): {c/1e6:.4f}M$")
+                
+            elif c < water_level and not self.pool.is_basin_tabu(final_sol):
                 pool_gap = (c - self.run_best_cost) / max(self.run_best_cost, 1)
                 max_pool_gap = 0.06 if self.is_late_game else 0.12
                 
-                if self.ctx.num_pipes >= 200 and pool_gap > max_pool_gap and strategy != "SEGMENT_RESTART":
+                if self.ctx.num_pipes >= 200 and pool_gap > max_pool_gap:
                     self.ctx.log(f"     -> Pool Filtered (gap {pool_gap:.1%}): {c/1e6:.4f}M$")
                 else:
                     self.pool.active_pool.append((score * 1.05, c, final_sol))
                     if strategy == "CORRIDOR_SEARCH":
                         self.corridor_pool_streak += 1
                         if self.corridor_pool_streak <= 3: self.stagnation_counter = 0 
-                    elif strategy in ["ILS_PERTURBATION", "IPC_CROSSOVER", "SEGMENT_RESTART", "RUIN_RECREATE", "VNS_KICK", "ZERO_SUM", "SUBMARINE"]:
+                    elif strategy in ["ILS_PERTURBATION", "IPC_CROSSOVER", "RUIN_RECREATE", "VNS_KICK", "ZERO_SUM", "SUBMARINE"]:
                         self.stagnation_counter = 0 
                         self.corridor_pool_streak = 0
                     self.strat_wins[strategy] += 0.5 
@@ -573,7 +666,6 @@ class IslandWorker:
                 self.ctx.log(f"     -> 🚀 HAIL MARY ACCEPT (Forced Escape): {c/1e6:.4f}M$")
             else:
                 self.ctx.log(f"     -> Rejected (Poor or Tabu Basin): {c/1e6:.4f}M$")
-                if strategy == "SEGMENT_RESTART": self.stagnation_counter = int(self.stag_limit * 1.5)
             if path_sig: self.pool.kick_tabu_set.add(path_sig)
         else:
              self.ctx.log(f"     -> Injection/Squeeze Failed: Infeasible/Exploded")
@@ -622,9 +714,9 @@ class IslandWorker:
             if self.pool.is_tabu(sol, cost): continue
             if len(unique_next_pool) < self.BEAM_WIDTH:
                 if rank == 0: 
-                    refined_sol = self.ls.gradient_squeeze(sol, max_passes=12, dyn_bonus=self.base_dyn_bonus)
+                    refined_sol = self.ls.gradient_squeeze(sol, max_passes=8, dyn_bonus=self.base_dyn_bonus, min_rel_improvement=0.0005)
                 elif rank < 3: 
-                    refined_sol = self.ls.gradient_squeeze(sol, max_passes=5, quick_mode=not self.is_late_game, dyn_bonus=self.base_dyn_bonus)
+                    refined_sol = self.ls.gradient_squeeze(sol, max_passes=4, quick_mode=not self.is_late_game, dyn_bonus=self.base_dyn_bonus, min_rel_improvement=0.001)
                 else: 
                     refined_sol = sol 
 
@@ -648,14 +740,12 @@ class IslandWorker:
                         else:
                             score = real_cost + (abs(real_p_surplus) * self.base_dyn_bonus * 50.0)
                         
-                        unique_next_pool.append((score, real_cost, refined_sol))
-                        self.pool.add_to_tabu(refined_sol, real_cost)
-                        
                         if is_strictly_valid and real_cost < self.run_best_cost:
                             is_ghost = False
                             if (self.run_best_cost - real_cost) > (self.run_best_cost * 0.02):
                                 is_ghost = self.ctx.is_ghost_solution(refined_sol, real_cost)
                                 
+                            # 🔴 ПАТЧ 1: Вихід з циклу ДО додавання Ghost у пул
                             if is_ghost:
                                 self.ctx.log(f"   > [SHIELD] Beam illusion blocked ({real_cost/1e6:.4f}M$).")
                                 continue 
@@ -671,18 +761,29 @@ class IslandWorker:
                             
                             self._update_global_best(shared_progress)
 
-        dynamic_beam = max(3, int(self.BEAM_WIDTH * (1.0 + 0.5 * (1.0 - self.progress_ratio))))
-        self.pool.active_pool = unique_next_pool[:dynamic_beam]
-        
-        if found_new_record or just_flushed:
-            self.stagnation_counter = 0
-            self.pool.kick_tabu_set.clear()
-        else:
-            self.stagnation_counter += 1
-            if self.stagnation_counter % 8 == 0: self.pool.kick_tabu_set.clear()
+                        # Додаємо в пул тільки після перевірок
+                        unique_next_pool.append((score, real_cost, refined_sol))
+                        self.pool.add_to_tabu(refined_sol, real_cost)
+
+        # 🔴 ПАТЧ 5: Захист від тихого обнулення пулу
+        if unique_next_pool:
+            unique_next_pool.sort(key=lambda x: x[0])
+            dynamic_beam = max(3, int(self.BEAM_WIDTH * (1.0 + 0.5 * (1.0 - self.progress_ratio))))
+            self.pool.active_pool = unique_next_pool[:dynamic_beam]
             
-        self._emergency_pool_diversity()
-        return found_new_record or just_flushed
+            if found_new_record or just_flushed:
+                self.stagnation_counter = 0
+                self.pool.kick_tabu_set.clear()
+            else:
+                self.stagnation_counter += 1
+                if self.stagnation_counter % 8 == 0: self.pool.kick_tabu_set.clear()
+                
+            self._emergency_pool_diversity()
+            return found_new_record or just_flushed
+        else:
+            self.ctx.log("     [BEAM] No valid children generated. Keeping current pool.")
+            self.stagnation_counter += 1
+            return False
 
     def _emergency_pool_diversity(self):
         if len(self.pool.active_pool) >= 3:
@@ -822,8 +923,8 @@ class AnalyticalSolver:
         self.pool = SolutionPool(self.ctx) 
         
         # 🔴 ВІДНОВЛЕНО: Динамічний розрахунок бюджету
-        self.BASE_SIM_BUDGET = {"SMALL": 1000000, "MEDIUM": 3000000, "LARGE": 40000000, "XLARGE": 30000000}[self.network_class]
-        self.EPOCHS = {"SMALL": 4, "MEDIUM": 4, "LARGE": 8, "XLARGE": 5}[self.network_class]
+        self.BASE_SIM_BUDGET = {"SMALL": 1000000, "MEDIUM": 3000000, "LARGE": 15000000, "XLARGE": 30000000}[self.network_class]
+        self.EPOCHS = {"SMALL": 4, "MEDIUM": 4, "LARGE": 5, "XLARGE": 5}[self.network_class]
             
         if max_sims is not None:
             self.max_sims = max_sims
@@ -833,9 +934,8 @@ class AnalyticalSolver:
         if time_limit_sec is not None:
             self.time_limit_sec = time_limit_sec
         else:
-            # Справедливий розрахунок часу (якщо хочете обмежувати і часом)
             cluster_speed = max(self.ctx.sim_speed, 1.0) * self.n_workers
-            self.time_limit_sec = (self.max_sims / cluster_speed) * 1.5
+            self.time_limit_sec = (self.max_sims / cluster_speed) * 5
 
     def solve_standalone(self, max_sims=None, time_limit_sec=None):
         print("\n[AnalyticalSolver] ⚡ Initiating Island Model Search...\n")
@@ -851,7 +951,10 @@ class AnalyticalSolver:
             worker_epoch_sims = float('inf')
         else:
             worker_epoch_sims = int(self.max_sims // (self.n_workers * self.EPOCHS))
-        print(f"  [Quota] Allocated {worker_epoch_sims:,} sims per worker/epoch.\n")
+        # print(f"  [Quota] Allocated {worker_epoch_sims:,} sims per worker/epoch.\n")
+        
+        quota_str = "∞" if worker_epoch_sims == float('inf') else f"{worker_epoch_sims:,}"
+        print(f"  [Quota] Allocated {quota_str} sims per worker/epoch.\n")
 
         manager = multiprocessing.Manager() if self.mp_pool else None
         shared_progress = manager.dict() if manager else None

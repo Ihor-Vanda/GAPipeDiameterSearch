@@ -16,7 +16,9 @@ class KickStrategies:
         if not path_pipes: return indices, set(), ""
             
         kicked, locked = list(indices), set()
-        limit = max(3, int(len(path_pipes) * 0.3))
+        c_current, _, _, _ = self.ctx.get_cached_stats(indices)
+        aggressiveness = 0.3 if c_current > 2_200_000 else (0.15 if c_current > 2_050_000 else 0.05)
+        limit = max(1, int(len(path_pipes) * aggressiveness))
         unit_losses = self.ctx.get_cached_heuristics(indices)
         
         worst_pipes = sorted(path_pipes, key=lambda i: unit_losses[i], reverse=True)[:limit]
@@ -29,41 +31,55 @@ class KickStrategies:
         if not locked: return indices, set(), ""
         return kicked, locked, f"SHOCK: Upgraded {len(locked)} worst pipes on Critical Path"
 
-    def upstream_bottleneck_kick(self, indices):
+    def upstream_bottleneck_kick(self, indices, failed_pipes=None, current_round=0):
+        failed_pipes = failed_pipes or {}
         _, _, _, crit_node = self.ctx.get_cached_stats(indices)
-        if not crit_node or crit_node == "ERR": return None, None, ""
-
+        if not crit_node or crit_node == "ERR": return indices, set(), "", -1
+        
         path_pipes, _ = self.ctx.get_dominant_path(indices, crit_node)
-        if not path_pipes: return None, None, ""
-        
-        best_candidate, reason = -1, ""
-        for i in range(1, len(path_pipes)):
-            prev_idx, curr_idx = path_pipes[i-1], path_pipes[i]
-            d_prev, d_curr = indices[prev_idx], indices[curr_idx]
-            if d_curr < d_prev and i < len(path_pipes) * 0.7:
-                best_candidate, reason = curr_idx, f"Taper Violation (Idx{d_prev}->Idx{d_curr})"
-                break
-        
-        if best_candidate == -1:
-            unit_losses = self.ctx.get_cached_heuristics(indices)
-            max_loss = -1.0
-            limit = max(1, len(path_pipes) // 2)
-            for idx in path_pipes[:limit]:
-                if unit_losses[idx] > max_loss:
-                    max_loss, best_candidate, reason = unit_losses[idx], idx, f"Max Upstream Loss ({max_loss:.4f})"
-
-        if best_candidate == -1: return None, None, ""
+        if not path_pipes: return indices, set(), "", -1
         
         kicked, locked = list(indices), set()
-        curr_d_idx = kicked[best_candidate] 
-        target_idx = min(self.ctx.max_d_idx, curr_d_idx + 2)
-        if best_candidate in path_pipes[:2]: target_idx = max(target_idx, self.ctx.max_d_idx - 1)
+        bottleneck_found = False
+        failed_id = -1
+        d_prev, d_curr = -1, -1
+        
+        # 1. Спроба знайти Taper Violation (звуження)
+        for i in range(len(path_pipes) - 1, 0, -1):
+            curr_p = path_pipes[i]
+            prev_p = path_pipes[i-1]
+            
+            if curr_p in failed_pipes and (current_round - failed_pipes[curr_p]) < 10:
+                continue
+                
+            d_curr = indices[curr_p]
+            d_prev = indices[prev_p]
+            
+            if d_curr < d_prev:
+                if kicked[curr_p] < self.ctx.max_d_idx:
+                    kicked[curr_p] += 1
+                    locked.add(curr_p)
+                    bottleneck_found = True
+                    failed_id = curr_p
+                    break
+                    
+        if not bottleneck_found:
+            unit_losses = self.ctx.get_cached_heuristics(indices)
+            half = max(1, len(path_pipes) // 2)
+            candidates = [(idx, unit_losses[idx]) for idx in path_pipes[:half] 
+                          if indices[idx] < self.ctx.max_d_idx 
+                          and not (idx in failed_pipes and (current_round - failed_pipes[idx]) < 10)]
+            
+            if not candidates:
+                return indices, set(), "", -1
+                
+            best_pipe = max(candidates, key=lambda x: x[1])[0]
+            kicked[best_pipe] = min(self.ctx.max_d_idx, kicked[best_pipe] + 1)
+            locked.add(best_pipe)
+            failed_id = best_pipe
+            return kicked, locked, f"BOTTLENECK: Max-Loss Pipe {best_pipe} boosted.", failed_id
 
-        if target_idx == curr_d_idx: return None, None, "" 
-
-        kicked[best_candidate] = target_idx
-        locked.add(best_candidate)
-        return kicked, locked, f"BOTTLENECK: Boosted Pipe {best_candidate} ({reason})"
+        return kicked, locked, f"BOTTLENECK: Boosted Pipe {failed_id} (Taper Violation (Idx{d_prev}->Idx{d_curr}))", failed_id
 
     def topological_inversion_kick(self, indices, tabu_set):
         _, _, _, crit_node = self.ctx.get_cached_stats(indices)
@@ -77,6 +93,7 @@ class KickStrategies:
         
         target_capacity_idx = int(np.mean([indices[p] for p in dom_pipes])) if dom_pipes else self.ctx.max_d_idx
         
+        # 1. Створюємо тимчасовий граф і шукаємо альтернативні шляхи
         temp_G = self.ctx.base_G_flow.copy()
         for u, v in temp_G.edges():
             idx = self.ctx.edge_to_pipe[(u, v)]
@@ -93,6 +110,7 @@ class KickStrategies:
             except nx.NetworkXNoPath:
                 break
 
+        # 2. Оцінюємо знайдені шляхи
         scored_paths = []
         for p_nodes in candidates:
             p_indices, overlap, length = [], 0, 0
@@ -112,10 +130,19 @@ class KickStrategies:
         scored_paths.sort(key=lambda x: x['overlap'])
         if not scored_paths: return None, None, "All paths tabu", None
 
+        # 3. Вибираємо найкращий і застосовуємо Адаптивну Агресію
         best_alt = scored_paths[0]
         kicked, locked, push_count = list(indices), set(), 0
         
-        for idx in best_alt['indices']:
+        c_current, _, _, _ = self.ctx.get_cached_stats(indices)
+        aggressiveness = 0.4 if c_current > 2_200_000 else (0.2 if c_current > 2_050_000 else 0.08)
+        max_pipes_to_change = max(2, int(len(best_alt['indices']) * aggressiveness))
+        
+        indices_to_change = best_alt['indices']
+        if len(indices_to_change) > max_pipes_to_change:
+             indices_to_change = random.sample(indices_to_change, max_pipes_to_change)
+
+        for idx in indices_to_change:
             force_idx = max(target_capacity_idx, self.ctx.max_d_idx - 1) 
             force_idx = min(force_idx, self.ctx.max_d_idx)
             if kicked[idx] < force_idx:
@@ -190,48 +217,6 @@ class KickStrategies:
         
         return best_final_sol, best_locked, f"SYNC-TRIM: Shrunk Pipes {[p+1 for p in best_locked]}. Healed {best_boosts}x."
 
-    # def loop_balancing_kick(self, indices, dyn_bonus):
-    #     _, _, _, crit_node = self.ctx.get_cached_stats(indices)
-    #     if not crit_node or crit_node == "ERR": return None, None, ""
-
-    #     try: cycles = nx.cycle_basis(self.ctx.base_G_flow)
-    #     except: return None, None, ""
-    #     if not cycles: return None, None, "No cycles found"
-
-    #     best_drop_achieved = -1
-    #     candidates = []
-
-    #     for cycle_nodes in cycles:
-    #         cycle_indices = []
-    #         full_cycle = cycle_nodes + [cycle_nodes[0]]
-    #         for u, v in zip(full_cycle[:-1], full_cycle[1:]):
-    #             if (u, v) in self.ctx.edge_to_pipe: cycle_indices.append(self.ctx.edge_to_pipe[(u, v)])
-
-    #         for candidate_idx in cycle_indices:
-    #             curr_d_idx = indices[candidate_idx]
-    #             if curr_d_idx < 2: continue 
-                
-    #             max_drop = min(3, curr_d_idx) 
-    #             for drop in range(max_drop, 0, -1):
-    #                 if drop < best_drop_achieved: continue
-                        
-    #                 kicked, locked = list(indices), set()
-    #                 kicked[candidate_idx] -= drop
-    #                 locked.add(candidate_idx)
-                    
-    #                 healed_sol, is_feasible, boosts = self.ls.heal_network(kicked, locked)
-    #                 if is_feasible:
-    #                     test_squeezed = self.ls.gradient_squeeze(healed_sol, locked_pipes=locked, max_passes=4, quick_mode=True, dyn_bonus=dyn_bonus)
-    #                     sq_cost, _, _, _ = self.ctx.get_cached_stats(test_squeezed)
-    #                     msg = f"FLOW STEER: Cut Pipe {candidate_idx + 1} (-{drop}). Healed {boosts}x."
-    #                     candidates.append((sq_cost, healed_sol, locked, msg))
-    #                     best_drop_achieved = max(best_drop_achieved, drop)
-
-    #     if not candidates: return None, None, "FLOW STEER: Exhaustive search found no valid bypass."
-    #     candidates.sort(key=lambda x: x[0])
-    #     chosen = random.choice(candidates[:3])
-    #     return chosen[1], chosen[2], chosen[3]
-    
     def diameter_diversity_kick(self, indices, stagnation_counter):
         kicked, locked = list(indices), set()
         
@@ -371,16 +356,22 @@ class KickStrategies:
         return squeezed, frozen_pipes, f"SEGMENT-RESTART: Froze {len(frozen_pipes)} pipes, partial Top-Down squeeze."
 
     
-    def corridor_search_kick(self, sol_A, sol_B):
-        """Досліджує простір між двома рішеннями (Hamming 30-70)"""
-        child = list(sol_A)
-        diff_pipes = [i for i in range(self.ctx.num_pipes) if sol_A[i] != sol_B[i]]
+    def corridor_search_kick(self, indices, target_sol):
+        diff_pipes = [i for i in range(self.ctx.num_pipes) if indices[i] != target_sol[i]]
+        if not diff_pipes:
+            return None, None, ""
             
+        child = list(indices)
         locked = set()
+        
         for i in diff_pipes:
             if random.random() < 0.5:
-                child[i] = sol_B[i]
-            locked.add(i)
+                child[i] = target_sol[i]
+                # 🔴 ПАТЧ 4: Блокуємо ТІЛЬКИ ті труби, які дійсно перейняли значення target_sol
+                locked.add(i) 
+                
+        if not locked:
+            return None, None, ""
             
         healed, ok, boosts = self.ls.heal_network(child, locked)
         if not ok: return None, None, ""
@@ -518,49 +509,69 @@ class KickStrategies:
         return healed, locked, msg
 
     def zero_sum_shift_kick(self, indices):
-        """Ідеальний Cost-Cutter: стохастичний обмін найефективніших труб"""
+        _, _, _, crit_node = self.ctx.get_cached_stats(indices)
+        if not crit_node or crit_node == "ERR": return None, None, ""
+
         unit_losses = self.ctx.get_cached_heuristics(indices)
-        downgrade_eff, upgrade_eff = [], []
         
+        # 🔴 ФІКС: Менше пар для обміну на великих мережах (захист від деструктивності)
+        if self.ctx.num_pipes >= 200:
+            max_pairs = 1
+        else:
+            max_pairs = min(3, max(1, self.ctx.num_pipes // 20))
+            
+        kicked = list(indices)
+        locked = set()
+        
+        # Кандидати на апгрейд (Високе тертя, але відносно дешево підняти)
+        upgrade_candidates = []
         for i in range(self.ctx.num_pipes):
-            curr_d = indices[i]
-            if curr_d > 0:
-                delta_c = self.ctx.simulator.costs[curr_d] - self.ctx.simulator.costs[curr_d - 1]
-                eff = delta_c / max(1e-6, unit_losses[i]) 
-                downgrade_eff.append((i, eff))
-            if curr_d < self.ctx.max_d_idx:
-                delta_c = self.ctx.simulator.costs[curr_d + 1] - self.ctx.simulator.costs[curr_d]
-                eff = unit_losses[i] / max(1e-6, delta_c) 
-                upgrade_eff.append((i, eff))
+            if kicked[i] < self.ctx.max_d_idx:
+                cost_diff = self.ctx.lengths[i] * (self.ctx.costs_array[kicked[i]+1] - self.ctx.costs_array[kicked[i]])
+                score = unit_losses[i] / max(cost_diff, 1.0)
+                upgrade_candidates.append((i, cost_diff, score))
                 
-        downgrade_eff.sort(key=lambda x: x[1], reverse=True)
-        upgrade_eff.sort(key=lambda x: x[1], reverse=True)
+        # Кандидати на даунгрейд (Низьке тертя, і можна добре зекономити)
+        downgrade_candidates = []
+        for i in range(self.ctx.num_pipes):
+            if kicked[i] > 0:
+                cost_diff = self.ctx.lengths[i] * (self.ctx.costs_array[kicked[i]] - self.ctx.costs_array[kicked[i]-1])
+                score = cost_diff / max(unit_losses[i], 1e-5)
+                downgrade_candidates.append((i, cost_diff, score))
+                
+        upgrade_candidates.sort(key=lambda x: x[2], reverse=True)
+        downgrade_candidates.sort(key=lambda x: x[2], reverse=True)
         
-        if not downgrade_eff or not upgrade_eff: return None, None, ""
+        exchanges = 0
+        used_pipes = set()
+        
+        for up_pipe, up_cost, _ in upgrade_candidates:
+            if exchanges >= max_pairs: break
+            if up_pipe in used_pipes: continue
             
-        kicked, locked = list(indices), set()
-        n_shifts = random.choice([2, 3, 4])
-        boosts = 0
-        
-        # 🔴 ПАТЧ: Динамічне вікно. Чим довше працює алгоритм, тим глибше він шукає труби
-        window = min(len(downgrade_eff), 10 + self.ctx.sim_count % 50)
-        top_down = [x[0] for x in downgrade_eff[:window]]
-        top_up = [x[0] for x in upgrade_eff[:window]]
-        random.shuffle(top_down)
-        random.shuffle(top_up)
-        
-        for s_idx, c_idx in zip(top_down[:n_shifts], top_up[:n_shifts]):
-            if s_idx == c_idx: continue
-            kicked[s_idx] -= 1
-            kicked[c_idx] += 1
-            locked.update([s_idx, c_idx])
-            boosts += 1
+            # Шукаємо пару для даунгрейду, яка приблизно компенсує вартість (zero-sum)
+            best_down_pipe = -1
+            best_diff = float('inf')
             
-        if boosts == 0: return None, None, ""
-        healed, ok, h_boosts = self.ls.heal_network(kicked, locked)
-        if not ok: return None, None, ""
-        
-        return healed, locked, f"ZERO-SUM: Exchanged {boosts} pairs (Cost-Optimized). Healed {h_boosts}x."
+            for down_pipe, down_cost, _ in downgrade_candidates:
+                if down_pipe in used_pipes or down_pipe == up_pipe: continue
+                
+                cost_balance = abs(up_cost - down_cost)
+                if cost_balance < best_diff and cost_balance < (up_cost * 0.5): # Дозволяємо до 50% відхилення ціни
+                    best_diff = cost_balance
+                    best_down_pipe = down_pipe
+                    
+            if best_down_pipe != -1:
+                kicked[up_pipe] += 1
+                kicked[best_down_pipe] -= 1
+                locked.add(up_pipe)
+                locked.add(best_down_pipe)
+                used_pipes.add(up_pipe)
+                used_pipes.add(best_down_pipe)
+                exchanges += 1
+
+        if not locked: return None, None, ""
+        return kicked, locked, f"ZERO-SUM: Exchanged {exchanges} pairs (Cost-Optimized)."
     
     def submarine_oscillation_kick(self, indices):
         """Strategic Oscillation: Радикально ріже магістралі і лікує мережу периферією"""

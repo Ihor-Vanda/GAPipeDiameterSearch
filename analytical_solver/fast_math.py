@@ -24,9 +24,6 @@ def fast_avg_hamming(pool_matrix):
             pairs += 1
     return total_dist / pairs
 
-import numpy as np
-from numba import njit
-
 @njit
 def fast_dijkstra(num_nodes, sources, target, indptr, indices, weights):
     # indptr, indices, weights - це представлення графа у форматі CSR (Compressed Sparse Row)
