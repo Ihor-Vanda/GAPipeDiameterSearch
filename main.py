@@ -186,6 +186,7 @@ def main():
     
     parser.add_argument("--config", type=str, default=None, help="Path to JSON config file (overrides other args)")
     parser.add_argument("--max_sims", type=int, default=None, help="Global simulation budget (e.g., 15000000)")
+    parser.add_argument("--time_mult", type=float, default=1.5, help="Time limit multiplier") # Не забудьте додати це!
     
     parser.add_argument("--inp", type=str, default="InputData/Hanoi/Hanoi.inp", help="Path to EPANET .inp file")
     parser.add_argument("--costs", type=str, default="InputData/Hanoi/costs.csv", help="Path to cost configuration JSON")
@@ -213,11 +214,16 @@ def main():
             print(f"[System] Loading configuration from {args.config}...")
             with open(args.config, 'r', encoding='utf-8') as f:
                 config_data = json.load(f)
+                
+                cli_args_used = [arg.strip('-') for arg in sys.argv if arg.startswith('--')]
+                
                 for key, value in config_data.items():
-                    setattr(args, key, value)
+                    if key not in cli_args_used:
+                        setattr(args, key, value)
         else:
             print(f"[Fatal Error] Config file not found: {args.config}")
             sys.exit(1)
+
     args.inp = os.path.abspath(args.inp)
     args.costs = os.path.abspath(args.costs)
 

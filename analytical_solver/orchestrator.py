@@ -550,7 +550,15 @@ class IslandWorker:
             if strategy == "BOTTLENECK": self.bottleneck_failed_pipes[failed_pipe_id] = round_idx
             elif strategy == "LOOP_BALANCE": self.loop_balance_failed_pipes[failed_pipe_id] = round_idx
 
-        self.ctx.log(f"     -> {log_msg}")
+        c, p, feas, _ = self.ctx.get_cached_stats(forced_sol)
+        if not feas or p < self.ctx.simulator.config.h_min:
+            forced_sol, ok, _ = self.ls.heal_network(forced_sol, locked)
+            if not ok:
+                if log_msg: self.ctx.log(f"     -> {log_msg}")
+                self.ctx.log(f"     -> Kick Failed (Unhealable structural damage). Discarded.")
+                return
+
+        if log_msg: self.ctx.log(f"     -> {log_msg}")
         
         stagnation_relax = min(0.05, (self.stagnation_counter / max(1, self.stag_limit)) * 0.015)
         base_margin = 0.08 if self.ctx.num_pipes >= 200 else 0.05
