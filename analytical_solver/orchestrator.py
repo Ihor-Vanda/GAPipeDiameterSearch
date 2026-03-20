@@ -97,23 +97,27 @@ class SeedFactory:
                     seeds.append(perturbed)
                     
         elif role == "RELINKER":
-            self.ctx.log(f"[CASTE] Worker {worker_id+1:02d} -> 🧬 RELINKER (Path-Relinking)")
+            self.ctx.log(f"[CASTE] Worker {worker_id+1:02d} -> 🧬 RELINKER (Greedy Path-Relinking)")
             seeds.append(list(base_sol))
             
             if len(archive) >= 2:
-                target_sol = archive[(archive_idx + 1) % len(archive)][1]
+                best_dist = -1
+                target_sol = None
+                for _, arch_sol in archive:
+                    dist = sum(1 for a, b in zip(base_sol, arch_sol) if a != b)
+                    if dist > best_dist and dist > 0:
+                        best_dist = dist
+                        target_sol = arch_sol
+                
                 diff_indices = [i for i in range(self.ctx.num_pipes) if base_sol[i] != target_sol[i]]
                 
                 if not diff_indices:
                     for _ in range(self.BEAM_WIDTH - 1):
                         seeds.append(list(base_sol))
                 else:
+                    self.ctx.log(f"   > Relinking across {len(diff_indices)} pipes to distant target.")
                     for _ in range(self.BEAM_WIDTH - 1):
-                        child = list(base_sol)
-                        n_cross = min(len(diff_indices), max(2, len(diff_indices) // 2))
-                        cross_points = random.sample(diff_indices, n_cross)
-                        for idx in cross_points: 
-                            child[idx] = target_sol[idx]
+                        child = self.greedy_path_relink(base_sol, target_sol)
                         seeds.append(child)
             else:
                 div_seeds = self.make_diverse_seeds()
@@ -148,6 +152,30 @@ class SeedFactory:
                     seeds.append(perturbed)
                     
         return seeds[:self.BEAM_WIDTH]
+    
+    def greedy_path_relink(self, sol_A, sol_B):
+        current = list(sol_A)
+        diff = [i for i in range(self.ctx.num_pipes) if sol_A[i] != sol_B[i]]
+        
+        random.shuffle(diff)
+        
+        best_intermediate = list(sol_A)
+        best_cost, _, _, _ = self.ctx.get_cached_stats(sol_A)
+        
+        for pipe_idx in diff:
+            test = list(current)
+            test[pipe_idx] = sol_B[pipe_idx]
+            
+            c, p, feas, _ = self.ctx.get_cached_stats(test)
+            
+            if feas and p >= self.ctx.simulator.config.h_min:
+                current = test
+                
+                if c < best_cost:
+                    best_cost = c
+                    best_intermediate = list(test)
+                    
+        return best_intermediate
 
 class IslandWorker:
     def __init__(self, ctx, kicker, local_search, worker_id, n_workers, max_sims, beam_width, network_class, global_archive, epoch):
@@ -586,7 +614,13 @@ class IslandWorker:
         
         if feas and p >= self.ctx.simulator.config.h_min:
             p_surplus = p - self.ctx.simulator.config.h_min
-            eff_bonus = self.base_dyn_bonus * 0.3 if p_surplus < 1.0 else (self.base_dyn_bonus * 2.0 if p_surplus > 15.0 else self.base_dyn_bonus)
+            
+            if p_surplus < 2.0:
+                eff_bonus = self.base_dyn_bonus * 3.0 
+            elif p_surplus > 10.0:
+                eff_bonus = self.base_dyn_bonus * 0.3 
+            else:
+                eff_bonus = self.base_dyn_bonus
             
             if p_surplus < 2.0:
                 pre_sq_sol = final_sol 
@@ -919,6 +953,39 @@ class AnalyticalSolver:
         else:
             cluster_speed = max(self.ctx.sim_speed, 1.0) * self.n_workers
             self.time_limit_sec = (self.max_sims / cluster_speed) * 5
+            
+    def _build_diverse_archive(self, pool_results, target_size=6, elite_count=2):
+        if not pool_results: 
+            return []
+            
+        num_pipes = len(pool_results[0][1])
+        
+        # 1. Відбираємо тільки унікальні рішення
+        unique_results = {}
+        for cost, sol in pool_results:
+            sig = tuple(sol)
+            if sig not in unique_results or cost < unique_results[sig]:
+                unique_results[sig] = cost
+                
+        sorted_results = sorted([(c, list(s)) for s, c in unique_results.items()], key=lambda x: x[0])
+        
+        # 2. 🔴 ЗБЕРЕЖЕННЯ ЕЛІТИ: Завжди беремо Топ-2 (чи Топ-3), незалежно від їхньої схожості
+        archive = sorted_results[:elite_count]
+        
+        # 3. 🔴 М'ЯКІШИЙ ФІЛЬТР: Для щільних мереж 4-5% відмінностей (15-20 труб) достатньо для іншої "долини"
+        min_diff_pipes = max(5, min(20, int(num_pipes * 0.04)))
+        
+        # 4. Заповнюємо решту слотів структурно відмінними рішеннями
+        for cost, sol in sorted_results[elite_count:]:
+            if len(archive) >= target_size: 
+                break
+                
+            min_hamming = min(sum(1 for a, b in zip(sol, arch_sol[1]) if a != b) for arch_sol in archive)
+            
+            if min_hamming >= min_diff_pipes:
+                archive.append((cost, sol))
+                
+        return archive
 
     def solve_standalone(self, max_sims=None, time_limit_sec=None):
         print("\n[AnalyticalSolver] ⚡ Initiating Island Model Search...\n")
@@ -1040,35 +1107,21 @@ class AnalyticalSolver:
                     global_best_sol = best_epoch_sol
                     print(f"\n 🏆 [EPOCH {epoch+1}] NEW GLOBAL BEST: {global_best_cost/1e6:.4f}M$ 🏆\n")
 
-                elite_archive = [epoch_results_sorted[0]]
-                diverse_archive = []
-                archive_signatures = {self.pool.get_basin_signature(epoch_results_sorted[0][1])}
-
-                for cost, sol in epoch_results_sorted[1:]:
-                    sig = self.pool.get_basin_signature(sol)
-                    if sig not in archive_signatures:
-                        diverse_archive.append((cost, sol))
-                        archive_signatures.add(sig)
-                    if len(diverse_archive) >= 4: break 
+                # Будуємо архів: 2 беззаперечних лідери + 4 різноманітних варіанти
+                global_archive = self._build_diverse_archive(epoch_results, target_size=6, elite_count=2)
                 
-                for cost, sol in epoch_results_sorted[1:]:
-                    if len(elite_archive) + len(diverse_archive) >= 6: break
-                    if (cost, sol) not in diverse_archive:
-                        elite_archive.append((cost, sol))
-
-                global_archive = elite_archive + diverse_archive
-
-            if epoch < epochs - 1 and len(global_archive) >= 2:
-                sigs = set()
-                for _, sol in global_archive:
-                    sigs.add(self.pool.get_basin_signature(sol))
-                if len(sigs) == 1:
-                    print(f"   [DIVERSITY ALARM] Archive collapsed to single basin! Injecting cold seeds.")
-                    cold_seeds = self.seeder.make_diverse_seeds()
-                    for cs in cold_seeds[:2]:
-                        c, _, feas, _ = self.ctx.get_cached_stats(cs)
-                        if feas: global_archive.append((c, cs))
-                    global_archive = sorted(global_archive, key=lambda x: x[0])[:6]
+            if epoch < epochs - 1 and len(global_archive) < 6:
+                missing_slots = 6 - len(global_archive)
+                print(f"   [DIVERSITY CHECK] Found {len(global_archive)} unique structural basins. Injecting {missing_slots} cold seeds.")
+                cold_seeds = self.seeder.make_diverse_seeds()
+                
+                for cs in cold_seeds:
+                    c, _, feas, _ = self.ctx.get_cached_stats(cs)
+                    if feas: 
+                        global_archive.append((c, cs))
+                        if len(global_archive) >= 6: break
+                
+                global_archive = sorted(global_archive, key=lambda x: x[0])[:6]
 
         print("\n[FINAL POLISH] Polishing global best solution...")
         if global_best_sol:

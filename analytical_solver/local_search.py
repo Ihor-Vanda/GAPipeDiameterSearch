@@ -60,10 +60,17 @@ class LocalSearch:
 
             random.shuffle(active_indices)
           
+            # Завжди беремо всі труби для проходу
             active_indices_pass = active_indices
                 
             for idx in active_indices_pass:
                 curr_d = current_indices[idx]
+                
+                if quick_mode:
+                    unit_losses = self.ctx.get_cached_heuristics(current_indices)
+                    if unit_losses[idx] >= 0.1:
+                        continue
+                
                 best_local_sol = None
                 best_local_score = best_score
                 best_local_cost = cost
