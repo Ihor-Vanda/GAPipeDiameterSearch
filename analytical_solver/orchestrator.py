@@ -7,7 +7,6 @@ import multiprocessing
 import networkx as nx
 import numpy as np
 
-# Виносимо імпорти на рівень модуля (Усунення прихованого багу продуктивності)
 try:
     from .fast_math import fast_avg_hamming
     HAS_FAST_MATH = True
@@ -19,10 +18,6 @@ from .pool import SolutionPool
 from .local_search import LocalSearch
 from .kicks import KickStrategies
 
-# =====================================================================
-# КЛАС 1: ФАБРИКА ЗЕРЕН (SEED FACTORY)
-# Відповідає за генерацію стартових рішень, засновану на фізиці EPANET
-# =====================================================================
 class SeedFactory:
     def __init__(self, ctx, local_search, n_workers, beam_width):
         self.ctx = ctx
@@ -154,9 +149,6 @@ class SeedFactory:
                     
         return seeds[:self.BEAM_WIDTH]
 
-# =====================================================================
-# КЛАС 2: АГЕНТ ПОШУКУ (ISLAND WORKER)
-# =====================================================================
 class IslandWorker:
     def __init__(self, ctx, kicker, local_search, worker_id, n_workers, max_sims, beam_width, network_class, global_archive, epoch):
         self.ctx = ctx
@@ -249,14 +241,12 @@ class IslandWorker:
             self.pool.current_round = round_idx 
             self.base_dyn_bonus = min(self.run_best_cost, self.global_best_cost) * 0.001 * random.uniform(0.70, 1.30)
             
-            # --- 1. IPC та Порятунок ---
             gb = shared_progress.get('global_best') if shared_progress else None
             if shared_progress is not None:
                 self._process_ipc(shared_progress, gb)
                 self._check_rescue(shared_progress, gb)
                 shared_progress[self.worker_id] = {"round": round_idx + 1, "sims": self.ctx.sim_count, "best_cost": self.run_best_cost}
             
-            # --- 2. Таймінги ---
             elapsed = time.time() - start_time
             epoch_sims = self.ctx.sim_count - epoch_start_sims
             if elapsed > time_budget or epoch_sims >= self.max_sims: break
@@ -268,21 +258,16 @@ class IslandWorker:
             self.is_late_game = self.progress_ratio > 0.5 
             self.stag_limit = 4 + int(4 * self.progress_ratio) 
             
-            # --- 3. Перевірка стагнації ---
             self._check_mini_restart(shared_progress, gb)
             if round_idx > 0 and round_idx % 6 == 0: self.pool.kick_tabu_set.clear()
             
-            # --- 4. Мікро-полірування (SWAP) ---
             self._apply_swap(round_idx, shared_progress)
 
-            # --- 5. Макро-Кіки (Стратегії) ---
             if self.stagnation_counter >= 1 or round_idx % 2 == 0:
                 self._apply_kick(round_idx, shared_progress, gb)
 
-            # --- 6. Генерація мутацій пулу ---
             next_gen = self._generate_mutations()
             
-            # --- 7. Градієнтний спуск та Beam Search ---
             if next_gen:
                 next_gen.sort(key=lambda x: x[0])
                 just_flushed = self._beam_search_and_update(next_gen, just_flushed, shared_progress, round_idx)
@@ -290,7 +275,6 @@ class IslandWorker:
                 self._emergency_respawn()
                 just_flushed = True
 
-            # --- 8. Забування історії UCB1 ---
             if round_idx > 0 and round_idx % 10 == 0:
                 for s in self.strat_wins:
                     self.strat_wins[s] *= 0.80
@@ -311,8 +295,6 @@ class IslandWorker:
         self.ls.progress_callback = None
         
         return self.run_best_cost, self.run_best_sol
-
-    # ================= ПРИВАТНІ МЕТОДИ ВОКЕРА =================
 
     def _initialize_seeds(self, seeds):
         valid_sols = []
@@ -411,9 +393,10 @@ class IslandWorker:
                 new_seeds = []
                 
                 base_perturb = max(10, self.ctx.num_pipes // 5)
-                n_perturb = min(30, base_perturb) if self.is_late_game else min(45, base_perturb + 10)
-                # 🔴 ФІКС 1 (Критичний): Захист від ValueError на малих мережах
-                n_perturb = min(n_perturb, self.ctx.num_pipes)
+                n_perturb = min(
+                    self.ctx.num_pipes,
+                    min(30, base_perturb) if self.is_late_game else min(45, base_perturb + 10)
+                )
                 
                 for _ in range(4): 
                     perturbed = list(archive_sol)
@@ -427,7 +410,6 @@ class IslandWorker:
                             new_seeds.append(squeezed)
                             
                 if new_seeds:
-                    # 🔴 ПАТЧ 3: Скидаємо стагнацію, тільки якщо реально додали щось у пул
                     actually_added = 0
                     for seed in new_seeds:
                         c, p, feas, _ = self.ctx.get_cached_stats(seed)
@@ -753,7 +735,6 @@ class IslandWorker:
                             if (self.run_best_cost - real_cost) > (self.run_best_cost * 0.02):
                                 is_ghost = self.ctx.is_ghost_solution(refined_sol, real_cost)
                                 
-                            # 🔴 ПАТЧ 1: Вихід з циклу ДО додавання Ghost у пул
                             if is_ghost:
                                 self.ctx.log(f"   > [SHIELD] Beam illusion blocked ({real_cost/1e6:.4f}M$).")
                                 continue 
@@ -769,11 +750,9 @@ class IslandWorker:
                             
                             self._update_global_best(shared_progress)
 
-                        # Додаємо в пул тільки після перевірок
                         unique_next_pool.append((score, real_cost, refined_sol))
                         self.pool.add_to_tabu(refined_sol, real_cost)
 
-        # 🔴 ПАТЧ 5: Захист від тихого обнулення пулу
         if unique_next_pool:
             unique_next_pool.sort(key=lambda x: x[0])
             dynamic_beam = max(3, int(self.BEAM_WIDTH * (1.0 + 0.5 * (1.0 - self.progress_ratio))))
@@ -860,9 +839,6 @@ class IslandWorker:
                     shared_progress['global_best'] = (self.run_best_cost, list(self.run_best_sol))
 
 
-# =====================================================================
-# КЛАС 3: ОРКЕСТРАТОР КЛАСТЕРА (ANALYTICAL SOLVER)
-# =====================================================================
 class AnalyticalSolver:
     @classmethod
     def worker_task(cls, args):
@@ -930,7 +906,6 @@ class AnalyticalSolver:
         self.seeder = SeedFactory(self.ctx, self.ls, self.n_workers, self.BEAM_WIDTH)
         self.pool = SolutionPool(self.ctx) 
         
-        # 🔴 ВІДНОВЛЕНО: Динамічний розрахунок бюджету
         self.BASE_SIM_BUDGET = {"SMALL": 1000000, "MEDIUM": 3000000, "LARGE": 15000000, "XLARGE": 30000000}[self.network_class]
         self.EPOCHS = {"SMALL": 4, "MEDIUM": 4, "LARGE": 5, "XLARGE": 5}[self.network_class]
             
@@ -959,7 +934,6 @@ class AnalyticalSolver:
             worker_epoch_sims = float('inf')
         else:
             worker_epoch_sims = int(self.max_sims // (self.n_workers * self.EPOCHS))
-        # print(f"  [Quota] Allocated {worker_epoch_sims:,} sims per worker/epoch.\n")
         
         quota_str = "∞" if worker_epoch_sims == float('inf') else f"{worker_epoch_sims:,}"
         print(f"  [Quota] Allocated {quota_str} sims per worker/epoch.\n")

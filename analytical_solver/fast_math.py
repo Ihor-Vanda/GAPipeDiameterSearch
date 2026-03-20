@@ -1,7 +1,6 @@
 import numpy as np
 from numba import njit
 
-# @njit компілює цю функцію в машинний код під час першого виклику
 @njit(fastmath=True)
 def fast_hamming_distance(sol1, sol2):
     dist = 0
@@ -12,7 +11,6 @@ def fast_hamming_distance(sol1, sol2):
 
 @njit(fastmath=True)
 def fast_avg_hamming(pool_matrix):
-    # pool_matrix - це 2D NumPy масив: розмірність (N_рішень, M_труб)
     n = pool_matrix.shape[0]
     if n < 2: return 0.0
     
@@ -26,18 +24,15 @@ def fast_avg_hamming(pool_matrix):
 
 @njit
 def fast_dijkstra(num_nodes, sources, target, indptr, indices, weights):
-    # indptr, indices, weights - це представлення графа у форматі CSR (Compressed Sparse Row)
     dist = np.full(num_nodes, np.inf)
     parent = np.full(num_nodes, -1)
     
-    # Мульти-старт з усіх джерел (sources)
     for s in sources:
         dist[s] = 0.0
         
     visited = np.zeros(num_nodes, dtype=np.bool_)
     
     for _ in range(num_nodes):
-        # Шукаємо невідвіданий вузол з мінімальною відстанню
         u = -1
         min_d = np.inf
         for i in range(num_nodes):
@@ -50,7 +45,6 @@ def fast_dijkstra(num_nodes, sources, target, indptr, indices, weights):
             
         visited[u] = True
         
-        # Релаксація сусідів
         for edge_idx in range(indptr[u], indptr[u+1]):
             v = indices[edge_idx]
             w = weights[edge_idx]
@@ -58,10 +52,8 @@ def fast_dijkstra(num_nodes, sources, target, indptr, indices, weights):
                 dist[v] = dist[u] + w
                 parent[v] = u
                 
-    # Відновлення шляху
     if dist[target] == np.inf:
-        # Якщо шлях не знайдено (недосяжний вузол)
-        return [np.int32(x) for x in range(0)] # Порожній типізований список
+        return [np.int32(x) for x in range(0)]
         
     path = []
     curr = target
@@ -78,7 +70,6 @@ def fast_dijkstra(num_nodes, sources, target, indptr, indices, weights):
 def fast_crossover(sol1, sol2, p_mine):
     n = len(sol1)
     child = np.empty(n, dtype=np.int32)
-    # Numba вміє генерувати масиви випадкових чисел на швидкості C
     rand_vals = np.random.random(n) 
     locked_count = 0
     

@@ -44,7 +44,6 @@ class KickStrategies:
         failed_id = -1
         d_prev, d_curr = -1, -1
         
-        # 1. Спроба знайти Taper Violation (звуження)
         for i in range(len(path_pipes) - 1, 0, -1):
             curr_p = path_pipes[i]
             prev_p = path_pipes[i-1]
@@ -93,7 +92,6 @@ class KickStrategies:
         
         target_capacity_idx = int(np.mean([indices[p] for p in dom_pipes])) if dom_pipes else self.ctx.max_d_idx
         
-        # 1. Створюємо тимчасовий граф і шукаємо альтернативні шляхи
         temp_G = self.ctx.base_G_flow.copy()
         for u, v in temp_G.edges():
             idx = self.ctx.edge_to_pipe[(u, v)]
@@ -110,7 +108,6 @@ class KickStrategies:
             except nx.NetworkXNoPath:
                 break
 
-        # 2. Оцінюємо знайдені шляхи
         scored_paths = []
         for p_nodes in candidates:
             p_indices, overlap, length = [], 0, 0
@@ -130,7 +127,6 @@ class KickStrategies:
         scored_paths.sort(key=lambda x: x['overlap'])
         if not scored_paths: return None, None, "All paths tabu", None
 
-        # 3. Вибираємо найкращий і застосовуємо Адаптивну Агресію
         best_alt = scored_paths[0]
         kicked, locked, push_count = list(indices), set(), 0
         
@@ -262,7 +258,6 @@ class KickStrategies:
         
         target_pipes = max(3, int(self.ctx.num_pipes * target_pct))
         
-        # 🔴 ЛІМІТЕР МАСТАБУ: Не більше 35 труб (для великих мереж)
         target_pipes = min(35, target_pipes)
         
         pipe_with_dist = []
@@ -300,7 +295,6 @@ class KickStrategies:
         return healed_sol, cluster_pipes, f"R&R (LNS): Ruined {ruined_count} pipes (~{target_pct:.0%} net, Rad: {actual_radius}). Rebuilt {boosts}x."
     
     def vns_structured_kick(self, indices, stagnation_level):
-        """Variable Neighborhood Search: збільшує розмір і радіус удару зі зростанням стагнації"""
         n = self.ctx.num_pipes
         neighborhood_sizes = [0.05, 0.10, 0.15, 0.20, 0.25]
         k_idx = min(stagnation_level // 2, len(neighborhood_sizes) - 1)
@@ -330,7 +324,6 @@ class KickStrategies:
         return healed, locked, f"VNS-KICK (Level {k_idx}): Shifted {n_change} high-loss pipes by ±{jump_size}. Healed {boosts}x."
 
     def segment_restart_kick(self, indices, dyn_bonus):
-        """Segment Restart: Заморожує частину і частково скидає решту"""
         n = self.ctx.num_pipes
         
         freeze_pct = 0.50 if n <= 50 else 0.20
@@ -342,7 +335,6 @@ class KickStrategies:
         fresh = list(indices)
         for p in range(n):
             if p not in frozen_pipes:
-                # 🔴 ПАТЧ: Обережне роздування. Замість вибуху вартості, піднімаємо лише ~35% вільних труб на 1-2 кроки
                 if random.random() < 0.35:
                     boost = random.choice([1, 2])
                     fresh[p] = min(self.ctx.max_d_idx, fresh[p] + boost)
@@ -367,7 +359,6 @@ class KickStrategies:
         for i in diff_pipes:
             if random.random() < 0.5:
                 child[i] = target_sol[i]
-                # 🔴 ПАТЧ 4: Блокуємо ТІЛЬКИ ті труби, які дійсно перейняли значення target_sol
                 locked.add(i) 
                 
         if not locked:
@@ -379,10 +370,8 @@ class KickStrategies:
         return healed, locked, f"CORRIDOR: Interpolated {len(diff_pipes)} diff pipes. Healed {boosts}x."
     
     def crossover_with_peer_kick(self, my_sol, peer_sol, my_cost, peer_cost):
-        """Схрещування з успішним рішенням іншого воркера"""
         child = []
         total = my_cost + peer_cost
-        # 🔴 ПАТЧ (Bug 3): Захист від ZeroDivisionError
         if total <= 0: 
             return None, None, ""
             
@@ -404,7 +393,6 @@ class KickStrategies:
 
     def loop_balancing_kick(self, indices, dyn_bonus, failed_pipes=None, current_round=0):
         failed_pipes = failed_pipes or {}
-        # 🔴 ПАТЧ (Bug 9): Збільшений tenure і сувора фільтрація
         LOOP_BALANCE_PIPE_TENURE = min(25, max(3, self.ctx.num_pipes // 5))
         
         _, _, _, crit_node = self.ctx.get_cached_stats(indices)
@@ -425,7 +413,6 @@ class KickStrategies:
                     cycle_indices.append(self.ctx.edge_to_pipe[(u, v)])
 
             for candidate_idx in cycle_indices:
-                # Відсікаємо труби, які нещодавно були невдалими
                 if (current_round - failed_pipes.get(candidate_idx, -999)) < LOOP_BALANCE_PIPE_TENURE:
                     continue
                     
@@ -454,15 +441,13 @@ class KickStrategies:
         return chosen[1], chosen[2], chosen[3], chosen[4]
 
     def ils_perturbation_kick(self, indices, stagnation_counter):
-        """ILS: Змінює переважно ті труби, які мають запас тиску (slack)"""
         pct = min(0.35, 0.08 + stagnation_counter * 0.01)
         n_perturb = max(4, int(self.ctx.num_pipes * pct))
         
-        # 🔴 ПАТЧ (Bug 8): Менше руйнувань на пізніх стадіях
         is_late = stagnation_counter > 8
         base_limit = 12 if self.ctx.num_pipes >= 200 else 40
         if stagnation_counter > 15:
-            hard_limit = int(base_limit * 1.5) # Дозволяємо 18 труб для Балерми!
+            hard_limit = int(base_limit * 1.5)
         else:
             is_late = stagnation_counter > 8
             hard_limit = min(5 if is_late else base_limit, base_limit)
@@ -479,7 +464,6 @@ class KickStrategies:
                 slack_score = (1.0 / (unit_losses[i] + 1e-6)) if can_downgrade else 0.0
                 pipe_slack.append((i, slack_score))
                 
-            # Вибираємо тільки з труб, що мають реальний запас (slack)
             pipe_slack.sort(key=lambda x: x[1], reverse=True)
             n_slack = int(self.ctx.num_pipes * 0.3) 
             slack_pool = [p for p, _ in pipe_slack[:n_slack]]
@@ -514,7 +498,6 @@ class KickStrategies:
 
         unit_losses = self.ctx.get_cached_heuristics(indices)
         
-        # 🔴 ФІКС: Менше пар для обміну на великих мережах (захист від деструктивності)
         if self.ctx.num_pipes >= 200:
             max_pairs = 1
         else:
@@ -523,7 +506,6 @@ class KickStrategies:
         kicked = list(indices)
         locked = set()
         
-        # Кандидати на апгрейд (Високе тертя, але відносно дешево підняти)
         upgrade_candidates = []
         for i in range(self.ctx.num_pipes):
             if kicked[i] < self.ctx.max_d_idx:
@@ -531,7 +513,6 @@ class KickStrategies:
                 score = unit_losses[i] / max(cost_diff, 1.0)
                 upgrade_candidates.append((i, cost_diff, score))
                 
-        # Кандидати на даунгрейд (Низьке тертя, і можна добре зекономити)
         downgrade_candidates = []
         for i in range(self.ctx.num_pipes):
             if kicked[i] > 0:
@@ -549,7 +530,6 @@ class KickStrategies:
             if exchanges >= max_pairs: break
             if up_pipe in used_pipes: continue
             
-            # Шукаємо пару для даунгрейду, яка приблизно компенсує вартість (zero-sum)
             best_down_pipe = -1
             best_diff = float('inf')
             
@@ -557,7 +537,7 @@ class KickStrategies:
                 if down_pipe in used_pipes or down_pipe == up_pipe: continue
                 
                 cost_balance = abs(up_cost - down_cost)
-                if cost_balance < best_diff and cost_balance < (up_cost * 0.5): # Дозволяємо до 50% відхилення ціни
+                if cost_balance < best_diff and cost_balance < (up_cost * 0.5):
                     best_diff = cost_balance
                     best_down_pipe = down_pipe
                     
@@ -574,16 +554,13 @@ class KickStrategies:
         return kicked, locked, f"ZERO-SUM: Exchanged {exchanges} pairs (Cost-Optimized)."
     
     def submarine_oscillation_kick(self, indices):
-        """Strategic Oscillation: Радикально ріже магістралі і лікує мережу периферією"""
         unit_losses = self.ctx.get_cached_heuristics(indices)
         
-        # Шукаємо "жирні" магістралі (великий діаметр, але відносно низьке падіння тиску на метр)
         fat_mains = []
         for i in range(self.ctx.num_pipes):
-            if indices[i] > 3: # Беремо тільки відносно великі труби
+            if indices[i] > 3:
                 fat_mains.append((i, unit_losses[i]))
                 
-        # Сортуємо: чим менша втрата тиску, тим безпечніше її різати
         fat_mains.sort(key=lambda x: x[1]) 
         
         if not fat_mains: return None, None, ""
@@ -591,18 +568,14 @@ class KickStrategies:
         kicked = list(indices)
         locked = set()
         
-        # КРОК 1: ЗАНУРЕННЯ. Жорстко ріжемо 3-5 магістралей
         n_cuts = random.choice([3, 4, 5])
-        cut_pipes = [x[0] for x in fat_mains[:n_cuts * 2]] # Беремо з топ-кандидатів
+        cut_pipes = [x[0] for x in fat_mains[:n_cuts * 2]] 
         chosen_cuts = random.sample(cut_pipes, min(n_cuts, len(cut_pipes)))
         
         for p_idx in chosen_cuts:
-            # Зменшуємо діаметр на 2 кроки відразу (глибоке занурення!)
             kicked[p_idx] = max(0, kicked[p_idx] - 2) 
-            # КРОК 2: БЛОКУВАННЯ. Забороняємо лікувати ці труби
             locked.add(p_idx) 
             
-        # КРОК 3: СПЛИВАННЯ. Змушуємо мережу лікуватися через інші труби
         healed, ok, boosts = self.ls.heal_network(kicked, locked)
         
         if not ok: return None, None, ""

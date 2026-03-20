@@ -46,8 +46,6 @@ class LocalSearch:
             improved = False
             passes += 1
             
-            # 🔴 ФІКС 1: Глобальний пінг. Тепер оркестратор бачить прогрес завжди,
-            # незалежно від того, який метод викликав gradient_squeeze.
             if getattr(self, 'progress_callback', None):
                 self.progress_callback()
                 
@@ -61,16 +59,8 @@ class LocalSearch:
                 milestone_pass = passes
 
             random.shuffle(active_indices)
-            
-            if quick_mode:
-                unit_losses = self.ctx.get_cached_heuristics(current_indices)
-                active_indices_pass = [i for i in active_indices if unit_losses[i] < 0.05]
-                
-                if not active_indices_pass:
-                    sorted_by_loss = sorted(active_indices, key=lambda i: unit_losses[i])
-                    active_indices_pass = sorted_by_loss[:max(1, len(active_indices) // 3)]
-            else:
-                active_indices_pass = active_indices
+          
+            active_indices_pass = active_indices
                 
             for idx in active_indices_pass:
                 curr_d = current_indices[idx]
@@ -105,7 +95,6 @@ class LocalSearch:
         return current_indices
 
     def heal_network(self, kicked, locked_pipes):
-        # 🔴 ПАТЧ: Захисна копія. Запобігає мутації оригінального set() з caller'а
         locked_pipes_local = set(locked_pipes) 
         boosts = 0
         
@@ -125,20 +114,16 @@ class LocalSearch:
             candidates = []
             
             for idx in path_pipes:
-                # Використовуємо локальну копію для перевірки
                 if idx in locked_pipes_local: continue 
                 curr_d = kicked[idx]
                 if curr_d < self.ctx.max_d_idx: 
                     if self.ctx.num_pipes >= 200:
-                        # Ідеальна економічна ефективність
                         c_curr = self.ctx.simulator.costs[curr_d]
                         c_next = self.ctx.simulator.costs[curr_d + 1]
                         delta_c_per_m = c_next - c_curr
                         
                         abs_cost = delta_c_per_m * self.ctx.simulator.lengths[idx]
                         
-                        # Ефективність = Втрата тиску / (Переплата за метр * Штраф за гігантський чек)
-                        # math.sqrt м'яко штрафує довгі магістралі, запобігаючи Over-healing
                         efficiency = unit_losses[idx] / max(1e-6, delta_c_per_m * math.sqrt(max(1.0, abs_cost)))
                         candidates.append((idx, efficiency))
                     else:
@@ -151,7 +136,6 @@ class LocalSearch:
             best_pipe = candidates[0][0]
             
             kicked[best_pipe] += 1
-            # Мутуємо ТІЛЬКИ локальну копію
             locked_pipes_local.add(best_pipe) 
             boosts += 1
             
@@ -167,7 +151,6 @@ class LocalSearch:
             
         p_surplus = best_p - self.ctx.simulator.config.h_min
         
-        # 🔴 ГАРАНТОВАНА ІНІЦІАЛІЗАЦІЯ: Якщо мережа невалідна, best_cost = Нескінченність
         best_cost = raw_cost - (p_surplus * dyn_bonus) if p_surplus >= 0 else float('inf')
             
         path_pipes, _ = self.ctx.get_dominant_path(indices_copy, crit_node)
@@ -183,7 +166,6 @@ class LocalSearch:
         if self.ctx.num_pipes > 200:
             down_limit = min(down_limit, 40)
         
-        # --- 1. Single Swap (Safe down-sizing) ---
         for p in lazy_pipes[:down_limit]:
             if indices_copy[p] > 0:
                 test_sol = list(indices_copy)
@@ -194,7 +176,6 @@ class LocalSearch:
                     if score < best_cost:
                         best_cost, indices_copy = score, test_sol
                         
-        # --- 2. Double Swap (1 Up, 2 Down) ---
         if self.ctx.num_pipes <= 200:
             for up_pipe in path_pipes[-int(up_limit*0.7):]:
                 for d1, d2 in itertools.combinations(lazy_pipes[:int(down_limit*0.7)], 2):

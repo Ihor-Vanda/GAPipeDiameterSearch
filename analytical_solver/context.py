@@ -32,7 +32,6 @@ class SolverContext:
                 self.node_to_pipes.setdefault(u, []).append(idx)
                 self.node_to_pipes.setdefault(v, []).append(idx)
 
-        # 🔴 ПАТЧ: Підготовка CSR-графів для Numba Dijkstra
         self.nodes_list = list(self.base_G_flow.nodes())
         self.node_to_id = {node: i for i, node in enumerate(self.nodes_list)}
         self.id_to_node = {i: node for node, i in self.node_to_id.items()}
@@ -73,7 +72,7 @@ class SolverContext:
             return real_p_min < self.simulator.config.h_min - 0.01
             
         try:
-            result = self.simulator.get_stats(indices)  # без конвертації
+            result = self.simulator.get_stats(indices)
             self.sim_cache.set(sig, result)
             return result[1] < self.simulator.config.h_min - 0.01
         except Exception as e:
@@ -125,18 +124,15 @@ class SolverContext:
         return res
     
     def get_dominant_path(self, indices, crit_node):
-        """Супер-швидкий обхід графа через JIT-компіляцію"""
         if crit_node not in self.node_to_id:
             return [], []
             
         try:
             target_id = self.node_to_id[crit_node]
             
-            # Векторне оновлення ваг (працює за наносекунди, без циклу Python)
             indices_arr = np.array(indices, dtype=np.float64)
             csr_weights = 100.0 / (indices_arr[self.csr_edge_pipe] + 1.0)
             
-            # Виклик C-коду
             path_ids = fast_dijkstra(
                 self.num_nodes, 
                 self.source_ids, 

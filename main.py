@@ -98,7 +98,6 @@ def setup_run_directory(base_dir="OutputDataExperiments"):
     return run_dir
 
 def analytical_worker_task(args):
-    # 1. Безпечне розпакування за індексами
     diams            = args[0]
     v_opt            = args[1]
     time_budget      = args[2]
