@@ -193,13 +193,24 @@ class IslandWorker:
         self.pool = SolutionPool(self.ctx)
         self.seeder = SeedFactory(self.ctx, self.ls, self.n_workers, self.BEAM_WIDTH)
         
-        self.strategies = ["TOPO-DIV", "LOOP_BALANCE", "SYNC_TRIM", "FINISHER", "BOTTLENECK", 
-                           "ZERO_SUM", "SUBMARINE", "SHOCK", "RUIN_RECREATE", "VNS_KICK", "ILS_PERTURBATION", "DIAM_DIVERSITY"]
+        # self.strategies = [
+        #     "TOPO-DIV", "LOOP_BALANCE", "SYNC_TRIM", "FINISHER", 
+        #     "BOTTLENECK", "ZERO_SUM", "SHOCK", "DIAM_DIVERSITY"
+        # ]
+        
+        self.strategies = [
+            "TOPO-DIV", "LOOP_BALANCE", "SYNC_TRIM", "FINISHER", "BOTTLENECK", 
+            "ZERO_SUM", "SHOCK", "DIAM_DIVERSITY"
+        ]
         
         if nx.is_tree(self.ctx.base_G_flow) and "LOOP_BALANCE" in self.strategies:
             self.strategies.remove("LOOP_BALANCE")
             
-        all_tracked = self.strategies + ["SEGMENT_RESTART", "IPC_CROSSOVER", "CORRIDOR_SEARCH"]
+        all_tracked = self.strategies + [
+            "SEGMENT_RESTART", "IPC_CROSSOVER", "CORRIDOR_SEARCH", 
+            "BASIN_ESCAPE", "ILS_PERTURBATION", "VNS_KICK", 
+            "RUIN_RECREATE", "SUBMARINE"
+        ]
         self.strat_wins = {s: 1.0 for s in all_tracked}
         self.strat_tries = {s: 1.0 for s in all_tracked}
         
@@ -486,9 +497,14 @@ class IslandWorker:
                     if peer_data: peer_archive.append(peer_data)
 
         peer_to_cross = None
+        
         if self.stagnation_counter >= self.stag_limit * 3:
-            strategy = "SEGMENT_RESTART"
-            self.pool.add_basin_to_tabu(self.run_best_sol) 
+            if len(self.global_archive) >= 2:
+                strategy = "BASIN_ESCAPE"
+            else:
+                strategy = "SEGMENT_RESTART"
+                self.pool.add_basin_to_tabu(self.run_best_sol) 
+                
         elif self.stagnation_counter >= self.stag_limit * 2 and peer_archive:
             corridor_peers = [p for p in peer_archive if 30 <= self.pool.hamming_distance(self.run_best_sol, p[1]) <= 70]
             diverse_peers = [p for p in peer_archive if self.pool.hamming_distance(self.run_best_sol, p[1]) > 70]
@@ -500,12 +516,17 @@ class IslandWorker:
                 peer_to_cross = min(diverse_peers, key=lambda x: x[0])
             else:
                 strategy = "ILS_PERTURBATION"
-        elif self.stagnation_counter >= self.stag_limit * 1.5:
-            strategy = "ILS_PERTURBATION"
+                
         elif self.stagnation_counter > 0 and self.stagnation_counter % 12 == 0:
             strategy = "RUIN_RECREATE"
+        elif self.stagnation_counter > 0 and self.stagnation_counter % 9 == 0:
+            strategy = "SUBMARINE"
         elif self.stagnation_counter > 0 and self.stagnation_counter % 7 == 0:
             strategy = "VNS_KICK"
+            
+        elif self.stagnation_counter >= self.stag_limit * 1.5:
+            strategy = "ILS_PERTURBATION"
+            
         else:
             valid_strats = [s for s in self.strategies if s in self.strat_wins]
             if not valid_strats:
@@ -548,6 +569,7 @@ class IslandWorker:
         elif strategy == "SYNC_TRIM": forced_sol, locked, log_msg = self.kicker.sync_trim_kick(kick_target, self.base_dyn_bonus)
         elif strategy == "ZERO_SUM": forced_sol, locked, log_msg = self.kicker.zero_sum_shift_kick(kick_target)
         elif strategy == "SUBMARINE": forced_sol, locked, log_msg = self.kicker.submarine_oscillation_kick(kick_target)
+        elif strategy == "BASIN_ESCAPE": forced_sol, locked, log_msg = self.kicker.basin_escape(kick_target, self.global_archive)
         else: forced_sol, locked, log_msg, path_sig = self.kicker.topological_inversion_kick(kick_target, self.pool.kick_tabu_set)
 
         if not forced_sol or not locked:
@@ -580,7 +602,7 @@ class IslandWorker:
             final_sol = forced_sol 
             self.pool.basin_tabu.clear() 
         else:
-            is_heavy = strategy in ["ILS_PERTURBATION", "VNS_KICK", "RUIN_RECREATE", "IPC_CROSSOVER", "CORRIDOR_SEARCH", "SUBMARINE"]
+            is_heavy = strategy in ["ILS_PERTURBATION", "VNS_KICK", "RUIN_RECREATE", "IPC_CROSSOVER", "CORRIDOR_SEARCH", "SUBMARINE", "BASIN_ESCAPE"]
             base_quick = 2 if self.ctx.num_pipes >= 200 else 1
             quick_passes = base_quick if is_heavy else base_quick + 1
             locked_for_squeeze = set() if strategy in ["ILS_PERTURBATION", "IPC_CROSSOVER", "CORRIDOR_SEARCH"] else locked
@@ -601,9 +623,18 @@ class IslandWorker:
                 elif is_heavy: deep_passes = 4
                 else: deep_passes = 3 if self.progress_ratio > 0.5 else 4
                 
-                self.ctx.log(f"        [HYPERBAND] Promising path detected ({quick_cost/1e6:.2f}M$). Deep Squeeze ({deep_passes} passes)...")
+                consensus_locked = set()
+                if len(self.global_archive) >= 3 and self.is_late_game:
+                    arch_sols = [x[1] for x in self.global_archive]
+                    for i in range(self.ctx.num_pipes):
+                        if all(sol[i] == arch_sols[0][i] for sol in arch_sols):
+                            consensus_locked.add(i)
+                            
+                final_locked = locked_for_squeeze.union(consensus_locked)
                 
-                final_sol = self.ls.gradient_squeeze(quick_sol, locked_pipes=locked_for_squeeze, max_passes=deep_passes, dyn_bonus=self.base_dyn_bonus)
+                self.ctx.log(f"        [HYPERBAND] Promising path detected ({quick_cost/1e6:.2f}M$). Deep Squeeze ({deep_passes} passes, {len(consensus_locked)} backbone pipes frozen)...")
+                
+                final_sol = self.ls.gradient_squeeze(quick_sol, locked_pipes=final_locked, max_passes=deep_passes, dyn_bonus=self.base_dyn_bonus)
             else:
                 final_sol = quick_sol
         
@@ -615,10 +646,8 @@ class IslandWorker:
         if feas and p >= self.ctx.simulator.config.h_min:
             p_surplus = p - self.ctx.simulator.config.h_min
             
-            if p_surplus < 2.0:
-                eff_bonus = self.base_dyn_bonus * 3.0 
-            elif p_surplus > 10.0:
-                eff_bonus = self.base_dyn_bonus * 0.3 
+            if p_surplus > 10.0:
+                eff_bonus = self.base_dyn_bonus * 0.2 
             else:
                 eff_bonus = self.base_dyn_bonus
             
@@ -661,11 +690,13 @@ class IslandWorker:
                     self.ctx.log(f"   > [FORCE] 💎 Direct Record Update: -${diff:,.0f} ({self.run_best_cost/1e6:.4f}M$)")
                     self._update_global_best(shared_progress)
 
-            elif strategy == "SEGMENT_RESTART":
+            elif strategy in ["SEGMENT_RESTART", "BASIN_ESCAPE"]:
                 self.pool.active_pool.append((score * 1.05, c, final_sol))
                 self.stagnation_counter = 0 
                 self.corridor_pool_streak = 0
-                self.ctx.log(f"     -> Added to Pool (Segment Restart Accept): {c/1e6:.4f}M$")
+                if strategy == "SEGMENT_RESTART": 
+                    self.pool.basin_tabu.clear() 
+                self.ctx.log(f"      -> Added to Pool (Major Escape Accept): {c/1e6:.4f}M$")
                 
             elif c < water_level and not self.pool.is_basin_tabu(final_sol):
                 pool_gap = (c - self.run_best_cost) / max(self.run_best_cost, 1)
@@ -677,12 +708,12 @@ class IslandWorker:
                     self.pool.active_pool.append((score * 1.05, c, final_sol))
                     if strategy == "CORRIDOR_SEARCH":
                         self.corridor_pool_streak += 1
-                        if self.corridor_pool_streak <= 3: self.stagnation_counter = 0 
-                    elif strategy in ["ILS_PERTURBATION", "IPC_CROSSOVER", "RUIN_RECREATE", "VNS_KICK", "ZERO_SUM", "SUBMARINE"]:
-                        self.stagnation_counter = 0 
+                        if self.corridor_pool_streak <= 3: self.stagnation_counter = max(0, self.stagnation_counter - 2) 
+                    elif strategy in ["ILS_PERTURBATION", "IPC_CROSSOVER", "RUIN_RECREATE", "VNS_KICK", "ZERO_SUM", "SUBMARINE", "BASIN_ESCAPE"]:
                         self.corridor_pool_streak = 0
+                        
                     self.strat_wins[strategy] += 0.5 
-                    self.ctx.log(f"     -> Added to Pool (Water Level Accept): {c/1e6:.4f}M$")
+                    self.ctx.log(f"      -> Added to Pool (Water Level Accept): {c/1e6:.4f}M$")
                     
             elif self.stagnation_counter >= self.stag_limit * 3.5 and not self.pool.is_basin_tabu(final_sol):
                 self.pool.active_pool.append((score * 1.20, c, final_sol))
