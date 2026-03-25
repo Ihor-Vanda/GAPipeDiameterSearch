@@ -5,5 +5,5 @@
   "inp": "InputData/Balerma/Balerma.inp",
   "costs": "InputData/Balerma/costs.csv",
   "cores": 5,
-  "max_sims": 15000000
+  "max_sims": 20000000
 }

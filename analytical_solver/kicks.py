@@ -252,13 +252,22 @@ class KickStrategies:
         else:
             ruin_center = crit_node
 
-        max_pct = 0.20 if self.ctx.num_pipes <= 50 else 0.40
-        base_pct = random.uniform(0.10, max_pct / 2)
-        target_pct = min(max_pct, base_pct + (stagnation_counter * 0.025)) 
+        # 🔴 ФІКС 1: Адаптивні ліміти руйнування (Late Game vs Early Game)
+        progress = getattr(self.ctx, 'progress_ratio', 0.0)
+        is_late_game = progress > 0.6
         
+        if is_late_game:
+            max_pct = 0.05  # Максимум 5% мережі
+            base_pct = random.uniform(0.01, 0.02)
+            max_pipes = 10  # Жорсткий ліміт для пізньої гри
+        else:
+            max_pct = 0.20 if self.ctx.num_pipes <= 50 else 0.40
+            base_pct = random.uniform(0.10, max_pct / 2)
+            max_pipes = 35
+
+        target_pct = min(max_pct, base_pct + (stagnation_counter * 0.015)) 
         target_pipes = max(3, int(self.ctx.num_pipes * target_pct))
-        
-        target_pipes = min(35, target_pipes)
+        target_pipes = min(max_pipes, target_pipes)
         
         pipe_with_dist = []
         seen_pipes = set()
@@ -282,59 +291,37 @@ class KickStrategies:
         
         for p in cluster_pipes:
             if kicked[p] > 0:
-                kicked[p] = 0
+                # 🔴 ФІКС 2: М'яке руйнування. 
+                # У пізній грі обнулення труби вбиває мережу, тому лише різко звужуємо.
+                if is_late_game:
+                    kicked[p] = max(0, kicked[p] - random.choice([1, 2]))
+                else:
+                    kicked[p] = 0
                 ruined_count += 1
 
         if ruined_count == 0: return None, None, ""
 
+        # Хілер вільно відновлює тиск
         healed_sol, is_feas, boosts = self.ls.heal_network(kicked, set())
         if not is_feas: return None, None, ""
 
         actual_radius = max((d for d, _ in pipe_with_dist[:target_pipes]), default=0)
         
-        return healed_sol, cluster_pipes, f"R&R (LNS): Ruined {ruined_count} pipes (~{target_pct:.0%} net, Rad: {actual_radius}). Rebuilt {boosts}x."
-    
-    # def vns_structured_kick(self, indices, stagnation_level):
-    #     n = self.ctx.num_pipes
-    #     neighborhood_sizes = [0.05, 0.10, 0.15, 0.20, 0.25]
-    #     k_idx = min(stagnation_level // 2, len(neighborhood_sizes) - 1)
-    #     pct = neighborhood_sizes[k_idx]
-        
-    #     n_change = max(3, int(n * pct))
-    #     hard_limit = 15 if self.ctx.num_pipes >= 200 else 30
-    #     n_change = min(n_change, hard_limit)
-        
-    #     unit_losses = self.ctx.get_cached_heuristics(indices)
-    #     worst_pipes = sorted(range(n), key=lambda i: unit_losses[i], reverse=True)[:n_change + max(5, n//10)]
-    #     target_pipes = random.sample(worst_pipes, n_change)
-        
-    #     kicked = list(indices)
-    #     locked = set()
-        
-    #     jump_size = 1 if k_idx < 2 else (2 if k_idx < 4 else 3)
-        
-    #     for p in target_pipes:
-    #         direction = random.choice([-jump_size, jump_size])
-    #         kicked[p] = max(0, min(self.ctx.max_d_idx, kicked[p] + direction))
-    #         locked.add(p)
-            
-    #     healed, ok, boosts = self.ls.heal_network(kicked, locked)
-    #     if not ok: return None, None, ""
-        
-    #     return healed, locked, f"VNS-KICK (Level {k_idx}): Shifted {n_change} high-loss pipes by ±{jump_size}. Healed {boosts}x."
+        # 🔴 ФІКС 3: Повертаємо порожній set() замість cluster_pipes, 
+        # щоб Сквіз міг ідеально відполірувати відбудований район!
+        return healed_sol, set(), f"R&R (LNS): Ruined {ruined_count} pipes (~{target_pct:.0%} net, Rad: {actual_radius}). Rebuilt {boosts}x."
     
     def vns_structured_kick(self, indices, stagnation_level):
         n = self.ctx.num_pipes
         progress = getattr(self.ctx, 'progress_ratio', 0.0)
+        is_late = progress > 0.6 or stagnation_level > 8
         
         neighborhood_sizes = [0.05, 0.08, 0.12, 0.15, 0.20]
         k_idx = min(stagnation_level // 3, len(neighborhood_sizes) - 1)
         pct = neighborhood_sizes[k_idx]
         
-        n_change = max(3, int(n * pct))
-        
-        hard_limit = 15 if progress < 0.5 else 5
-        n_change = min(n_change, hard_limit)
+        hard_limit = 8 if is_late else 25 
+        n_change = min(max(3, int(n * pct)), hard_limit)
         
         unit_losses = self.ctx.get_cached_heuristics(indices)
         worst_pipes = sorted(range(n), key=lambda i: unit_losses[i], reverse=True)[:n_change + max(5, n//10)]
@@ -343,12 +330,14 @@ class KickStrategies:
         kicked = list(indices)
         locked = set()
         
-        jump_size = 1 if (k_idx < 2 or progress > 0.6) else 2
+        jump_size = 1 if is_late else 2
         
         for p in target_pipes:
             direction = random.choice([-jump_size, jump_size])
             kicked[p] = max(0, min(self.ctx.max_d_idx, kicked[p] + direction))
-            locked.add(p)
+            
+            if direction > 0:
+                locked.add(p)
             
         healed, ok, boosts = self.ls.heal_network(kicked, locked)
         if not ok: return None, None, ""
@@ -434,8 +423,20 @@ class KickStrategies:
         except: return None, None, "", -1
         if not cycles: return None, None, "No cycles found", -1
 
+        progress = getattr(self.ctx, 'progress_ratio', 0.0)
+        
+        if progress > 0.75:
+            max_allowed_drop = 1
+        elif progress > 0.40:
+            max_allowed_drop = 2
+        else:
+            max_allowed_drop = 3
+
         best_drop_achieved = -1
         candidates = []
+
+        import random
+        random.shuffle(cycles)
 
         for cycle_nodes in cycles:
             cycle_indices = []
@@ -444,6 +445,8 @@ class KickStrategies:
                 if (u, v) in self.ctx.edge_to_pipe: 
                     cycle_indices.append(self.ctx.edge_to_pipe[(u, v)])
 
+            random.shuffle(cycle_indices)
+
             for candidate_idx in cycle_indices:
                 if (current_round - failed_pipes.get(candidate_idx, -999)) < LOOP_BALANCE_PIPE_TENURE:
                     continue
@@ -451,7 +454,8 @@ class KickStrategies:
                 curr_d_idx = indices[candidate_idx]
                 if curr_d_idx < 2: continue 
                 
-                max_drop = min(3, curr_d_idx) 
+                max_drop = min(max_allowed_drop, curr_d_idx) 
+                
                 for drop in range(max_drop, 0, -1):
                     if drop < best_drop_achieved: continue
                         
@@ -461,80 +465,35 @@ class KickStrategies:
                     
                     healed_sol, is_feasible, boosts = self.ls.heal_network(kicked, locked)
                     if is_feasible:
-                        test_squeezed = self.ls.gradient_squeeze(healed_sol, locked_pipes=locked, max_passes=4, quick_mode=True, dyn_bonus=dyn_bonus)
+                        test_squeezed = self.ls.gradient_squeeze(healed_sol, locked_pipes=locked, max_passes=2, quick_mode=True, dyn_bonus=dyn_bonus)
                         sq_cost, _, _, _ = self.ctx.get_cached_stats(test_squeezed)
+                        
                         msg = f"FLOW STEER: Cut Pipe {candidate_idx + 1} (-{drop}). Healed {boosts}x."
                         candidates.append((sq_cost, healed_sol, locked, msg, candidate_idx))
                         best_drop_achieved = max(best_drop_achieved, drop)
+            
+            if len(candidates) >= 5:
+                break
 
         if not candidates: return None, None, "FLOW STEER: Exhaustive search found no valid bypass.", -1
+        
         candidates.sort(key=lambda x: x[0])
         chosen = random.choice(candidates[:3])
+        
         return chosen[1], chosen[2], chosen[3], chosen[4]
 
-    # def ils_perturbation_kick(self, indices, stagnation_counter):
-    #     pct = min(0.35, 0.08 + stagnation_counter * 0.01)
-    #     n_perturb = max(4, int(self.ctx.num_pipes * pct))
+    def ils_perturbation_kick(self, indices, stagnation_counter):        
+        pct = min(0.35, 0.08 + stagnation_counter * 0.01)
+        n_perturb = max(4, int(self.ctx.num_pipes * pct))
         
-    #     is_late = stagnation_counter > 8
-    #     base_limit = 12 if self.ctx.num_pipes >= 200 else 40
-    #     if stagnation_counter > 15:
-    #         hard_limit = int(base_limit * 1.5)
-    #     else:
-    #         is_late = stagnation_counter > 8
-    #         hard_limit = min(5 if is_late else base_limit, base_limit)
+        is_late = stagnation_counter > 8
+        base_limit = 12 if self.ctx.num_pipes >= 200 else 40
+        
+        if stagnation_counter > 15:
+            hard_limit = int(base_limit * 1.5)
+        else:
+            hard_limit = 15 if is_late else base_limit
             
-    #     n_perturb = min(n_perturb, hard_limit)
-        
-    #     if self.ctx.num_pipes < 200:
-    #         chosen = random.sample(range(self.ctx.num_pipes), n_perturb)
-    #     else:
-    #         unit_losses = self.ctx.get_cached_heuristics(indices)
-    #         pipe_slack = []
-    #         for i in range(self.ctx.num_pipes):
-    #             can_downgrade = indices[i] > 0
-    #             slack_score = (1.0 / (unit_losses[i] + 1e-6)) if can_downgrade else 0.0
-    #             pipe_slack.append((i, slack_score))
-                
-    #         pipe_slack.sort(key=lambda x: x[1], reverse=True)
-    #         n_slack = int(self.ctx.num_pipes * 0.3) 
-    #         slack_pool = [p for p, _ in pipe_slack[:n_slack]]
-    #         tight_pool = [p for p, _ in pipe_slack[n_slack:]]
-            
-    #         n_from_slack = max(1, int(n_perturb * 0.7))
-    #         n_from_tight = n_perturb - n_from_slack
-            
-    #         chosen = random.sample(slack_pool, min(n_from_slack, len(slack_pool)))
-    #         if n_from_tight > 0 and tight_pool:
-    #             chosen += random.sample(tight_pool, min(n_from_tight, len(tight_pool)))
-            
-    #     kicked = list(indices)
-    #     locked = set()
-        
-    #     for p_idx in chosen:
-    #         delta = random.choice([-1, 1, 2]) if stagnation_counter > 8 else random.choice([-1, 1])
-    #         new_val = max(0, min(self.ctx.max_d_idx, kicked[p_idx] + delta))
-    #         kicked[p_idx] = new_val
-    #         if delta > 0:
-    #             locked.add(p_idx)
-                
-    #     healed, ok, boosts = self.ls.heal_network(kicked, locked)
-    #     if not ok: return None, None, ""
-        
-    #     msg = f"ILS-PERTURB (Slack-Aware): Shifted {len(chosen)} pipes. Healed {boosts}x."
-    #     return healed, locked, msg
-
-    def ils_perturbation_kick(self, indices, stagnation_counter):
-        progress = getattr(self.ctx, 'progress_ratio', 0.0)
-        is_late_game = progress > 0.5
-        
-        base_shift = max(8, self.ctx.num_pipes // 30) if not is_late_game else max(3, self.ctx.num_pipes // 70)
-        
-        stagnation_multiplier = min(1.5, 1.0 + (stagnation_counter / 15.0))
-        n_perturb = int(base_shift * stagnation_multiplier)
-        
-        hard_limit = 15 if self.ctx.num_pipes >= 200 else 30
-        if is_late_game: hard_limit = 6
         n_perturb = min(n_perturb, hard_limit)
         
         if self.ctx.num_pipes < 200:
@@ -563,7 +522,7 @@ class KickStrategies:
         locked = set()
         
         for p_idx in chosen:
-            delta = random.choice([-1, 1, 2]) if not is_late_game else random.choice([-1, 1])
+            delta = random.choice([-1, 1]) 
             new_val = max(0, min(self.ctx.max_d_idx, kicked[p_idx] + delta))
             kicked[p_idx] = new_val
             if delta > 0:
@@ -637,33 +596,45 @@ class KickStrategies:
         return kicked, locked, f"ZERO-SUM: Exchanged {exchanges} pairs (Cost-Optimized)."
     
     def submarine_oscillation_kick(self, indices):
+        n = self.ctx.num_pipes
         unit_losses = self.ctx.get_cached_heuristics(indices)
+        mid_d = self.ctx.max_d_idx // 2
         
-        fat_mains = []
-        for i in range(self.ctx.num_pipes):
-            if indices[i] > 3:
-                fat_mains.append((i, unit_losses[i]))
-                
-        fat_mains.sort(key=lambda x: x[1]) 
-        
-        if not fat_mains: return None, None, ""
+        mains = [i for i in range(n) if indices[i] <= mid_d and unit_losses[i] < 0.05]
+        if not mains:
+            mains = [i for i in range(n) if indices[i] <= mid_d]
             
+        peripherals = [i for i in range(n) if indices[i] >= (mid_d + 1) and unit_losses[i] > 0.05]
+        if not peripherals:
+            peripherals = [i for i in range(n) if indices[i] >= (mid_d + 1)]
+            
+        if not mains or not peripherals:
+            return None, None, "No valid Submarine targets found"
+            
+        import random
         kicked = list(indices)
-        locked = set()
         
-        n_cuts = random.choice([3, 4, 5])
-        cut_pipes = [x[0] for x in fat_mains[:n_cuts * 2]] 
-        chosen_cuts = random.sample(cut_pipes, min(n_cuts, len(cut_pipes)))
+        progress = getattr(self.ctx, 'progress_ratio', 0.0)
+        shift = 1
         
-        for p_idx in chosen_cuts:
-            kicked[p_idx] = max(0, kicked[p_idx] - 2) 
-            locked.add(p_idx) 
+        # 1. Зрізаємо магістралі
+        n_mains = 1 if n < 100 else min(2, len(mains))
+        target_mains = random.sample(mains, n_mains)
+        for p in target_mains:
+            kicked[p] = min(self.ctx.max_d_idx, kicked[p] + shift)
             
-        healed, ok, boosts = self.ls.heal_network(kicked, locked)
+        # 2. Розширюємо периферію
+        n_periph = min(3, len(peripherals))
+        target_periph = random.sample(peripherals, n_periph)
+        for p in target_periph:
+            kicked[p] = max(0, kicked[p] - shift)
+            
+        # 🔴 ФІКС 1: Передаємо ПОРОЖНІЙ set(), щоб Хілер мав свободу рятувати мережу!
+        healed, ok, boosts = self.ls.heal_network(kicked, set())
+        if not ok: return None, None, f"Submarine oscillation unhealable (tried shift ±{shift})"
         
-        if not ok: return None, None, ""
-        
-        return healed, locked, f"SUBMARINE: Cut {len(chosen_cuts)} mains (locked). Healed {boosts}x peripheral pipes."
+        # Повертаємо set(), щоб Сквіз теж міг поліпшувати ці труби
+        return healed, set(), f"SUBMARINE: Cut {n_mains} mains, Boosted {n_periph} periphs. Healed {boosts}x."
     
     def basin_escape(self, indices, global_archive):
         if not global_archive or len(global_archive) < 2:
@@ -677,25 +648,27 @@ class KickStrategies:
                 best_dist = dist
                 diverse_sol = arch_sol
 
-        if diverse_sol is None or best_dist < 5:
+        min_dist = max(2, int(self.ctx.num_pipes * 0.03))
+        
+        if diverse_sol is None or best_dist < min_dist:
             return None, None, "No diverse target"
 
         diff_pipes = [i for i in range(self.ctx.num_pipes) if indices[i] != diverse_sol[i]]
-        
         downgrade_pipes = [i for i in diff_pipes if diverse_sol[i] < indices[i]]
         target_pipes = downgrade_pipes if len(downgrade_pipes) >= 5 else diff_pipes
-        
-        n_replace = max(5, min(len(target_pipes) // 3, 40))
+        n_replace = max(5, min(len(target_pipes) // 4, 20))
         
         import random
-        replace_pipes = random.sample(target_pipes, n_replace)
+        center_pipe = random.choice(target_pipes)
+        target_pipes.sort(key=lambda p: abs(p - center_pipe))
+        replace_pipes = target_pipes[:n_replace]
         
         kicked = list(indices)
         for p in replace_pipes:
             kicked[p] = diverse_sol[p]
 
-        healed, ok, boosts = self.ls.heal_network(kicked, set(replace_pipes))
+        healed, ok, boosts = self.ls.heal_network(kicked, set())
         if not ok:
             return None, None, "Heal failed"
 
-        return healed, set(replace_pipes), f"BASIN-ESCAPE: Replaced {n_replace} cost-reducing pipes. Healed {boosts}x."
+        return healed, set(), f"BASIN-ESCAPE: Transplanted {n_replace} cluster pipes. Healed {boosts}x."

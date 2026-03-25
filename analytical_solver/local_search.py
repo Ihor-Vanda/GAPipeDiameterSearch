@@ -59,17 +59,18 @@ class LocalSearch:
                 milestone_pass = passes
 
             random.shuffle(active_indices)
-          
-            # Завжди беремо всі труби для проходу
             active_indices_pass = active_indices
+                
+            if quick_mode:
+                unit_losses = self.ctx.get_cached_heuristics(current_indices)
+            else:
+                unit_losses = None
                 
             for idx in active_indices_pass:
                 curr_d = current_indices[idx]
                 
-                if quick_mode:
-                    unit_losses = self.ctx.get_cached_heuristics(current_indices)
-                    if unit_losses[idx] >= 0.1:
-                        continue
+                if quick_mode and unit_losses[idx] >= 0.1:
+                    continue
                 
                 best_local_sol = None
                 best_local_score = best_score
