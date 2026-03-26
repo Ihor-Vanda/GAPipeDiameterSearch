@@ -247,6 +247,8 @@ class IslandWorker:
         
         self._initialize_seeds(seeds)
         
+        self.ipc_immunity = 30
+        
         self.stag_limit = 4 
         round_idx = 0
         epoch_start_sims = self.ctx.sim_count 
@@ -391,6 +393,10 @@ class IslandWorker:
                 if is_adventurer and self.progress_ratio < 0.85:
                     continue 
                     
+                is_massively_better = peer[0] < self.run_best_cost * 0.98
+                if self.stagnation_counter < self.stag_limit and not is_massively_better:
+                    continue 
+                    
                 peer_sol = list(peer[1])
                 c_p, p_p, feas_p, _ = self.ctx.get_cached_stats(peer_sol)
                 if feas_p and p_p >= self.ctx.simulator.config.h_min and not self.pool.is_basin_tabu(peer_sol):
@@ -398,7 +404,7 @@ class IslandWorker:
                     score = c_p - (p_surplus * self.base_dyn_bonus)
                     self.pool.active_pool.append((score, c_p, peer_sol))
                     self.ctx.log(f"     [IPC] 💉 Passively injected peer W{i+1} solution ({c_p/1e6:.4f}M$)")
-                    self.last_injected_peer[i] = peer[0] 
+                    self.last_injected_peer[i] = peer[0]
 
     def _check_rescue(self, shared_progress, gb):
         if getattr(self, 'ipc_immunity', 0) > 0:
@@ -507,17 +513,19 @@ class IslandWorker:
                     peer_data = shared_progress.get(f'best_sol_{i}')
                     if peer_data: peer_archive.append(peer_data)
 
+        peer_to_cross = None
+        
         if self.stagnation_counter >= self.stag_limit * 3.5:
             strategy = "SEGMENT_RESTART"
             self.pool.add_basin_to_tabu(self.run_best_sol) 
             
-        elif self.stagnation_counter >= self.stag_limit * 3:
+        elif self.stagnation_counter >= self.stag_limit * 3 and (self.stagnation_counter % 2 == 0):
             if len(self.global_archive) >= 2:
                 strategy = "BASIN_ESCAPE"
             else:
                 strategy = "ILS_PERTURBATION"
                 
-        elif self.stagnation_counter >= self.stag_limit * 2 and peer_archive:
+        elif self.stagnation_counter >= self.stag_limit * 2 and (self.stagnation_counter % 2 == 0) and peer_archive:
             corridor_peers = [p for p in peer_archive if 30 <= self.pool.hamming_distance(self.run_best_sol, p[1]) <= 70]
             diverse_peers = [p for p in peer_archive if self.pool.hamming_distance(self.run_best_sol, p[1]) > 70]
             if corridor_peers:
@@ -533,7 +541,7 @@ class IslandWorker:
             else:
                 strategy = "ILS_PERTURBATION"
                 
-        elif self.stagnation_counter >= self.stag_limit * 1.5:
+        elif self.stagnation_counter >= self.stag_limit * 1.5 and (self.stagnation_counter % 2 == 0):
             strategy = "ILS_PERTURBATION"
             
         elif self.stagnation_counter >= self.stag_limit:
@@ -619,8 +627,6 @@ class IslandWorker:
             self.pool.basin_tabu.clear() 
         else:
             is_heavy = strategy in ["ILS_PERTURBATION", "VNS_KICK", "RUIN_RECREATE", "IPC_CROSSOVER", "CORRIDOR_SEARCH", "SUBMARINE", "BASIN_ESCAPE"]
-            # base_quick = 2 if self.ctx.num_pipes >= 200 else 1
-            # quick_passes = base_quick if is_heavy else base_quick + 1
             quick_passes = 1
             locked_for_squeeze = set() if strategy in ["ILS_PERTURBATION", "IPC_CROSSOVER", "CORRIDOR_SEARCH"] else locked
             
@@ -635,14 +641,14 @@ class IslandWorker:
             if is_promising:
                 gap = (quick_cost - self.run_best_cost) / max(self.run_best_cost, 1.0)
                 
-                # 🔴 ФІКС: Відновлена потужність локального пошуку за вашою формулою
-                if gap < 0.0: 
+                # Жорстка економія симуляцій для слабкого заліза
+                if gap < -0.0001: 
                     deep_passes = 6 if self.ctx.num_pipes >= 200 else 4 
-                elif gap < 0.01:   # < 1% від рекорду — варто витратити час
-                    deep_passes = 4 
-                elif gap < 0.05:   # < 5% — коротке полірування
+                elif gap <= 0.002:  
+                    deep_passes = 3 
+                elif gap <= 0.01:   
                     deep_passes = 2
-                else:              # далеко від рекорду — лише 1 прохід
+                else:              
                     deep_passes = 1
                 
                 consensus_locked = set()
@@ -656,6 +662,9 @@ class IslandWorker:
                     
                     freeze_pct = 0.25 if self.progress_ratio > 0.6 else 0.10
                     max_frozen = max(5, int(self.ctx.num_pipes * freeze_pct))
+                    
+                    if self.progress_ratio > 0.88:
+                        max_frozen = 0
                     
                     if len(raw_consensus) > max_frozen:
                         interesting = [i for i in raw_consensus if 0 < arch_sols[0][i] < self.ctx.max_d_idx]
@@ -731,11 +740,12 @@ class IslandWorker:
                 self.corridor_pool_streak = 0
                 self._force_flush_next = True 
                 
-                self.ipc_immunity = 15
+                self.run_best_cost = c
+                self.run_best_sol = list(final_sol)
                 
-                if c < self.run_best_cost:
-                    self.run_best_cost = c
-                    self.run_best_sol = list(final_sol)
+                self.ipc_immunity = 50
+                
+                if c < self.global_best_cost:
                     self._update_global_best(shared_progress)
                 
                 if strategy == "SEGMENT_RESTART": 
@@ -759,7 +769,6 @@ class IslandWorker:
                         self.corridor_pool_streak = 0
                         self.stagnation_counter = max(0, self.stagnation_counter - int(self.stag_limit * 1.5))
                         
-                    # 🔴 ФІКС: Повертаємо 0.5 для нормального стимулювання пулу
                     self.strat_wins[strategy] += 0.5
                     self.ctx.log(f"      -> Added to Pool (Water Level Accept): {c/1e6:.4f}M$")
                     
@@ -1076,7 +1085,7 @@ class AnalyticalSolver:
         if self.max_sims == float('inf'):
             worker_epoch_sims = float('inf')
         else:
-            worker_epoch_sims = int(self.max_sims // (self.n_workers * self.EPOCHS))
+            worker_epoch_sims = int(self.max_sims // (self.n_workers * epochs))
         
         quota_str = "∞" if worker_epoch_sims == float('inf') else f"{worker_epoch_sims:,}"
         print(f"  [Quota] Allocated {quota_str} sims per worker/epoch.\n")
