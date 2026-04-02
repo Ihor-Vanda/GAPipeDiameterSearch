@@ -320,7 +320,7 @@ class KickStrategies:
         k_idx = min(stagnation_level // 3, len(neighborhood_sizes) - 1)
         pct = neighborhood_sizes[k_idx]
         
-        hard_limit = 8 if is_late else 25 
+        hard_limit = 20 if is_late else 35
         n_change = min(max(3, int(n * pct)), hard_limit)
         
         unit_losses = self.ctx.get_cached_heuristics(indices)
@@ -490,9 +490,9 @@ class KickStrategies:
         base_limit = 12 if self.ctx.num_pipes >= 200 else 40
         
         if stagnation_counter > 15:
-            hard_limit = int(base_limit * 1.5)
+            hard_limit = int(base_limit * 2.5)
         else:
-            hard_limit = 15 if is_late else base_limit
+            hard_limit = 25 if is_late else base_limit
             
         n_perturb = min(n_perturb, hard_limit)
         
@@ -659,9 +659,7 @@ class KickStrategies:
         n_replace = max(5, min(len(target_pipes) // 4, 20))
         
         import random
-        center_pipe = random.choice(target_pipes)
-        target_pipes.sort(key=lambda p: abs(p - center_pipe))
-        replace_pipes = target_pipes[:n_replace]
+        replace_pipes = random.sample(target_pipes, n_replace)
         
         kicked = list(indices)
         for p in replace_pipes:

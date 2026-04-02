@@ -17,7 +17,7 @@ from ga_data import load_config
 from water_sim import WaterSimulator
 from ga_optimizer import GeneticOptimizer
 from analytical_solver import AnalyticalSolver
-from ga_plot import plot_convergence, plot_network_map, export_solution
+from plot import plot_convergence, plot_network_map, export_solution
 from ga_utils import DualLogger
 from datetime import datetime
 
@@ -302,34 +302,61 @@ def main():
         if config.run_mode == 'analytical':
             print(f"\n[Mode] Running Fast Analytical Solver (v_opt = {config.v_opt} m/s)...")
             
-            abs_log_dir = os.path.abspath(base_dir)
-            solver = AnalyticalSolver(
-                sim, 
-                config.diameters_m, 
-                v_opt=config.v_opt, 
-                pool=pool, 
-                log_dir=abs_log_dir, 
-                n_workers=num_cores, 
-                max_sims=args.max_sims
-            )
-            
-            start_t = time.time()
-            best_solution_meters = solver.solve_standalone()
-            duration = time.time() - start_t
-            
-            best_indices = []
-            for d in best_solution_meters:
-                try: idx = config.diameters_m.index(d)
-                except ValueError: idx = len(config.diameters_m) - 1
-                best_indices.append(idx)
+            for i in range(args.runs):
+                if args.runs == 1:    
+                    current_log_dir = os.path.abspath(base_dir)
+                else:
+                    print(f"\n{'='*50}")
+                    print(f" 🚀 STARTING ANALYTICAL RUN {i+1}/{args.runs}")
+                    print(f"{'='*50}")
+                    current_log_dir = os.path.abspath(os.path.join(base_dir, f"run_{i+1}"))
+                    os.makedirs(current_log_dir, exist_ok=True)
                 
-            final_cost, final_p, _, _ = sim.get_stats(best_indices)
-            is_feasible = (final_p >= args.hmin)
-            status = "OK" if is_feasible else "FAIL"
+                solver = AnalyticalSolver(
+                    sim, 
+                    config.diameters_m, 
+                    v_opt=config.v_opt, 
+                    pool=pool, 
+                    log_dir=current_log_dir, 
+                    n_workers=num_cores, 
+                    max_sims=args.max_sims
+                )
+                
+                start_t = time.time()
+                best_solution_meters = solver.solve_standalone()
+                duration = time.time() - start_t
             
-            print("\n=== FINAL RESULTS ===")
-            print(f"Analytical Run: {final_cost/1e6:.4f}M$ | P={final_p:.2f}m | {status} | Time: {format_time(duration)}")
-            export_solution(best_indices, [], args.inp, os.path.join(base_dir, "tables", "analytical_solution"), config)
+                best_indices = []
+                for d in best_solution_meters:
+                    try: idx = config.diameters_m.index(d)
+                    except ValueError: idx = len(config.diameters_m) - 1
+                    best_indices.append(idx)
+                
+                final_cost, final_p, _, _ = sim.get_stats(best_indices)
+                is_feasible = (final_p >= args.hmin)
+                status = "OK" if is_feasible else "FAIL"
+            
+                print("\n=== RESULTS ===")
+                print(f"Analytical Run: {final_cost/1e6:.4f}M$ | P={final_p:.2f}m | {status} | Time: {format_time(duration)}")
+                
+                if args.runs > 1:
+                    local_tables_dir = os.path.join(current_log_dir, "tables")
+                    os.makedirs(local_tables_dir, exist_ok=True)
+                    export_solution(best_indices, [], args.inp, os.path.join(local_tables_dir, "analytical_solution"), config)
+                
+                raw_hist = getattr(solver, 'history', [])
+                # Формуємо чесну історію аналітичного солвера (без підміни gen)
+                formatted_hist = [{"evals": sim_count, "min_cost": best_cost} for sim_count, best_cost in raw_hist]
+                
+                results.append({
+                    "run_id": i+1, 
+                    "cost": final_cost, 
+                    "pressure": final_p,
+                    "feasible": is_feasible, 
+                    "time": duration, 
+                    "individual": best_indices, 
+                    "history": formatted_hist
+                })
             
         else:
             optimizer = GeneticOptimizer(sim, config, pop_size=args.pop, n_gens=args.gen, pool=pool, fixed_mode=args.fixed)
@@ -393,11 +420,34 @@ def main():
         status = "OK" if res['feasible'] else "FAIL"
         print(f"Run {res['run_id']}: {res['cost']/1e6:.4f}M$ | P={res['pressure']:.2f}m | {status}")
 
+    total_evals = best_run['history'][-1].get('evals', len(best_run['history'])) if best_run['history'] else 0
+
     solution_path = os.path.join(base_dir, "tables", "solution_champion")
-    export_solution(best_run['individual'], best_run['history'], args.inp, solution_path, config)
-    plot_network_map(best_run['individual'], args.inp, os.path.join(base_dir, "plots", "network_map.png"), config)
+    export_solution(
+        individual=best_run['individual'], 
+        history=best_run['history'], 
+        inp_file=args.inp, 
+        filename_prefix=solution_path, 
+        config=config,
+        cost=best_run['cost'],             # 🔴 Додали
+        time_sec=best_run['time'],         # 🔴 Додали
+        total_sims=total_evals             # 🔴 Додали
+    )
     
-    plot_convergence(best_run['history'], os.path.join(base_dir, "plots", "convergence.png"))
+    plot_network_map(
+        individual=best_run['individual'], 
+        inp_file=args.inp, 
+        filename=os.path.join(base_dir, "plots", "network_map.png"), 
+        config=config,
+        cost=best_run['cost']              # 🔴 Додали
+    )
+    
+    plot_convergence(
+        history=best_run['history'], 
+        filename=os.path.join(base_dir, "plots", "convergence.png")
+    )
+    
+    # Збереження фінального summary
     summary_data = [{"Run": r['run_id'], "Cost": r['cost'], "Pressure": r['pressure'], "Feasible": r['feasible'], "Time": r['time']} for r in results]
     pd.DataFrame(summary_data).to_csv(os.path.join(base_dir, "tables", "runs_summary.csv"), index=False)
 

@@ -407,12 +407,13 @@ class IslandWorker:
                     self.last_injected_peer[i] = peer[0]
 
     def _check_rescue(self, shared_progress, gb):
+        
         if getattr(self, 'ipc_immunity', 0) > 0:
             return
             
         global_lag = (self.run_best_cost - self.global_best_cost) / max(self.global_best_cost, 1)
         
-        if global_lag > 0.02 and self.stagnation_counter >= self.stag_limit * 2:
+        if (global_lag > 0.02 and self.stagnation_counter >= self.stag_limit * 2) or global_lag > 0.05:
             if gb and gb[1]:
                 self.ctx.log(f"   [RESCUE] Worker lagging by {global_lag:.1%}. Abandoning dead basin and adopting Global Best {gb[0]/1e6:.4f}M$!")
                 
@@ -501,10 +502,7 @@ class IslandWorker:
                     eff_bonus = self.base_dyn_bonus * 0.2 if p_surplus > 10.0 else self.base_dyn_bonus
                     self.pool.active_pool.insert(0, (c - (p_surplus * eff_bonus) - (self.run_best_cost * 0.1), c, swapped))
 
-    def _apply_kick(self, round_idx, shared_progress, gb):
-        if getattr(self, 'ipc_immunity', 0) > 0:
-            self.ipc_immunity -= 1
-            
+    def _apply_kick(self, round_idx, shared_progress, gb):   
         n_total = sum(self.strat_tries.values())
         peer_archive = []
         if shared_progress is not None:
@@ -519,13 +517,13 @@ class IslandWorker:
             strategy = "SEGMENT_RESTART"
             self.pool.add_basin_to_tabu(self.run_best_sol) 
             
-        elif self.stagnation_counter >= self.stag_limit * 3 and (self.stagnation_counter % 2 == 0):
+        elif self.stagnation_counter >= self.stag_limit * 3:
             if len(self.global_archive) >= 2:
                 strategy = "BASIN_ESCAPE"
             else:
                 strategy = "ILS_PERTURBATION"
                 
-        elif self.stagnation_counter >= self.stag_limit * 2 and (self.stagnation_counter % 2 == 0) and peer_archive:
+        elif self.stagnation_counter >= self.stag_limit * 2 and peer_archive:
             corridor_peers = [p for p in peer_archive if 30 <= self.pool.hamming_distance(self.run_best_sol, p[1]) <= 70]
             diverse_peers = [p for p in peer_archive if self.pool.hamming_distance(self.run_best_sol, p[1]) > 70]
             if corridor_peers:
@@ -541,8 +539,12 @@ class IslandWorker:
             else:
                 strategy = "ILS_PERTURBATION"
                 
-        elif self.stagnation_counter >= self.stag_limit * 1.5 and (self.stagnation_counter % 2 == 0):
-            strategy = "ILS_PERTURBATION"
+        elif self.stagnation_counter >= self.stag_limit * 1.5:
+            # Легке чергування, щоб не бити тільки ILS, якщо він не працює
+            if self.stagnation_counter % 3 == 0:
+                strategy = "VNS_KICK"
+            else:
+                strategy = "ILS_PERTURBATION"
             
         elif self.stagnation_counter >= self.stag_limit:
             medium_kicks = ["ILS_PERTURBATION", "SUBMARINE", "VNS_KICK", "RUIN_RECREATE"]
@@ -553,7 +555,7 @@ class IslandWorker:
             if not valid_strats:
                 strategy = "ILS_PERTURBATION"
             else:
-                exploration_C = 0.5
+                exploration_C = 0.05
                 strategy = max(valid_strats, key=lambda s: (self.strat_wins[s] / self.strat_tries[s]) + exploration_C * math.sqrt(math.log(max(1, n_total)) / self.strat_tries[s]))
                 
         self.strat_tries[strategy] += 1
@@ -641,12 +643,13 @@ class IslandWorker:
             if is_promising:
                 gap = (quick_cost - self.run_best_cost) / max(self.run_best_cost, 1.0)
                 
-                # Жорстка економія симуляцій для слабкого заліза
                 if gap < -0.0001: 
-                    deep_passes = 6 if self.ctx.num_pipes >= 200 else 4 
+                    deep_passes = 10 if self.ctx.num_pipes >= 200 else 6 
                 elif gap <= 0.002:  
-                    deep_passes = 3 
-                elif gap <= 0.01:   
+                    deep_passes = 4 
+                elif gap <= 0.02:   
+                    deep_passes = 3
+                elif gap <= 0.05:
                     deep_passes = 2
                 else:              
                     deep_passes = 1
@@ -666,11 +669,13 @@ class IslandWorker:
                     if self.progress_ratio > 0.88:
                         max_frozen = 0
                     
-                    if len(raw_consensus) > max_frozen:
+                    if len(raw_consensus) > max_frozen and max_frozen > 0:
                         interesting = [i for i in raw_consensus if 0 < arch_sols[0][i] < self.ctx.max_d_idx]
                         consensus_locked = set(list(interesting)[:max_frozen])
-                    else:
+                    elif max_frozen > 0:
                         consensus_locked = raw_consensus
+                    else:
+                        consensus_locked = set()
                             
                 safe_consensus = consensus_locked - (locked if locked else set())
                 final_locked = locked_for_squeeze.union(safe_consensus)
@@ -742,7 +747,6 @@ class IslandWorker:
                 
                 self.run_best_cost = c
                 self.run_best_sol = list(final_sol)
-                
                 self.ipc_immunity = 50
                 
                 if c < self.global_best_cost:
@@ -1059,7 +1063,7 @@ class AnalyticalSolver:
         
         archive = sorted_results[:elite_count]
         
-        min_diff_pipes = max(5, min(20, int(num_pipes * 0.04)))
+        min_diff_pipes = max(15, min(45, int(num_pipes * 0.08)))
         
         for cost, sol in sorted_results[elite_count:]:
             if len(archive) >= target_size: 
@@ -1072,12 +1076,216 @@ class AnalyticalSolver:
                 
         return archive
 
+    # def _generate_final_outputs(self, best_sol, best_cost, total_time, total_sims):
+    #     print("\n[OUTPUT] Генерація інженерних звітів, INP-файлу та графіків...")
+        
+    #     import os
+    #     base_dir = self.log_dir if self.log_dir else "Output"
+    #     plots_dir = os.path.join(base_dir, "plots")
+    #     tables_dir = os.path.join(base_dir, "tables")
+    #     os.makedirs(plots_dir, exist_ok=True)
+    #     os.makedirs(tables_dir, exist_ok=True)
+        
+    #     import wntr
+    #     import matplotlib.pyplot as plt
+    #     import networkx as nx
+    #     import pandas as pd
+        
+    #     # 1. ЕКСПОРТ .INP ФАЙЛУ ТА ІНЖЕНЕРНИЙ ЗВІТ
+    #     try:
+    #         wn = self.ctx.simulator.wn  
+    #         real_diams = [self.ctx.diameters[idx] for idx in best_sol]
+            
+    #         for i, p_name in enumerate(self.ctx.simulator.component_names):
+    #             pipe = wn.get_link(p_name)
+    #             pipe.diameter = real_diams[i]
+            
+    #         inp_path = os.path.join(tables_dir, "optimized_network.inp")
+    #         wntr.network.write_inpfile(wn, inp_path)
+    #         print(f"   > ✅ Збережено EPANET INP файл: {inp_path}")
+            
+    #         # Запускаємо гідравліку ДЛЯ ФІНАЛЬНОЇ МЕРЕЖІ
+    #         sim = wntr.sim.EpanetSimulator(wn)
+    #         results = sim.run_sim()
+            
+    #         # Витягуємо результати (беремо останній/єдиний крок часу, зазвичай 0 або 3600с)
+    #         # Якщо симуляція статична, це буде один рядок
+    #         pressures = results.node['pressure'].iloc[-1] 
+    #         velocities = results.link['velocity'].iloc[-1]
+            
+    #         # 🔴 ФІКС: Відфільтровуємо Резервуари (Reservoirs) та Джерела (Tanks)
+    #         junction_names = wn.junction_name_list
+    #         junction_pressures = pressures[junction_names]
+            
+    #         # Сортуємо вузли за зростанням тиску
+    #         sorted_pressures = junction_pressures.sort_values()
+            
+    #         report_path = os.path.join(tables_dir, "engineering_report.txt")
+    #         with open(report_path, 'w', encoding='utf-8') as f:
+    #             f.write("=================================================================================\n")
+    #             f.write("                   ДЕТАЛЬНИЙ ІНЖЕНЕРНИЙ ЗВІТ (ФІНАЛЬНЕ РІШЕННЯ)\n")
+    #             f.write("=================================================================================\n")
+    #             f.write(f"Фінальна вартість (Капітальні витрати) : {best_cost/1e6:.4f} M$\n")
+    #             f.write(f"Час оптимізації                        : {total_time/60:.1f} хвилин\n")
+    #             f.write(f"Витрачено симуляцій                    : {total_sims:,}\n")
+    #             f.write("=================================================================================\n\n")
+                
+    #             pressures = results.node['pressure'].iloc[-1]
+    #             demands = results.node['demand'].iloc[-1]
+    #             velocities = results.link['velocity'].iloc[-1]
+    #             headlosses = results.link['headloss'].iloc[-1]
+                
+    #             # --- АНАЛІЗ ВУЗЛІВ ---
+    #             junction_names = wn.junction_name_list
+    #             junction_pressures = pressures[junction_names]
+    #             sorted_pressures = junction_pressures.sort_values()
+                
+    #             f.write("--- ТИСК У ВУЗЛАХ (Відсортовано за зростанням тиску) ---\n")
+    #             f.write(f"Найнижчий тиск: {pressures.min():.2f} м (Вузол: {pressures.idxmin()})\n")
+    #             f.write(f"Найвищий тиск:  {pressures.max():.2f} м (Вузол: {pressures.idxmax()})\n")
+    #             f.write(f"Середній тиск:  {junction_pressures.mean():.2f} м\n\n")
+                
+    #             # Таблиця вузлів
+    #             f.write(f"{'Вузол ID':<15} | {'Тиск (м)':<15} | {'Споживання (л/с)':<20} | {'Висота (м)':<15}\n")
+    #             f.write("-" * 75 + "\n")
+                
+    #             for node_id, p_val in sorted_pressures.items():
+    #                 node = wn.get_node(node_id)
+    #                 elev = node.elevation if hasattr(node, 'elevation') else 0.0
+    #                 # WNTR повертає споживання в м3/с за замовчуванням, конвертуємо в л/с для зручності
+    #                 demand_lps = demands[node_id] * 1000 if node_id in demands else 0.0 
+    #                 f.write(f"{node_id:<15} | {p_val:<15.2f} | {demand_lps:<20.2f} | {elev:<15.2f}\n")
+                
+    #             f.write("\n\n")
+                
+    #             # --- АНАЛІЗ ТРУБ ---
+    #             pipe_velocities = velocities[self.ctx.simulator.component_names]
+    #             sorted_velocities = pipe_velocities.sort_values(ascending=False) # Сортуємо від найбільшої швидкості
+                
+    #             f.write("--- ШВИДКІСТЬ ТА ВТРАТИ В ТРУБԱХ (Відсортовано за спаданням швидкості) ---\n")
+    #             f.write(f"Максимальна швидкість: {velocities.max():.4f} м/с (Труба: {velocities.idxmax()})\n")
+    #             f.write(f"Мінімальна швидкість:  {velocities.min():.4f} м/с (Труба: {velocities.idxmin()})\n")
+    #             f.write(f"Середня швидкість:     {velocities.mean():.4f} м/с\n\n")
+                
+    #             # Таблиця труб
+    #             f.write(f"{'Труба ID':<15} | {'Швидкість (м/с)':<18} | {'Втрати (м)':<15} | {'Діаметр (м)':<15} | {'Довжина (м)':<15}\n")
+    #             f.write("-" * 88 + "\n")
+                
+    #             for pipe_id, v_val in sorted_velocities.items():
+    #                 pipe = wn.get_link(pipe_id)
+    #                 diam = pipe.diameter
+    #                 length = pipe.length
+    #                 hl_val = headlosses[pipe_id] if pipe_id in headlosses else 0.0
+                    
+    #                 f.write(f"{pipe_id:<15} | {v_val:<18.4f} | {hl_val:<15.4f} | {diam:<15.3f} | {length:<15.1f}\n")
+                
+    #         print(f"   > ✅ Збережено інженерний звіт: {report_path}")
+    #     except Exception as e:
+    #         print(f"   > [Помилка] Не вдалося згенерувати INP/Звіт: {e}")
+
+    #     # 2. ГРАФІК ЗБІЖНОСТІ (Convergence)
+    #     try:
+    #         if hasattr(self, 'history') and len(self.history) > 0:
+    #             # Сортуємо історію за кількістю симуляцій, щоб графік не йшов назад
+    #             sorted_history = sorted(self.history, key=lambda x: x[0])
+    #             sims, costs = zip(*sorted_history)
+                
+    #             plt.figure(figsize=(10, 6))
+    #             # Використовуємо step (сходинки) для метаевристик, це правильніше відображає рекорди
+    #             plt.step(sims, [c/1e6 for c in costs], color='blue', linewidth=2, where='post')
+    #             plt.xlabel("Кількість симуляцій")
+    #             plt.ylabel("Найкраща вартість (Мільйони $)")
+    #             plt.title("Історія оптимізації (Convergence)")
+    #             plt.grid(True, linestyle='--', alpha=0.7)
+    #             plt.tight_layout()
+                
+    #             conv_path = os.path.join(plots_dir, "convergence.png")
+    #             plt.savefig(conv_path, dpi=300)
+    #             plt.close()
+    #             print(f"   > ✅ Збережено графік збіжності: {conv_path}")
+                
+    #             rounded_costs = [round(c, 2) for c in costs]
+                
+    #             pd.DataFrame({"Simulations": sims, "Cost": rounded_costs}).to_csv(
+    #                 os.path.join(tables_dir, "convergence_history.csv"), index=False
+    #             )
+    #     except Exception as e:
+    #         print(f"   > [Помилка] Не вдалося побудувати графік збіжності: {e}")
+
+    #     # 3. ВІЗУАЛІЗАЦІЯ ТОПОЛОГІЇ МЕРЕЖІ (ОРИГІНАЛЬНА)
+    #     try:
+    #         plt.figure(figsize=(14, 14))
+    #         G = self.ctx.base_G_flow
+            
+    #         # Витягуємо координати
+    #         pos = {}
+    #         for node_name in wn.node_name_list:
+    #             node = wn.get_node(node_name)
+    #             if hasattr(node, 'coordinates') and node.coordinates is not None:
+    #                 pos[node_name] = node.coordinates
+            
+    #         if not pos:
+    #             pos = nx.kamada_kawai_layout(G)
+            
+    #         real_diams = [self.ctx.diameters[idx] for idx in best_sol]
+    #         edges = list(self.ctx.edge_to_pipe.keys())
+            
+    #         max_d = max(real_diams)
+    #         min_d = min(real_diams)
+            
+    #         edge_colors = [real_diams[self.ctx.edge_to_pipe[e]] for e in edges]
+    #         line_widths = [1 + 4 * ((d - min_d) / (max_d - min_d + 1e-6)) for d in edge_colors]
+            
+    #         # 🔴 НОВЕ: Розділяємо вузли за типами для відмальовки
+    #         junctions = wn.junction_name_list
+    #         reservoirs = wn.reservoir_name_list
+    #         tanks = wn.tank_name_list
+            
+    #         # Малюємо звичайні вузли (маленькі, чорні)
+    #         nx.draw_networkx_nodes(G, pos, nodelist=junctions, node_size=15, node_color='black', alpha=0.6, label="Вузли")
+            
+    #         # Малюємо Джерела/Резервуари (великі, сині квадрати)
+    #         if reservoirs:
+    #             nx.draw_networkx_nodes(G, pos, nodelist=reservoirs, node_size=150, node_color='blue', node_shape='s', label="Джерело (Reservoir)")
+                
+    #         # Малюємо Баки/Вежі (великі, червоні трикутники)
+    #         if tanks:
+    #             nx.draw_networkx_nodes(G, pos, nodelist=tanks, node_size=150, node_color='red', node_shape='^', label="Бак (Tank)")
+            
+    #         # Малюємо труби
+    #         edges_draw = nx.draw_networkx_edges(
+    #             G, pos, edgelist=edges, edge_color=edge_colors, 
+    #             edge_cmap=plt.cm.viridis, width=line_widths
+    #         )
+            
+    #         # Кольорова шкала для труб
+    #         cbar = plt.colorbar(edges_draw, shrink=0.5, pad=0.02)
+    #         cbar.set_label('Діаметр труби (м)')
+            
+    #         # 🔴 НОВЕ: Додаємо легенду для вузлів
+    #         plt.legend(scatterpoints=1, loc='upper right', fontsize=12)
+            
+    #         plt.title(f"Оптимізована конфігурація мережі | Вартість: {best_cost/1e6:.4f} M$", fontsize=16)
+    #         plt.axis('off')
+    #         plt.tight_layout()
+            
+    #         topo_path = os.path.join(plots_dir, "network_map.png")
+    #         plt.savefig(topo_path, dpi=300)
+    #         plt.close()
+    #         print(f"   > ✅ Збережено графік топології: {topo_path}")
+    #     except Exception as e:
+    #         print(f"   > [Помилка] Не вдалося побудувати графік топології: {e}")
+            
+    #     print("[OUTPUT] Всі файли успішно згенеровані!\n")
+
     def solve_standalone(self, max_sims=None, time_limit_sec=None):
         print("\n[AnalyticalSolver] ⚡ Initiating Island Model Search...\n")
         start_time = time.time()
         global_best_cost = float('inf')
         global_best_sol = None
         global_archive = []
+        
+        self.history = [] # 🔴 Для графіка збіжності
 
         epochs = {"SMALL": 4, "MEDIUM": 4, "LARGE": 8, "XLARGE": 8}[self.network_class]
         time_per_epoch = self.time_limit_sec / epochs
@@ -1098,122 +1306,139 @@ class AnalyticalSolver:
         cumulative_epoch_sims = 0 
         global_failed_basins = set()
 
-        for epoch in range(epochs):
-            mode_str = "PARALLEL" if self.mp_pool else "SEQUENTIAL"
-            print("="*46)
-            print(f" [EPOCH {epoch+1}/{epochs}] {mode_str} Workers: {self.n_workers} | Time Limit: {time_per_epoch/60:.1f} min")
-            print("="*46)
-            
-            seed_modifier = random.randint(1, 10000)
-            tasks = []
-            for i in range(self.n_workers):
-                tasks.append((
-                    self.ctx.diameters, self.ctx.v_opt, time_per_epoch, 
-                    global_best_cost, global_archive, 
-                    seed_modifier + i, i, shared_progress, self.log_dir, epoch,
-                    global_failed_basins, worker_epoch_sims, self.n_workers
-                ))
-
-            epoch_results = []
-            
-            if self.mp_pool:
-                async_results = []
-                for t in tasks:
-                    res = self.mp_pool.apply_async(self.worker_task, (t,))
-                    async_results.append((t[6], res))
-
-                epoch_start_time = time.time()
-                last_print_time = 0
-                print_interval = {"SMALL": 1.0, "MEDIUM": 15.0, "LARGE": 30.0, "XLARGE": 60.0}[self.network_class]
+        try: # 🔴 ПЕРЕХОПЛЕННЯ ПЕРЕРИВАНЬ
+            for epoch in range(epochs):
+                mode_str = "PARALLEL" if self.mp_pool else "SEQUENTIAL"
+                print("="*46)
+                print(f" [EPOCH {epoch+1}/{epochs}] {mode_str} Workers: {self.n_workers} | Time Limit: {time_per_epoch/60:.1f} min")
+                print("="*46)
                 
-                while True:
-                    all_done = all(res.ready() for _, res in async_results)
-                    if all_done: break
+                seed_modifier = random.randint(1, 10000)
+                tasks = []
+                for i in range(self.n_workers):
+                    tasks.append((
+                        self.ctx.diameters, self.ctx.v_opt, time_per_epoch, 
+                        global_best_cost, global_archive, 
+                        seed_modifier + i, i, shared_progress, self.log_dir, epoch,
+                        global_failed_basins, worker_epoch_sims, self.n_workers
+                    ))
+
+                epoch_results = []
+                
+                if self.mp_pool:
+                    async_results = []
+                    for t in tasks:
+                        res = self.mp_pool.apply_async(self.worker_task, (t,))
+                        async_results.append((t[6], res))
+
+                    epoch_start_time = time.time()
+                    last_print_time = 0
+                    print_interval = {"SMALL": 1.0, "MEDIUM": 15.0, "LARGE": 30.0, "XLARGE": 60.0}[self.network_class]
+                    
+                    while True:
+                        all_done = all(res.ready() for _, res in async_results)
+                        if all_done: break
+                            
+                        curr_time = time.time()
+                        if curr_time - last_print_time >= print_interval:
+                            last_print_time = curr_time
+                            elapsed_total = curr_time - start_time 
+                            m, s = divmod(int(elapsed_total), 60)
+                            
+                            status_parts = []
+                            total_sims = 0
+                            live_best = global_best_cost
+                            
+                            for wid in range(self.n_workers):
+                                prog = shared_progress.get(wid, 0)
+                                if isinstance(prog, dict):
+                                    sims = prog.get('sims', 0)
+                                    w_best = prog.get('best_cost', float('inf'))
+                                    if w_best < live_best: live_best = w_best
+                                else:
+                                    sims = prog
+                                total_sims += sims
+                                if sims > 0: status_parts.append(f"W{wid+1}:{sims//1000}k")
+                                else: status_parts.append(f"W{wid+1}:--")
+                                    
+                            status_str = " ".join(status_parts)
+                            best_str = f"{live_best/1e6:.4f}M$" if live_best != float('inf') else "---"
+                            print(f"   > [Live {m:02d}:{s:02d}] Best: {best_str} | Sims: {total_sims/1000:.1f}k | {status_str}")
+                            
+                            if live_best != float('inf'):
+                                current_total = self.ctx.sim_count + cumulative_epoch_sims + total_sims
+                                self.history.append((current_total, live_best))
                         
-                    curr_time = time.time()
-                    if curr_time - last_print_time >= print_interval:
-                        last_print_time = curr_time
-                        elapsed_total = curr_time - start_time 
-                        m, s = divmod(int(elapsed_total), 60)
-                        
-                        status_parts = []
-                        total_sims = 0
-                        live_best = global_best_cost
-                        
+                        time.sleep(1.0)
+
+                    for wid, res in async_results:
+                        try:
+                            c, sol, _, sims_done, worker_basins = res.get()
+                            if sol is not None: epoch_results.append((c, sol))
+                            global_failed_basins.update(worker_basins)
+                        except Exception as e:
+                            print(f"     [Error] Worker {wid+1} crashed: {e}")
+
+                    if shared_progress is not None:
                         for wid in range(self.n_workers):
-                            prog = shared_progress.get(wid, 0)
+                            prog = shared_progress.get(wid, {})
                             if isinstance(prog, dict):
-                                sims = prog.get('sims', 0)
-                                w_best = prog.get('best_cost', float('inf'))
-                                if w_best < live_best: live_best = w_best
-                            else:
-                                sims = prog
-                            total_sims += sims
-                            if sims > 0: status_parts.append(f"W{wid+1}:{sims//1000}k")
-                            else: status_parts.append(f"W{wid+1}:--")
-                                
-                        status_str = " ".join(status_parts)
-                        best_str = f"{live_best/1e6:.4f}M$" if live_best != float('inf') else "---"
-                        print(f"   > [Live {m:02d}:{s:02d}] Best: {best_str} | Sims: {total_sims/1000:.1f}k | {status_str}")
+                                cumulative_epoch_sims += prog.get('sims', 0)
+
+                else:
+                    for t in tasks:
+                        try:
+                            c, sol, _, sims_done, worker_basins = self.worker_task(t)
+                            if sol is not None: epoch_results.append((c, sol))
+                            global_failed_basins.update(worker_basins)
+                            cumulative_epoch_sims += sims_done 
+                            print(f"   > Worker {t[6]+1} Finished. Best: {c/1e6:.4f}M$")
+                        except Exception as e:
+                            print(f"     [Error] Sequential Worker {t[6]+1} crashed: {e}")
+
+                if epoch_results:
+                    epoch_results_sorted = sorted(epoch_results, key=lambda x: x[0])
+                    best_epoch_c, best_epoch_sol = epoch_results_sorted[0]
                     
-                    time.sleep(1.0)
+                    if best_epoch_c < global_best_cost:
+                        global_best_cost = best_epoch_c
+                        global_best_sol = best_epoch_sol
+                        print(f"\n 🏆 [EPOCH {epoch+1}] NEW GLOBAL BEST: {global_best_cost/1e6:.4f}M$ 🏆\n")
+                        
+                        # 🔴 Записуємо в історію для графіка збіжності
+                        current_sims = self.ctx.sim_count + cumulative_epoch_sims
+                        self.history.append((current_sims, global_best_cost))
+                        
+                    if shared_progress is not None and 'global_best' in shared_progress:
+                        vault_cost, vault_sol = shared_progress['global_best']
+                        if vault_cost < global_best_cost:
+                            global_best_cost = vault_cost
+                            global_best_sol = list(vault_sol)
+                            print(f"\n 🛡️ [VAULT RECOVERY] Restored historical global best: {global_best_cost/1e6:.4f}M$ 🛡️\n")
+                            epoch_results.append((vault_cost, vault_sol))
+                            
+                            current_sims = self.ctx.sim_count + cumulative_epoch_sims
+                            self.history.append((current_sims, global_best_cost))
 
-                for wid, res in async_results:
-                    try:
-                        c, sol, _, sims_done, worker_basins = res.get()
-                        if sol is not None: epoch_results.append((c, sol))
-                        global_failed_basins.update(worker_basins)
-                    except Exception as e:
-                        print(f"     [Error] Worker {wid+1} crashed: {e}")
-
-                if shared_progress is not None:
-                    for wid in range(self.n_workers):
-                        prog = shared_progress.get(wid, {})
-                        if isinstance(prog, dict):
-                            cumulative_epoch_sims += prog.get('sims', 0)
-
-            else:
-                for t in tasks:
-                    try:
-                        c, sol, _, sims_done, worker_basins = self.worker_task(t)
-                        if sol is not None: epoch_results.append((c, sol))
-                        global_failed_basins.update(worker_basins)
-                        cumulative_epoch_sims += sims_done 
-                        print(f"   > Worker {t[6]+1} Finished. Best: {c/1e6:.4f}M$")
-                    except Exception as e:
-                        print(f"     [Error] Sequential Worker {t[6]+1} crashed: {e}")
-
-            if epoch_results:
-                epoch_results_sorted = sorted(epoch_results, key=lambda x: x[0])
-                best_epoch_c, best_epoch_sol = epoch_results_sorted[0]
-                
-                if best_epoch_c < global_best_cost:
-                    global_best_cost = best_epoch_c
-                    global_best_sol = best_epoch_sol
-                    print(f"\n 🏆 [EPOCH {epoch+1}] NEW GLOBAL BEST: {global_best_cost/1e6:.4f}M$ 🏆\n")
+                    global_archive = self._build_diverse_archive(epoch_results, target_size=6, elite_count=2)
                     
-                if shared_progress is not None and 'global_best' in shared_progress:
-                    vault_cost, vault_sol = shared_progress['global_best']
-                    if vault_cost < global_best_cost:
-                        global_best_cost = vault_cost
-                        global_best_sol = list(vault_sol)
-                        print(f"\n 🛡️ [VAULT RECOVERY] Restored historical global best: {global_best_cost/1e6:.4f}M$ 🛡️\n")
-                        epoch_results.append((vault_cost, vault_sol))
+                if epoch < epochs - 1 and len(global_archive) < 6:
+                    missing_slots = 6 - len(global_archive)
+                    print(f"   [DIVERSITY CHECK] Found {len(global_archive)} unique structural basins. Injecting {missing_slots} cold seeds.")
+                    cold_seeds = self.seeder.make_diverse_seeds()
+                    
+                    for cs in cold_seeds:
+                        c, _, feas, _ = self.ctx.get_cached_stats(cs)
+                        if feas: 
+                            global_archive.append((c, cs))
+                            if len(global_archive) >= 6: break
+                    
+                    global_archive = sorted(global_archive, key=lambda x: x[0])[:6]
 
-                global_archive = self._build_diverse_archive(epoch_results, target_size=6, elite_count=2)
-                
-            if epoch < epochs - 1 and len(global_archive) < 6:
-                missing_slots = 6 - len(global_archive)
-                print(f"   [DIVERSITY CHECK] Found {len(global_archive)} unique structural basins. Injecting {missing_slots} cold seeds.")
-                cold_seeds = self.seeder.make_diverse_seeds()
-                
-                for cs in cold_seeds:
-                    c, _, feas, _ = self.ctx.get_cached_stats(cs)
-                    if feas: 
-                        global_archive.append((c, cs))
-                        if len(global_archive) >= 6: break
-                
-                global_archive = sorted(global_archive, key=lambda x: x[0])[:6]
+        except KeyboardInterrupt:
+            # 🔴 ОБРОБКА CTRL+C
+            print("\n\n[AnalyticalSolver] 🛑 Отримано сигнал переривання (Ctrl+C)!")
+            print("[AnalyticalSolver] М'яка зупинка епох. Перехід до генерації звітів...")
 
         print("\n[FINAL POLISH] Polishing global best solution...")
         if global_best_sol:
@@ -1223,6 +1448,9 @@ class AnalyticalSolver:
                 global_best_cost = p_cost
                 global_best_sol = polished
                 print(f"   > [POLISH] Improved! Final: {global_best_cost/1e6:.4f}M$")
+                
+                current_sims = self.ctx.sim_count + cumulative_epoch_sims
+                self.history.append((current_sims, global_best_cost))
         else:
             print("\n[WARNING] No valid solution found. Returning safe default.")
             global_best_sol = [self.ctx.max_d_idx] * self.ctx.num_pipes
