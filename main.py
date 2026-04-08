@@ -345,7 +345,6 @@ def main():
                     export_solution(best_indices, [], args.inp, os.path.join(local_tables_dir, "analytical_solution"), config)
                 
                 raw_hist = getattr(solver, 'history', [])
-                # Формуємо чесну історію аналітичного солвера (без підміни gen)
                 formatted_hist = [{"evals": sim_count, "min_cost": best_cost} for sim_count, best_cost in raw_hist]
                 
                 results.append({
@@ -429,9 +428,9 @@ def main():
         inp_file=args.inp, 
         filename_prefix=solution_path, 
         config=config,
-        cost=best_run['cost'],             # 🔴 Додали
-        time_sec=best_run['time'],         # 🔴 Додали
-        total_sims=total_evals             # 🔴 Додали
+        cost=best_run['cost'],           
+        time_sec=best_run['time'],       
+        total_sims=total_evals          
     )
     
     plot_network_map(
@@ -439,7 +438,7 @@ def main():
         inp_file=args.inp, 
         filename=os.path.join(base_dir, "plots", "network_map.png"), 
         config=config,
-        cost=best_run['cost']              # 🔴 Додали
+        cost=best_run['cost'] 
     )
     
     plot_convergence(

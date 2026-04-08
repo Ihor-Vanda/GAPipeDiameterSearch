@@ -122,31 +122,25 @@ def plot_convergence(history, filename="convergence.png"):
     y_costs = []
     
     for x in history:
-        # Універсальне вилучення X: пріоритет 'evals' (симуляції), резерв 'gen' (ітерації)
         x_val = x.get('evals', x.get('gen', None))
         
-        # Універсальне вилучення Y: пріоритет 'cost', резерв 'min_cost'
         y_val = x.get('cost', x.get('min_cost', None))
         
-        # Захист від битих/початкових даних
         if x_val is not None and y_val is not None and y_val != float('inf') and y_val > 0:
             x_vals.append(x_val)
-            y_costs.append(y_val / 1e6) # Конвертуємо в мільйони доларів
+            y_costs.append(y_val / 1e6)
             
     if not x_vals:
         print("   > [WARNING] Не знайдено валідних точок для графіка.")
         return
         
-    # Сортуємо, щоб графік завжди йшов послідовно зліва направо
     sorted_pairs = sorted(zip(x_vals, y_costs), key=lambda pair: pair[0])
     x_vals, y_costs = zip(*sorted_pairs)
     
     plt.figure(figsize=(10, 6))
     
-    # ЄДИНИЙ правильний стиль для ВСІХ алгоритмів пошуку (Global Best) - сходинки
     plt.step(x_vals, y_costs, label='Найкраща вартість (M$)', color='blue', linewidth=2, where='post')
         
-    # Динамічний підпис осі X залежно від того, які дані надав алгоритм
     x_label = 'Кількість симуляцій (Evaluations)' if 'evals' in history[0] else 'Ітерації / Покоління'
     
     plt.xlabel(x_label)
@@ -161,7 +155,6 @@ def plot_convergence(history, filename="convergence.png"):
     plt.close()
     print(f"   > ✅ Збережено графік збіжності: {filename}")
     
-    # Збереження універсального CSV
     base_dir = os.path.dirname(os.path.dirname(filename))
     tables_dir = os.path.join(base_dir, "tables")
     os.makedirs(tables_dir, exist_ok=True)
