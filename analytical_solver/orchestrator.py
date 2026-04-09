@@ -44,11 +44,34 @@ class SeedFactory:
                 reserve.append(squeezed)
         return reserve
 
+    # def make_diverse_seeds(self):
+    #     seeds = []
+    #     for v in [1.0, 1.2, 0.8]:
+    #         idx_sol = [self.ctx.max_d_idx] * self.ctx.num_pipes
+    #         for _ in range(10):
+    #             real_diams = [self.ctx.diameters[i] for i in idx_sol]
+    #             flows, _ = self.ctx.simulator.get_hydraulic_state(real_diams)
+    #             new_idx = [self.calculate_ideal_d(q, v) for q in flows] 
+    #             if new_idx == idx_sol: break
+    #             idx_sol = new_idx
+                
+    #         _, p, feas, _ = self.ctx.get_cached_stats(idx_sol)
+    #         if not feas or p < self.ctx.simulator.config.h_min:
+    #             idx_sol, is_healed, _ = self.ls.heal_network(idx_sol, set())
+    #             if not is_healed: continue 
+    #         squeezed_sol = self.ls.gradient_squeeze(idx_sol, max_passes=12, quick_mode=True)
+    #         seeds.append(squeezed_sol)
+    #     return seeds
+    
     def make_diverse_seeds(self):
+        """Створює масив зерен для різних цільових швидкостей (від 0.5 до 2.0 м/с)."""
         seeds = []
-        for v in [1.0, 1.2, 0.8]:
+        # Генеруємо швидкості [0.5, 0.6, 0.7 ... 2.0]
+        velocities = [x / 10.0 for x in range(5, 21)]
+        
+        for v in velocities:
             idx_sol = [self.ctx.max_d_idx] * self.ctx.num_pipes
-            for _ in range(10):
+            for _ in range(5): # Достатньо 5 ітерацій для стабілізації потоку
                 real_diams = [self.ctx.diameters[i] for i in idx_sol]
                 flows, _ = self.ctx.simulator.get_hydraulic_state(real_diams)
                 new_idx = [self.calculate_ideal_d(q, v) for q in flows] 
@@ -59,9 +82,38 @@ class SeedFactory:
             if not feas or p < self.ctx.simulator.config.h_min:
                 idx_sol, is_healed, _ = self.ls.heal_network(idx_sol, set())
                 if not is_healed: continue 
-            squeezed_sol = self.ls.gradient_squeeze(idx_sol, max_passes=12, quick_mode=True)
+                
+            # Робимо лише швидкий поверхневий сквіз (щоб не витрачати час)
+            squeezed_sol = self.ls.gradient_squeeze(idx_sol, max_passes=2, quick_mode=True)
             seeds.append(squeezed_sol)
+            
         return seeds
+
+    def make_backbone_seed(self, target_v=1.2):
+        """Будує 'скелет' (товсті магістралі, вузька периферія) для заданої швидкості."""
+        max_sol = [self.ctx.max_d_idx] * self.ctx.num_pipes
+        flows, _ = self.ctx.simulator.get_hydraulic_state([self.ctx.diameters[i] for i in max_sol])
+
+        flow_data = [(i, abs(q)) for i, q in enumerate(flows)]
+        flow_data.sort(key=lambda x: x[1], reverse=True)
+
+        n = self.ctx.num_pipes
+        n_trunk = max(1, int(n * 0.20))      # Топ 20%
+        n_periphery = max(1, int(n * 0.50))  # Нижні 50%
+
+        new_sol = list(max_sol)
+        for rank, (p_idx, q) in enumerate(flow_data):
+            if rank < n_trunk:
+                new_sol[p_idx] = self.ctx.max_d_idx
+            elif rank >= n - n_periphery:
+                new_sol[p_idx] = 0
+            else:
+                new_sol[p_idx] = self.calculate_ideal_d(q, target_v) # Використовуємо передану швидкість
+
+        healed, ok, _ = self.ls.heal_network(new_sol, set())
+        if ok:
+            return self.ls.gradient_squeeze(healed, max_passes=2, quick_mode=True)
+        return None
 
     def make_warm_seeds(self, archive, worker_id=0, failed_basins=None):
         failed_basins = failed_basins or set()
@@ -1938,6 +1990,75 @@ class AnalyticalSolver:
                 archive.append((cost, sol))
                 
         return archive
+
+    def solve_fast(self, ui_callback=None):
+        """Швидкий аналітичний розрахунок з поліруванням ТОП-5 кандидатів."""
+        print("\n[AnalyticalSolver] ⚡ Initiating FAST Analytical Search (Velocity Sweep)...\n")
+        start_time = time.time()
+        
+        print("   > Sweeping ideal velocities (0.5 to 2.0 m/s)...")
+        seeds = self.seeder.make_diverse_seeds()
+        
+        print("   > Sweeping Backbone (Trunk-Branch) configurations...")
+        for v in [0.8, 1.0, 1.2, 1.5, 1.8]:
+            bb_seed = self.seeder.make_backbone_seed(target_v=v)
+            if bb_seed:
+                seeds.append(bb_seed)
+                
+        # 1. Збираємо всі ВАЛІДНІ та УНІКАЛЬНІ зерна
+        valid_seeds = []
+        seen_sigs = set()
+        
+        for sol in seeds:
+            c, p, feas, _ = self.ctx.get_cached_stats(sol)
+            if feas and p >= self.ctx.simulator.config.h_min:
+                sig = tuple(sol)
+                if sig not in seen_sigs:
+                    seen_sigs.add(sig)
+                    valid_seeds.append((c, list(sol)))
+                    
+        global_best_cost = float('inf')
+        global_best_sol = None
+        
+        # 2. ПОЛІРУЄМО НЕ ОДНОГО, А ТОП-5 ЛІДЕРІВ
+        if valid_seeds:
+            # Сортуємо від найдешевшого до найдорожчого
+            valid_seeds.sort(key=lambda x: x[0])
+            top_n = min(5, len(valid_seeds))
+            
+            print(f"   > Sweep finished. Found {len(valid_seeds)} valid seeds. Deep Polishing TOP-{top_n}...")
+            
+            for rank in range(top_n):
+                raw_cost, raw_sol = valid_seeds[rank]
+                
+                # Глибоке полірування (False вимикає quick_mode, змушуючи перевіряти ВСЕ)
+                polished = self.ls.gradient_squeeze(raw_sol, max_passes=None, quick_mode=False, dyn_bonus=raw_cost * 0.001)
+                p_cost, p_p, _, _ = self.ctx.get_cached_stats(polished)
+                
+                if p_p >= self.ctx.simulator.config.h_min and p_cost < global_best_cost:
+                    global_best_cost = p_cost
+                    global_best_sol = polished
+                    print(f"     [{rank+1}/{top_n}] Polished {raw_cost/1e6:.4f}M$ ➡️ RECORD: {global_best_cost/1e6:.4f}M$")
+                else:
+                    print(f"     [{rank+1}/{top_n}] Polished {raw_cost/1e6:.4f}M$ ➡️ {p_cost/1e6:.4f}M$ (Discarded)")
+                    
+                if ui_callback is not None:
+                    ui_callback(self.ctx.sim_count, global_best_cost, global_best_sol)
+                    
+        if global_best_sol is None:
+            print("\n[WARNING] Fast seeds infeasible. Falling back to max diameters.")
+            global_best_sol = [self.ctx.max_d_idx] * self.ctx.num_pipes
+            global_best_cost, _, _, _ = self.ctx.get_cached_stats(global_best_sol)
+            
+        total_time = time.time() - start_time
+        print(f"\n[Fast Analytical] FINAL RESULT: {global_best_cost/1e6:.4f}M$ (Time: {total_time:.2f}s | Sims: {self.ctx.sim_count})")
+        
+        self.history = [(self.ctx.sim_count, global_best_cost)]
+        if ui_callback is not None:
+            ui_callback(self.ctx.sim_count, global_best_cost, global_best_sol)
+        
+        real_diams = [self.ctx.diameters[i] for i in global_best_sol]
+        return real_diams
 
     def solve_standalone(self, max_sims=None, time_limit_sec=None, ui_callback=None):
         print("\n[AnalyticalSolver] ⚡ Initiating Continuous Island Model Search...\n")

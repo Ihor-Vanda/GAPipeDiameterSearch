@@ -184,7 +184,7 @@ class PipelineOptimizerApp(ctk.CTk):
     
     def __init__(self):
         super().__init__()
-        self.title("Оптимізатор Водопровідних Мереж (GA & Analytical)")
+        self.title("Оптимізатор Водопровідних Мереж")
         self.geometry("1100x700")
 
         self.base_font_size = 14
@@ -237,8 +237,8 @@ class PipelineOptimizerApp(ctk.CTk):
         self.btn_costs.pack(pady=10, fill="x")
 
         ctk.CTkLabel(tab_main, text="Режим запуску:", font=self.font_main).pack(anchor="w", pady=(10,0))
-        self.opt_mode = ctk.CTkOptionMenu(tab_main, values=["analytical", "ga"], font=self.font_main, command=self.on_mode_change)
-        self.opt_mode.set("analytical")
+        self.opt_mode = ctk.CTkOptionMenu(tab_main, values=["Швидкий Аналітичний", "Повний Аналітичний"], font=self.font_main, command=getattr(self, 'on_mode_change', None))
+        self.opt_mode.set("Швидкий Аналітичний")
         self.opt_mode.pack(fill="x", pady=5)
 
         ctk.CTkLabel(tab_main, text="Кількість запусків (runs):", font=self.font_main).pack(anchor="w", pady=(5,0))
@@ -271,22 +271,6 @@ class PipelineOptimizerApp(ctk.CTk):
         self.ent_vopt = ctk.CTkEntry(tab_algo, font=self.font_main)
         self.ent_vopt.insert(0, "1.0")
         self.ent_vopt.pack(fill="x", pady=5)
-
-        self.ga_frame = ctk.CTkFrame(tab_algo, fg_color="transparent")
-        ctk.CTkLabel(self.ga_frame, text="--- Налаштування GA ---", text_color="gray", font=self.font_main).pack(pady=(10,5))
-        ctk.CTkLabel(self.ga_frame, text="Розмір популяції (0=Auto):", font=self.font_main).pack(anchor="w")
-        self.ent_pop = ctk.CTkEntry(self.ga_frame, font=self.font_main)
-        self.ent_pop.insert(0, "0")
-        self.ent_pop.pack(fill="x", pady=2)
-        ctk.CTkLabel(self.ga_frame, text="Ініціалізація:", font=self.font_main).pack(anchor="w")
-        self.opt_init = ctk.CTkOptionMenu(self.ga_frame, values=["sep", "random", "static", "analytical"], font=self.font_main)
-        self.opt_init.set("sep")
-        self.opt_init.pack(fill="x", pady=2)
-
-        self.chk_fixed = ctk.CTkSwitch(self.ga_frame, text="Fixed penalty mode", font=self.font_main)
-        self.chk_fixed.pack(anchor="w", pady=5)
-        self.chk_no_eps = ctk.CTkSwitch(self.ga_frame, text="Disable EPS", font=self.font_main)
-        self.chk_no_eps.pack(anchor="w", pady=5)
 
         self.btn_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         self.btn_frame.grid(row=2, column=0, padx=10, pady=20, sticky="ew")
@@ -398,15 +382,11 @@ class PipelineOptimizerApp(ctk.CTk):
                 messagebox.showerror("Помилка", f"Не вдалося прочитати CSV: {e}")
                 
     def on_mode_change(self, mode):
-        if mode == "analytical":
-            self.lbl_cores.configure(text="Острови (cores, реком. >= 5):")
-            self.ga_frame.pack_forget() 
-            if self.ent_cores.get() == "0":
-                self.ent_cores.delete(0, "end")
-                self.ent_cores.insert(0, "5")
-        else:
-            self.lbl_cores.configure(text="Ядра CPU (cores, 0=Всі):")
-            self.ga_frame.pack(fill="x", pady=5) 
+        self.lbl_cores.configure(text="Острови (cores, реком. >= 5):")
+        if self.ent_cores.get() == "0":
+            self.ent_cores.delete(0, "end")
+            self.ent_cores.insert(0, "5")
+        
             
             
     # ==========================================
@@ -448,25 +428,32 @@ class PipelineOptimizerApp(ctk.CTk):
             clean_all_temp()
             os.makedirs(get_temp_root(), exist_ok=True)
             
-            run_mode = self.opt_mode.get()
+            # 1. Читаємо базові налаштування
+            mode_text = self.opt_mode.get()
+            # Переводимо українську назву з GUI у внутрішню змінну
+            run_mode = "fast_analytical" if mode_text == "Швидкий Аналітичний" else "analytical"
+            
             runs = int(self.ent_runs.get())
             hmin = float(self.ent_hmin.get())
             units = self.opt_units.get()
             v_opt = float(self.ent_vopt.get())
-            max_sims = int(self.ent_sims.get())
-            cores = int(self.ent_cores.get())
             
-            pop = int(self.ent_pop.get())
-            init_mode = self.opt_init.get()
-            is_fixed = bool(self.chk_fixed.get())
-            use_epsilon = not bool(self.chk_no_eps.get())
+            try: max_sims = int(self.ent_sims.get())
+            except: max_sims = 0
+            
+            try: cores = int(self.ent_cores.get())
+            except: cores = 0
 
+            # 🔴 ЗМІНА: Видалено читання pop, init_mode, is_fixed, use_epsilon
+
+            # 2. Налаштування директорій
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             base_dir = os.path.abspath(os.path.join("OutputDataExperiments", timestamp))
             self.last_run_dir = base_dir 
             os.makedirs(base_dir, exist_ok=True)
             
             log_file_path = os.path.join(base_dir, "logs", f"run_{timestamp}.txt")
+            os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
             if isinstance(sys.stdout, GUIStream):
                 sys.stdout.set_file(log_file_path)
             
@@ -479,11 +466,12 @@ class PipelineOptimizerApp(ctk.CTk):
             print(f"   Режим: {run_mode.upper()} | Воркери: {cores if cores > 0 else 'Auto'}")
             print(f"==============================================\n")
 
+            # 3. Ініціалізація конфігурації
             config = GAConfig(
                 inp_file=self.selected_inp, cost_file=self.selected_costs,
-                pop_size=pop if pop > 0 else 200, n_gens=150, runs=runs,
+                pop_size=200, n_gens=150, runs=runs, # Стандартні заглушки, щоб не ламався клас
                 h_min=hmin, unit_system=units, run_mode=run_mode,
-                init_method=init_mode, v_opt=v_opt
+                init_method="analytical", v_opt=v_opt
             )
             load_config(config)
 
@@ -498,97 +486,70 @@ class PipelineOptimizerApp(ctk.CTk):
             
             results = []
 
-            if run_mode == 'analytical':
-                print(f"[Mode] Running Fast Analytical Solver (v_opt = {v_opt} m/s)...")
-                for i in range(runs):
-                    if self.is_stopped: break
-                    
-                    self.after(0, self.clear_realtime_graph)
-                    self.highest_sims = 0 
-                    
-                    current_log_dir = os.path.join(base_dir, f"run_{i+1}") if runs > 1 else base_dir
-                    os.makedirs(current_log_dir, exist_ok=True)
-                    
-                    solver = AnalyticalSolver(
-                        sim, config.diameters_m, v_opt=v_opt, pool=self.current_pool, 
-                        log_dir=current_log_dir, n_workers=num_cores, max_sims=max_sims
-                    )
-                    
-                    start_t = time.time()
-                    try:
+            # 4. 🔴 ЗМІНА: ОБ'ЄДНАНИЙ ЦИКЛ ВИКОНАННЯ (Більше немає else з GeneticOptimizer)
+            for i in range(runs):
+                if self.is_stopped: break
+                
+                self.after(0, self.clear_realtime_graph)
+                self.highest_sims = 0 
+                
+                current_log_dir = os.path.join(base_dir, f"run_{i+1}") if runs > 1 else base_dir
+                os.makedirs(current_log_dir, exist_ok=True)
+                
+                solver = AnalyticalSolver(
+                    sim, config.diameters_m, v_opt=v_opt, pool=self.current_pool, 
+                    log_dir=current_log_dir, n_workers=num_cores, max_sims=max_sims
+                )
+                
+                start_t = time.time()
+                try:
+                    # Викликаємо правильний метод залежно від обраного режиму!
+                    if run_mode == 'fast_analytical':
+                        best_solution_meters = solver.solve_fast(ui_callback=self.sync_ui_state)
+                    else:
                         best_solution_meters = solver.solve_standalone(ui_callback=self.sync_ui_state)
-                        duration = time.time() - start_t
                         
-                        if best_solution_meters:
-                            best_indices = []
-                            for d in best_solution_meters:
-                                try: idx = config.diameters_m.index(d)
-                                except ValueError: idx = len(config.diameters_m) - 1
-                                best_indices.append(idx)
-                                
-                            final_cost, final_p, _, _ = sim.get_stats(best_indices)
-                            hist = [{"evals": s, "min_cost": c} for s, c in getattr(solver, 'history', [])]
-                            total_evals = hist[-1].get('evals', len(hist)) if hist else 0
+                    duration = time.time() - start_t
+                    
+                    if best_solution_meters:
+                        best_indices = []
+                        for d in best_solution_meters:
+                            try: idx = config.diameters_m.index(d)
+                            except ValueError: idx = len(config.diameters_m) - 1
+                            best_indices.append(idx)
                             
-                            results.append({
-                                "run_id": i+1, "cost": final_cost, "pressure": final_p,
-                                "feasible": (final_p >= hmin), "time": duration, 
-                                "individual": best_indices, "history": hist
-                            })
+                        final_cost, final_p, _, _ = sim.get_stats(best_indices)
+                        
+                        # Захист на випадок порожньої історії
+                        raw_hist = getattr(solver, 'history', [])
+                        if not raw_hist: raw_hist = [(sim.sim_count, final_cost)]
+                        hist = [{"evals": s, "min_cost": c} for s, c in raw_hist]
+                        
+                        total_evals = hist[-1].get('evals', len(hist)) if hist else 0
+                        
+                        results.append({
+                            "run_id": i+1, "cost": final_cost, "pressure": final_p,
+                            "feasible": (final_p >= hmin), "time": duration, 
+                            "individual": best_indices, "history": hist
+                        })
+                        
+                        if runs > 1:
+                            local_tables = os.path.join(current_log_dir, "tables")
+                            local_plots = os.path.join(current_log_dir, "plots")
+                            os.makedirs(local_tables, exist_ok=True)
+                            os.makedirs(local_plots, exist_ok=True)
+                            sol_path = os.path.join(local_tables, "solution")
+                            export_solution(best_indices, hist, self.selected_inp, sol_path, config, final_cost, duration, total_evals)
+                            plot_network_map(best_indices, self.selected_inp, os.path.join(local_plots, "network_map.png"), config, final_cost)
                             
-                            if runs > 1:
-                                local_tables = os.path.join(current_log_dir, "tables")
-                                local_plots = os.path.join(current_log_dir, "plots")
-                                os.makedirs(local_tables, exist_ok=True)
-                                os.makedirs(local_plots, exist_ok=True)
-                                sol_path = os.path.join(local_tables, "solution")
-                                export_solution(best_indices, hist, self.selected_inp, sol_path, config, final_cost, duration, total_evals)
-                                plot_network_map(best_indices, self.selected_inp, os.path.join(local_plots, "network_map.png"), config, final_cost)
+                            # Малюємо графік збіжності, лише якщо є більше 1 точки
+                            if len(hist) > 1:
                                 plot_convergence(hist, os.path.join(local_plots, "convergence.png"))
 
-                    except Exception as e:
-                        if not self.is_stopped: raise e
-            else:
-                for i in range(runs):
-                    if self.is_stopped: break
-                    
-                    self.after(0, self.clear_realtime_graph)
-                    self.highest_sims = 0
-                    
-                    current_log_dir = os.path.join(base_dir, f"run_{i+1}") if runs > 1 else base_dir
-                    os.makedirs(current_log_dir, exist_ok=True)
-                    
-                    optimizer = GeneticOptimizer(sim, config, pop_size=pop, n_gens=150, pool=self.current_pool, fixed_mode=is_fixed)
-                    start_t = time.time()
-                    try:
-                        optimizer.total_sims = 0
-                        ind, _, _, dur, hist = optimizer.run(
-                            run_id=i, h_min=hmin, init_mode=init_mode, use_epsilon=use_epsilon
-                        )
-                        if ind:
-                            final_cost, final_p, _, _ = sim.get_stats(ind)
-                            results.append({
-                                "run_id": i+1, "cost": final_cost, "pressure": final_p,
-                                "feasible": (final_p >= hmin), "time": dur, 
-                                "individual": ind, "history": hist
-                            })
-                            
-                            if runs > 1:
-                                local_tables = os.path.join(current_log_dir, "tables")
-                                local_plots = os.path.join(current_log_dir, "plots")
-                                os.makedirs(local_tables, exist_ok=True)
-                                os.makedirs(local_plots, exist_ok=True)
-                                
-                                total_evals = hist[-1].get('evals', len(hist)) if hist else 0
-                                sol_path = os.path.join(local_tables, "solution")
-                                export_solution(ind, hist, self.selected_inp, sol_path, config, final_cost, dur, total_evals)
-                                plot_network_map(ind, self.selected_inp, os.path.join(local_plots, "network_map.png"), config, final_cost)
-                                plot_convergence(hist, os.path.join(local_plots, "convergence.png"))
-                                
-                    except Exception as e:
-                        if not self.is_stopped: raise e
+                except Exception as e:
+                    if not self.is_stopped: raise e
 
-            # Збереження Фінального Звіту
+            # 5. Збереження Фінального Звіту (Після всіх runs)
             if results:
                 os.makedirs(os.path.join(base_dir, "tables"), exist_ok=True)
                 os.makedirs(os.path.join(base_dir, "plots"), exist_ok=True)
@@ -599,7 +560,9 @@ class PipelineOptimizerApp(ctk.CTk):
                 solution_path = os.path.join(base_dir, "tables", "solution_champion")
                 export_solution(best_run['individual'], best_run['history'], self.selected_inp, solution_path, config, best_run['cost'], best_run['time'], total_evals)
                 plot_network_map(best_run['individual'], self.selected_inp, os.path.join(base_dir, "plots", "network_map.png"), config, best_run['cost'])
-                plot_convergence(best_run['history'], os.path.join(base_dir, "plots", "convergence.png"))
+                
+                if len(best_run['history']) > 1:
+                    plot_convergence(best_run['history'], os.path.join(base_dir, "plots", "convergence.png"))
                 
                 summary_data = [{"Run": r['run_id'], "Cost": r['cost'], "Pressure": r['pressure'], "Feasible": r['feasible'], "Time": r['time']} for r in results]
                 pd.DataFrame(summary_data).to_csv(os.path.join(base_dir, "tables", "runs_summary.csv"), index=False)
