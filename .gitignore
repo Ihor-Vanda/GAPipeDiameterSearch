@@ -4,3 +4,5 @@ temp_sim/
 _temp_sim_data/
 OutputData/
 OutputDataExperiments/
+build/
+dist/

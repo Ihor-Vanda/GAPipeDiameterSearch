@@ -7,7 +7,6 @@ from wntr.epanet.toolkit import ENepanet
 
 warnings.filterwarnings("ignore")
 
-# Базові константи C-API EPANET
 EN_NODECOUNT = 0
 EN_LINKCOUNT = 2
 EN_JUNCTION = 0
@@ -23,16 +22,13 @@ class WaterSimulator:
         self.config = config
         self.temp_dir = temp_dir 
         
-        # 1. Читаємо топологію через WNTR (тільки для структури та довжин у СІ)
         self.wn = wntr.network.WaterNetworkModel(self.inp_file)
         self.graph = self.wn.get_graph()
         self.component_names = self.wn.pipe_name_list
         self.n_variables = len(self.component_names)
         
-        # WNTR автоматично конвертує довжини у метри при парсингу, тому це завжди в метрах
         self.lengths = np.array([self.wn.get_link(p).length for p in self.component_names])
         
-        # 2. Відкриваємо мережу через C-API
         rpt_file = os.path.join(temp_dir if temp_dir else "", f"temp_rpt_{os.getpid()}.rpt")
         bin_file = os.path.join(temp_dir if temp_dir else "", f"temp_bin_{os.getpid()}.bin")
         
@@ -42,21 +38,18 @@ class WaterSimulator:
         self.n_nodes = self.api.ENgetcount(EN_NODECOUNT)
         self.n_links = self.api.ENgetcount(EN_LINKCOUNT)
         
-        # 🔴 АВТО-АДАПТАЦІЯ ОДИНИЦЬ ВИМІРУ ДЛЯ C-API
-        # 0-4: US Customary (GPM, CFS...), 5-9: Metric (LPS, CMH...)
         flow_units = self.api.ENgetflowunits()
         self.is_us_units = flow_units < 5
         
         if self.is_us_units:
-            self.diam_epanet_mult = 39.3701   # Метри -> Дюйми (передача в C-API)
-            self.press_si_mult = 0.7032496    # PSI -> Метри (читання з C-API)
-            self.hl_si_mult = 0.3048          # Фути -> Метри (читання з C-API)
+            self.diam_epanet_mult = 39.3701 
+            self.press_si_mult = 0.7032496    
+            self.hl_si_mult = 0.3048        
         else:
-            self.diam_epanet_mult = 1000.0    # Метри -> Міліметри (передача в C-API)
-            self.press_si_mult = 1.0          # Метри -> Метри
-            self.hl_si_mult = 1.0             # Метри -> Метри
+            self.diam_epanet_mult = 1000.0   
+            self.press_si_mult = 1.0         
+            self.hl_si_mult = 1.0         
 
-        # Кешуємо індекси C-API
         self.pipe_name_to_c_idx = {}
         for name in self.component_names:
             c_idx = self.api.ENgetlinkindex(name)
@@ -94,12 +87,12 @@ class WaterSimulator:
 
     def __del__(self):
         try:
-            self.api.ENclose()
+            if hasattr(self, 'api') and self.api is not None:
+                self.api.ENclose()
         except:
             pass
 
     def _apply_pattern(self, individual):
-        """Встановлює діаметри в C-пам'ять із правильною конвертацією одиниць"""
         if not self.diams_m: self._refresh_config()
         
         ind_arr = np.clip(individual, 0, self.n_options - 1)
@@ -109,17 +102,15 @@ class WaterSimulator:
         for i, pipe_name in enumerate(self.component_names):
             c_idx = self.pipe_name_to_c_idx[pipe_name]
             idx = ind_arr[i]
-            # 🔴 Конвертуємо метри у потрібні EPANET одиниці (mm або inches)
             val = self.diams_m[idx] * self.diam_epanet_mult
             self.api.ENsetlinkvalue(c_idx, EN_DIAMETER, val)
             
         return total_cost
 
     def _run_simulation_core(self):
-        """Швидкий In-Memory покроковий вирішувач (зберігає результати в пам'яті)"""
         try:
             self.api.ENopenH()
-            self.api.ENinitH(0) # 0 = не записувати результати у файл
+            self.api.ENinitH(0)
             
             while True:
                 self.api.ENrunH()
@@ -127,7 +118,7 @@ class WaterSimulator:
                 if tstep <= 0:
                     break
                     
-            self.api.ENcloseH() # Гідравліка закрита, але вузли пам'ятають останній крок
+            self.api.ENcloseH()
             return True
         except Exception:
             return False
@@ -145,7 +136,6 @@ class WaterSimulator:
         effective_limit = self.config.h_min - epsilon
         
         for c_idx in self.junction_c_indices:
-            # 🔴 Конвертуємо тиск назад у метри
             p = self.api.ENgetnodevalue(c_idx, EN_PRESSURE) * self.press_si_mult
             if p < effective_limit:
                 max_violation += (effective_limit - p)
@@ -163,7 +153,6 @@ class WaterSimulator:
         unit_losses = []
         for i, pipe_name in enumerate(self.component_names):
             c_idx = self.pipe_name_to_c_idx[pipe_name]
-            # 🔴 Конвертуємо втрати тиску назад у метри
             hl = abs(self.api.ENgetlinkvalue(c_idx, EN_HEADLOSS)) * self.hl_si_mult
             L = self.lengths[i]
             unit_losses.append(hl / L if L > 0 else 0.0)
@@ -182,7 +171,6 @@ class WaterSimulator:
         crit_node_idx = -1
         
         for c_idx in self.junction_c_indices:
-            # 🔴 Конвертуємо тиск назад у метри
             p = self.api.ENgetnodevalue(c_idx, EN_PRESSURE) * self.press_si_mult
             if p < min_p:
                 min_p = p

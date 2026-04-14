@@ -1,5 +1,6 @@
 from .fast_math import fast_hamming_distance # 🔴 Додайте імпорт
 import numpy as np
+import collections
 
 class SolutionPool:
     def __init__(self, ctx):
@@ -7,7 +8,7 @@ class SolutionPool:
         self.active_pool = []
         self.tabu_fingerprints = {} 
         self.kick_tabu_set = set()
-        self.basin_tabu = set() 
+        self.basin_tabu = collections.deque(maxlen=500)
         self.current_round = 0
         
     def clear_all(self):
@@ -33,7 +34,9 @@ class SolutionPool:
         return self.get_basin_signature(indices) in self.basin_tabu
 
     def add_basin_to_tabu(self, indices):
-        self.basin_tabu.add(self.get_basin_signature(indices))
+        sig = self.get_basin_signature(indices)
+        if sig not in self.basin_tabu:
+            self.basin_tabu.append(sig)
 
     def add_to_tabu(self, indices, cost):
         fp = self.ctx.get_fingerprint(indices, cost)

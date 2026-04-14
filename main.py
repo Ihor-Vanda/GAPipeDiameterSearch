@@ -4,18 +4,15 @@ import shutil
 import time
 import pandas as pd
 import multiprocessing
-import uuid
 import signal
 import sys
 import traceback
-import copy
 import json
 
 from ga_config import GAConfig
 from ga_utils import silence_warnings, format_time
 from ga_data import load_config
 from water_sim import WaterSimulator
-from ga_optimizer import GeneticOptimizer
 from analytical_solver import AnalyticalSolver
 from plot import plot_convergence, plot_network_map, export_solution
 from ga_utils import DualLogger
@@ -59,24 +56,6 @@ def worker_init(inp_file, config_obj):
         log_err(f"!!! WORKER {os.getpid()} INIT CRASH: {e}")
         sys.exit(1)
 
-def worker_eval_task(args):
-    ind, gen, pf, epsilon = args
-    global worker_sim_instance
-    
-    if worker_sim_instance is None:
-        return (float('inf'),)
-
-    try:
-        val = worker_sim_instance.evaluate(ind, penalty_factor=pf, epsilon=epsilon)
-        
-        if not isinstance(val, tuple): 
-            val = (val,)
-        return val
-        
-    except Exception as e:
-        log_err(f"Worker Eval Error: {e}")
-        return (float('inf'),)
-
 def clean_all_temp():
     root = get_temp_root()
     if os.path.exists(root):
@@ -108,9 +87,8 @@ def analytical_worker_task(args):
     shared_progress  = args[7]
     log_dir          = args[8]
     epoch            = args[9]
-    failed_basins    = args[10]
-    max_sims         = args[11] if len(args) > 11 else float('inf')
-    n_workers        = args[12] if len(args) > 12 else (len(shared_progress) if shared_progress else 1)
+    max_sims         = args[10] if len(args) > 10 else float('inf')
+    n_workers        = args[11] if len(args) > 11 else (len(shared_progress) if shared_progress else 1)
 
     global worker_sim_instance
     if worker_sim_instance is None:
@@ -142,6 +120,9 @@ def analytical_worker_task(args):
                 self.file_handle = file_handle
             def write(self, message):
                 self.file_handle.write(message)
+                self.file_handle.flush()
+            def writelines(self, lines):
+                self.file_handle.writelines(lines)
                 self.file_handle.flush()
             def flush(self):
                 self.file_handle.flush()
@@ -189,21 +170,12 @@ def main():
     parser.add_argument("--inp", type=str, default="InputData/Hanoi/Hanoi.inp", help="Path to EPANET .inp file")
     parser.add_argument("--costs", type=str, default="InputData/Hanoi/costs.csv", help="Path to cost configuration JSON")
     parser.add_argument("--runs", type=int, default=1, help="Number of independent runs")
-    # parser.add_argument("--pop", type=int, default=0, help="Population size (0 = auto)") 
-    # parser.add_argument("--gen", type=int, default=0, help="Max generations (0 = auto)")
     parser.add_argument("--hmin", type=float, default=30.0, help="Minimum allowable head (pressure)")
     parser.add_argument("--units", type=str, choices=["in", "mm"], default="mm", help="Units for pipe diameters")
     parser.add_argument("--cores", type=int, default=0, help="Number of CPU cores (0 = all)")
-    # parser.add_argument("--fixed", action="store_true", help="Enable fixed penalty mode")
     
     parser.add_argument("--run_mode", type=str, choices=["fast_analytical", "analytical"], default="analytical", help="Mode: fast analytical or analytical")
-    # parser.add_argument("--init", type=str, choices=["random", "static", "sep", "analytical"], default="sep", help="Initialization strategy for GA")
     parser.add_argument("--v_opt", type=float, default=1.0, help="Optimal velocity (m/s) for analytical solver")
-
-    # parser.add_argument("--no-eps", action="store_true", help="Disable adaptive epsilon relaxation")
-    # parser.add_argument("--no-shocks", action="store_true", help="Disable seismic shocks (re-starts)")
-    # parser.add_argument("--no-expansion", action="store_true", help="Disable population expansion on stagnation")
-    # parser.add_argument("--no-graphs", action="store_true", help="Disable graph heuristics (Smart Repair & Squeeze)")
 
     args, unknown = parser.parse_known_args()
     
@@ -234,7 +206,7 @@ def main():
     config = GAConfig(
         inp_file=args.inp,
         cost_file=args.costs,
-        pop_size=200, n_gens=150, runs=args.runs, # Залишено для сумісності з класом GAConfig
+        pop_size=200, n_gens=150, runs=args.runs,
         h_min=args.hmin,
         unit_system=args.units,
         run_mode=args.run_mode,
@@ -263,10 +235,8 @@ def main():
     results = []
     try:
         pool = multiprocessing.Pool(processes=num_cores, initializer=worker_init, initargs=(args.inp, config))
-        WaterSimulator.worker_eval_wrapper = staticmethod(worker_eval_task)
         AnalyticalSolver.worker_task = staticmethod(analytical_worker_task)
         
-        # 🔴 ОБ'ЄДНАНИЙ БЛОК ДЛЯ ОБОХ РЕЖИМІВ
         for i in range(args.runs):
             current_log_dir = os.path.abspath(base_dir) if args.runs == 1 else os.path.abspath(os.path.join(base_dir, f"run_{i+1}"))
             if args.runs > 1: os.makedirs(current_log_dir, exist_ok=True)
@@ -277,7 +247,6 @@ def main():
             )
             
             start_t = time.time()
-            # Викликаємо потрібний метод залежно від режиму
             if config.run_mode == 'fast_analytical':
                 best_solution_meters = solver.solve_fast()
             else:
@@ -303,7 +272,7 @@ def main():
                 export_solution(best_indices, [], args.inp, os.path.join(local_tables_dir, "solution"), config)
             
             raw_hist = getattr(solver, 'history', [])
-            if not raw_hist: raw_hist = [(sim.sim_count, final_cost)]
+            if not raw_hist: raw_hist = [(solver.ctx.sim_count, final_cost)]
             formatted_hist = [{"evals": sc, "min_cost": bc} for sc, bc in raw_hist]
             
             results.append({
@@ -347,248 +316,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-#     if args.config:
-#         if os.path.exists(args.config):
-#             print(f"[System] Loading configuration from {args.config}...")
-#             with open(args.config, 'r', encoding='utf-8') as f:
-#                 config_data = json.load(f)
-                
-#                 cli_args_used = [arg.strip('-') for arg in sys.argv if arg.startswith('--')]
-                
-#                 for key, value in config_data.items():
-#                     if key not in cli_args_used:
-#                         setattr(args, key, value)
-#         else:
-#             print(f"[Fatal Error] Config file not found: {args.config}")
-#             sys.exit(1)
-
-#     args.inp = os.path.abspath(args.inp)
-#     args.costs = os.path.abspath(args.costs)
-
-#     clean_all_temp()
-#     os.makedirs(get_temp_root(), exist_ok=True)
-
-#     main_proc_temp = os.path.join(get_temp_root(), "main_process")
-#     os.makedirs(main_proc_temp, exist_ok=True)
-    
-#     base_dir = setup_run_directory()
-    
-#     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-#     log_file = f"{base_dir}/logs/run_{timestamp}.txt"
-#     os.makedirs(os.path.dirname(log_file), exist_ok=True)
-    
-#     sys.stdout = DualLogger(log_file)
-#     sys.stderr = sys.stdout
-    
-#     print(f"[System] Log file initiated: {log_file}")
-
-#     print("[System] Loading configuration in Main Process...")
-    
-#     config = GAConfig(
-#         inp_file=args.inp,
-#         cost_file=args.costs,
-#         pop_size=args.pop if args.pop > 0 else 200,
-#         n_gens=args.gen if args.gen > 0 else 150,
-#         runs=args.runs,
-#         h_min=args.hmin,
-#         unit_system=args.units,
-#         run_mode=args.run_mode,
-#         init_method=args.init,
-#         v_opt=args.v_opt
-#     )
-    
-#     try:
-#         load_config(config)
-#     except Exception as e:
-#         print(f"[Main Error] Config loading failed: {e}")
-#         return
-
-#     try:
-#         print("[System] Pre-flight simulation check...")
-#         sim = WaterSimulator(args.inp, config, temp_dir=main_proc_temp)
-#         test_ind = [0] * sim.n_variables
-#         sim.evaluate(test_ind, penalty_factor=1000, epsilon=0.0)
-#         print("[System] Pre-flight check PASSED ✅")
-#     except Exception as e:
-#         print(f"[CRITICAL] PRE-FLIGHT CHECK FAILED: {e}")
-#         traceback.print_exc()
-#         return
-
-#     os.makedirs(os.path.join(base_dir, "plots"), exist_ok=True)
-#     os.makedirs(os.path.join(base_dir, "tables"), exist_ok=True)
-    
-#     print("==============================================")
-#     print(f"   EVOLUTIONARY OPTIMIZER: {os.path.basename(args.inp)}")
-#     print(f"   System: {os.name.upper()} | Cores: {args.cores if args.cores > 0 else 'Auto'}")
-#     print("==============================================")
-    
-#     num_cores = args.cores if args.cores > 0 else multiprocessing.cpu_count()
-#     print(f"[System] Initializing {num_cores} parallel workers (Strict Isolation)...")
-    
-#     pool = None
-#     try:
-#         pool = multiprocessing.Pool(
-#             processes=num_cores, 
-#             initializer=worker_init, 
-#             initargs=(args.inp, config)
-#         )
-
-#         WaterSimulator.worker_eval_wrapper = staticmethod(worker_eval_task)
-#         AnalyticalSolver.worker_task = staticmethod(analytical_worker_task)
-        
-#         results = []
-        
-#         if config.run_mode == 'analytical':
-#             print(f"\n[Mode] Running Fast Analytical Solver (v_opt = {config.v_opt} m/s)...")
-            
-#             for i in range(args.runs):
-#                 if args.runs == 1:    
-#                     current_log_dir = os.path.abspath(base_dir)
-#                 else:
-#                     print(f"\n{'='*50}")
-#                     print(f" 🚀 STARTING ANALYTICAL RUN {i+1}/{args.runs}")
-#                     print(f"{'='*50}")
-#                     current_log_dir = os.path.abspath(os.path.join(base_dir, f"run_{i+1}"))
-#                     os.makedirs(current_log_dir, exist_ok=True)
-                
-#                 solver = AnalyticalSolver(
-#                     sim, 
-#                     config.diameters_m, 
-#                     v_opt=config.v_opt, 
-#                     pool=pool, 
-#                     log_dir=current_log_dir, 
-#                     n_workers=num_cores, 
-#                     max_sims=args.max_sims
-#                 )
-                
-#                 start_t = time.time()
-#                 best_solution_meters = solver.solve_standalone()
-#                 duration = time.time() - start_t
-            
-#                 best_indices = []
-#                 for d in best_solution_meters:
-#                     try: idx = config.diameters_m.index(d)
-#                     except ValueError: idx = len(config.diameters_m) - 1
-#                     best_indices.append(idx)
-                
-#                 final_cost, final_p, _, _ = sim.get_stats(best_indices)
-#                 is_feasible = (final_p >= args.hmin)
-#                 status = "OK" if is_feasible else "FAIL"
-            
-#                 print("\n=== RESULTS ===")
-#                 print(f"Analytical Run: {final_cost/1e6:.4f}M$ | P={final_p:.2f}m | {status} | Time: {format_time(duration)}")
-                
-#                 if args.runs > 1:
-#                     local_tables_dir = os.path.join(current_log_dir, "tables")
-#                     os.makedirs(local_tables_dir, exist_ok=True)
-#                     export_solution(best_indices, [], args.inp, os.path.join(local_tables_dir, "analytical_solution"), config)
-                
-#                 raw_hist = getattr(solver, 'history', [])
-#                 formatted_hist = [{"evals": sim_count, "min_cost": best_cost} for sim_count, best_cost in raw_hist]
-                
-#                 results.append({
-#                     "run_id": i+1, 
-#                     "cost": final_cost, 
-#                     "pressure": final_p,
-#                     "feasible": is_feasible, 
-#                     "time": duration, 
-#                     "individual": best_indices, 
-#                     "history": formatted_hist
-#                 })
-            
-#         else:
-#             optimizer = GeneticOptimizer(sim, config, pop_size=args.pop, n_gens=args.gen, pool=pool, fixed_mode=args.fixed)
-            
-#             use_epsilon = not args.no_eps
-#             use_shocks = not args.no_shocks
-#             use_expansion = not args.no_expansion
-#             use_graphs = not args.no_graphs
-
-#             for i in range(args.runs):
-#                 optimizer.total_sims = 0
-#                 ind, _, _, dur, hist = optimizer.run(
-#                     run_id=i, 
-#                     h_min=args.hmin, 
-#                     init_mode=args.init, 
-#                     use_epsilon=use_epsilon,
-#                     use_shocks=use_shocks,
-#                     use_expansion=use_expansion,
-#                     use_graph_heuristics=use_graphs
-#                 )
-                
-#                 print("    [Post-Process] Refining Solution...")
-#                 if use_graphs:
-#                     polished_ind = optimizer.run_local_search(ind, limit_pipes=500)
-#                 else:
-#                     polished_ind = list(ind)
-                
-#                 final_cost, final_p, _, _ = sim.get_stats(polished_ind)
-#                 is_feasible = (final_p >= args.hmin + 0.000001)
-                
-#                 results.append({
-#                     "run_id": i+1, "cost": final_cost, "pressure": final_p,
-#                     "feasible": is_feasible, "time": dur, "individual": polished_ind, "history": hist
-#                 })
-
-#                 pd.DataFrame(hist).to_csv(os.path.join(base_dir, "tables", f"run_{i+1}_history.csv"), index=False)
-            
-#     except KeyboardInterrupt:
-#         print("\n[System] 🛑 User interrupted via Keyboard (Ctrl+C). Terminating...")
-#     except Exception as e:
-#         print(f"\n[Fatal Error] {e}")
-#         traceback.print_exc()
-#     finally:
-#         if pool:
-#             print("[System] Shutting down workers pool...")
-#             pool.terminate()
-#             pool.join()
-        
-#         try:
-#             time.sleep(1.0)
-#             clean_all_temp()
-#         except: pass
-#         print("[System] Cleanup complete.")
-        
-#     if not results: return
-
-#     best_run = sorted(results, key=lambda x: (not x['feasible'], x['cost']))[0]
-    
-#     print("\n=== FINAL RESULTS ===")
-#     for res in results:
-#         status = "OK" if res['feasible'] else "FAIL"
-#         print(f"Run {res['run_id']}: {res['cost']/1e6:.4f}M$ | P={res['pressure']:.2f}m | {status}")
-
-#     total_evals = best_run['history'][-1].get('evals', len(best_run['history'])) if best_run['history'] else 0
-
-#     solution_path = os.path.join(base_dir, "tables", "solution_champion")
-#     export_solution(
-#         individual=best_run['individual'], 
-#         history=best_run['history'], 
-#         inp_file=args.inp, 
-#         filename_prefix=solution_path, 
-#         config=config,
-#         cost=best_run['cost'],           
-#         time_sec=best_run['time'],       
-#         total_sims=total_evals          
-#     )
-    
-#     plot_network_map(
-#         individual=best_run['individual'], 
-#         inp_file=args.inp, 
-#         filename=os.path.join(base_dir, "plots", "network_map.png"), 
-#         config=config,
-#         cost=best_run['cost'] 
-#     )
-    
-#     plot_convergence(
-#         history=best_run['history'], 
-#         filename=os.path.join(base_dir, "plots", "convergence.png")
-#     )
-    
-#     # Збереження фінального summary
-#     summary_data = [{"Run": r['run_id'], "Cost": r['cost'], "Pressure": r['pressure'], "Feasible": r['feasible'], "Time": r['time']} for r in results]
-#     pd.DataFrame(summary_data).to_csv(os.path.join(base_dir, "tables", "runs_summary.csv"), index=False)
-
-# if __name__ == "__main__":
-#     main()

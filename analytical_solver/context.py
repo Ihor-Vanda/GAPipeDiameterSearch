@@ -74,6 +74,7 @@ class SolverContext:
         try:
             result = self.simulator.get_stats(indices)
             self.sim_cache.set(sig, result)
+            self.sim_count += 1
             return result[1] < self.simulator.config.h_min - 0.01
         except Exception as e:
             self.log(f"     [CRITICAL ERROR in Ghost Check]: {e}")

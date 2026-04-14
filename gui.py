@@ -37,10 +37,42 @@ def get_temp_root():
     return os.path.abspath("_temp_sim_data")
 
 def clean_all_temp():
+    import shutil
+    import time
+    import os
+    
     root = get_temp_root()
+    
+    try:
+        if os.path.abspath(os.getcwd()).startswith(os.path.abspath(root)):
+            os.chdir(os.path.dirname(os.path.abspath(root)))
+    except: pass
+
+    for ext in ['.bin', '.inp', '.rpt', '.out']:
+        for f in os.listdir(os.getcwd()):
+            if f.lower().startswith('temp') and f.lower().endswith(ext):
+                try: os.remove(os.path.join(os.getcwd(), f))
+                except: pass
+
     if os.path.exists(root):
-        try: shutil.rmtree(root, ignore_errors=True)
-        except: pass
+        for dirpath, _, filenames in os.walk(root):
+            for f in filenames:
+                if f.lower().endswith(('.bin', '.inp', '.rpt', '.out')):
+                    try:
+                        os.remove(os.path.join(dirpath, f))
+                    except: pass 
+
+    if os.path.exists(root):
+        for attempt in range(10):
+            try:
+                shutil.rmtree(root, ignore_errors=False) 
+                break
+            except Exception:
+                time.sleep(0.5)
+                
+        if os.path.exists(root):
+            try: shutil.rmtree(root, ignore_errors=True)
+            except: pass
 
 def worker_init(inp_file, config_obj):
     import signal
@@ -386,8 +418,6 @@ class PipelineOptimizerApp(ctk.CTk):
         if self.ent_cores.get() == "0":
             self.ent_cores.delete(0, "end")
             self.ent_cores.insert(0, "5")
-        
-            
             
     # ==========================================
     # 4 Execution/Threading
@@ -428,9 +458,7 @@ class PipelineOptimizerApp(ctk.CTk):
             clean_all_temp()
             os.makedirs(get_temp_root(), exist_ok=True)
             
-            # 1. Читаємо базові налаштування
             mode_text = self.opt_mode.get()
-            # Переводимо українську назву з GUI у внутрішню змінну
             run_mode = "fast_analytical" if mode_text == "Швидкий Аналітичний" else "analytical"
             
             runs = int(self.ent_runs.get())
@@ -444,9 +472,6 @@ class PipelineOptimizerApp(ctk.CTk):
             try: cores = int(self.ent_cores.get())
             except: cores = 0
 
-            # 🔴 ЗМІНА: Видалено читання pop, init_mode, is_fixed, use_epsilon
-
-            # 2. Налаштування директорій
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             base_dir = os.path.abspath(os.path.join("OutputDataExperiments", timestamp))
             self.last_run_dir = base_dir 
@@ -466,7 +491,6 @@ class PipelineOptimizerApp(ctk.CTk):
             print(f"   Режим: {run_mode.upper()} | Воркери: {cores if cores > 0 else 'Auto'}")
             print(f"==============================================\n")
 
-            # 3. Ініціалізація конфігурації
             config = GAConfig(
                 inp_file=self.selected_inp, cost_file=self.selected_costs,
                 pop_size=200, n_gens=150, runs=runs, # Стандартні заглушки, щоб не ламався клас
@@ -486,7 +510,6 @@ class PipelineOptimizerApp(ctk.CTk):
             
             results = []
 
-            # 4. 🔴 ЗМІНА: ОБ'ЄДНАНИЙ ЦИКЛ ВИКОНАННЯ (Більше немає else з GeneticOptimizer)
             for i in range(runs):
                 if self.is_stopped: break
                 
@@ -503,7 +526,6 @@ class PipelineOptimizerApp(ctk.CTk):
                 
                 start_t = time.time()
                 try:
-                    # Викликаємо правильний метод залежно від обраного режиму!
                     if run_mode == 'fast_analytical':
                         best_solution_meters = solver.solve_fast(ui_callback=self.sync_ui_state)
                     else:
@@ -520,7 +542,6 @@ class PipelineOptimizerApp(ctk.CTk):
                             
                         final_cost, final_p, _, _ = sim.get_stats(best_indices)
                         
-                        # Захист на випадок порожньої історії
                         raw_hist = getattr(solver, 'history', [])
                         if not raw_hist: raw_hist = [(sim.sim_count, final_cost)]
                         hist = [{"evals": s, "min_cost": c} for s, c in raw_hist]
@@ -542,14 +563,12 @@ class PipelineOptimizerApp(ctk.CTk):
                             export_solution(best_indices, hist, self.selected_inp, sol_path, config, final_cost, duration, total_evals)
                             plot_network_map(best_indices, self.selected_inp, os.path.join(local_plots, "network_map.png"), config, final_cost)
                             
-                            # Малюємо графік збіжності, лише якщо є більше 1 точки
                             if len(hist) > 1:
                                 plot_convergence(hist, os.path.join(local_plots, "convergence.png"))
 
                 except Exception as e:
                     if not self.is_stopped: raise e
 
-            # 5. Збереження Фінального Звіту (Після всіх runs)
             if results:
                 os.makedirs(os.path.join(base_dir, "tables"), exist_ok=True)
                 os.makedirs(os.path.join(base_dir, "plots"), exist_ok=True)
@@ -588,6 +607,13 @@ class PipelineOptimizerApp(ctk.CTk):
                     self.current_pool.join()
                 except: pass
                 self.current_pool = None
+                
+            try:
+                if 'sim' in locals():
+                    del sim
+                import gc
+                gc.collect()
+            except: pass
                 
             try:
                 time.sleep(1.0)
@@ -676,10 +702,6 @@ class PipelineOptimizerApp(ctk.CTk):
             self._last_drawn_cost_for_map = current_cost
             self._last_drawn_sol = list(best_sol)
 
-            # if hasattr(self, 'txt_logs'):
-            #     self.txt_logs.insert("end", f"\n[GUI] 🎨 Оновлення мапи для рекорду: {current_cost/1e6:.4f}M$...\n")
-            #     self.txt_logs.see("end")
-
             import wntr
             import networkx as nx
             import matplotlib.pyplot as plt
@@ -746,11 +768,7 @@ class PipelineOptimizerApp(ctk.CTk):
             self.topo_canvas.draw()
             self.topo_canvas.flush_events()
             self.tab_topology.update_idletasks()
-            
-            # if hasattr(self, 'txt_logs'):
-            #     self.txt_logs.insert("end", "[GUI] ✅ Мапа успішно оновлена!\n")
-            #     self.txt_logs.see("end")
-            
+                   
         except Exception as e:
             import traceback
             err_msg = traceback.format_exc()

@@ -66,11 +66,18 @@ class LocalSearch:
             else:
                 unit_losses = None
                 
+            p_surplus = p_min - self.ctx.simulator.config.h_min
+            is_critically_tight = p_surplus < 0.1
+                
             for idx in active_indices_pass:
                 curr_d = current_indices[idx]
                 
-                if quick_mode and unit_losses[idx] >= 0.1:
-                    continue
+                if quick_mode:
+                    loss_threshold = 0.02 if is_critically_tight else 0.10
+                    crit_threshold = 0.005 if is_critically_tight else 0.02
+                    
+                    if unit_losses[idx] >= loss_threshold: continue
+                    if is_critically_tight and unit_losses[idx] >= crit_threshold: continue
                 
                 best_local_sol = None
                 best_local_score = best_score
@@ -123,6 +130,7 @@ class LocalSearch:
             
             for idx in path_pipes:
                 if idx in locked_pipes_local: continue 
+                
                 curr_d = kicked[idx]
                 if curr_d < self.ctx.max_d_idx: 
                     if self.ctx.num_pipes >= 200:
@@ -144,7 +152,7 @@ class LocalSearch:
             best_pipe = candidates[0][0]
             
             kicked[best_pipe] += 1
-            locked_pipes_local.add(best_pipe) 
+            
             boosts += 1
             
         return kicked, False, boosts
@@ -173,21 +181,29 @@ class LocalSearch:
         
         if self.ctx.num_pipes > 200:
             down_limit = min(down_limit, 40)
+            
+        is_critically_tight = p_surplus < 0.02
         
-        for p in lazy_pipes[:down_limit]:
-            if indices_copy[p] > 0:
-                test_sol = list(indices_copy)
-                test_sol[p] -= 1
-                c, p_val, feas, _ = self.ctx.get_cached_stats(test_sol)
-                if feas and p_val >= self.ctx.simulator.config.h_min:
-                    score = c - ((p_val - self.ctx.simulator.config.h_min) * dyn_bonus)
-                    if score < best_cost:
-                        best_cost, indices_copy = score, test_sol
-                        
+        if not is_critically_tight:
+            for p in lazy_pipes[:down_limit]:
+                if indices_copy[p] > 0 and unit_losses[p] < 0.05:
+                    test_sol = list(indices_copy)
+                    test_sol[p] -= 1
+                    c, p_val, feas, _ = self.ctx.get_cached_stats(test_sol)
+                    if feas and p_val >= self.ctx.simulator.config.h_min:
+                        score = c - ((p_val - self.ctx.simulator.config.h_min) * dyn_bonus)
+                        if score < best_cost:
+                            best_cost, indices_copy = score, test_sol
+                            
         if self.ctx.num_pipes <= 200:
-            for up_pipe in path_pipes[-int(up_limit*0.7):]:
-                for d1, d2 in itertools.combinations(lazy_pipes[:int(down_limit*0.7)], 2):
-                    if indices_copy[up_pipe] < self.ctx.max_d_idx and indices_copy[d1] > 0 and indices_copy[d2] > 0:
+            safe_up_limit = min(len(path_pipes), 15)
+            safe_down_limit = min(len(lazy_pipes), 20)
+            
+            for up_pipe in path_pipes[-safe_up_limit:]:
+                if indices_copy[up_pipe] >= self.ctx.max_d_idx: continue
+                
+                for d1, d2 in itertools.combinations(lazy_pipes[:safe_down_limit], 2):
+                    if indices_copy[d1] > 0 and indices_copy[d2] > 0:
                         test_sol = list(indices_copy)
                         test_sol[up_pipe] += 1
                         test_sol[d1] -= 1
