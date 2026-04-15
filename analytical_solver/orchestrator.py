@@ -280,6 +280,11 @@ class IslandWorker:
         self._last_global_improvement_sim = 0
         self.bottleneck_failed_pipes = {}
         self.zero_sum_tabu = {}
+        
+        self.mu_ruin_pct = 0.05 
+        self.mu_perturb_pct = 0.10 
+        self.mu_spatial_pct = 0.20 
+        self.mu_escape_pct = 0.20 
 
     def run(self, time_budget, global_best_cost, shared_progress):
         self.global_best_cost = global_best_cost
@@ -353,6 +358,9 @@ class IslandWorker:
             self.is_late_game = self.progress_ratio > 0.5 
             self.stag_limit = 4 + int(8 * self.progress_ratio)
             
+            if self.max_sims != float('inf'):
+                self._migration_interval_sims = max(1000, int((self.max_sims // 20) * (1.0 - 0.6 * self.progress_ratio)))
+            
             self._check_mini_restart(gb)
             if round_idx > 0 and round_idx % 6 == 0: self.pool.kick_tabu_set.clear()
             
@@ -388,7 +396,21 @@ class IslandWorker:
                         T = min(1.0, self.stagnation_counter / max(1, self.stag_limit * 3.0))
                         
                         if T < 0.3:
-                            hybrid_sol = self._spatial_crossover(self.run_best_sol, gb_sol, T=0.3)
+                            hybrid_sol = self._spatial_crossover(self.run_best_sol, gb_sol, T=0.25)
+                            
+                            peers = [i for i in range(self.n_workers) if i != self.worker_id]
+                            random.shuffle(peers)
+                            peer_sol = None
+                            for peer_id in peers:
+                                peer_data = shared_progress.get(f'best_sol_{peer_id}')
+                                if peer_data and abs(peer_data[0] - gb_cost) > 0.1:
+                                    peer_sol = peer_data[1]
+                                    break
+                            
+                            noise_msg = ""
+                            if peer_sol:
+                                hybrid_sol = self._spatial_crossover(hybrid_sol, peer_sol, T=0.05)
+                                noise_msg = " + Peer Noise"
                             
                             c, p, feas, _ = self.ctx.get_cached_stats(hybrid_sol)
                             if not feas or p < self.ctx.simulator.config.h_min:
@@ -398,19 +420,18 @@ class IslandWorker:
                             h_c, _, _, _ = self.ctx.get_cached_stats(hybrid_sol)
                             
                             self.pool.active_pool.insert(0, (h_c, h_c, hybrid_sol))
-                            
                             self.stagnation_counter = 0
                             self.ipc_immunity = 50
                             
-                            self.ctx.log(f"    📡 [MIGRATION] Soft injection of Global Best hybrid ({h_c/1e6:.4f}M$)")
-                            
+                            self.ctx.log(f"    📡 [MIGRATION] Soft injection of Global Best hybrid{noise_msg} ({h_c/1e6:.4f}M$)")
+                        
                         elif T < 0.7:
                             hybrid_sol = self._spatial_crossover(self.run_best_sol, gb_sol, T)
                             
                             c, p, feas, _ = self.ctx.get_cached_stats(hybrid_sol)
                             if not feas or p < self.ctx.simulator.config.h_min:
-                                hybrid_sol, _, _ = self.ls.heal_network(hybrid_sol, set())
-                                c, p, feas, _ = self.ctx.get_cached_stats(hybrid_sol)
+                                hybrid_sol, ok, _ = self.ls.heal_network(hybrid_sol, set())
+                                if ok: c, p, feas, _ = self.ctx.get_cached_stats(hybrid_sol)
                                 
                             if feas and c < self.run_best_cost:
                                 self.ctx.log(f" 🧬 [HYBRID SUCCESS] Created new hybrid solution: {c/1e6:.4f}M$")
@@ -547,7 +568,6 @@ class IslandWorker:
             self.ctx.log(f"   [MINI-RESTART] {self.stagnation_counter} rounds without progress. Soft epoch restart.")
             self.pool.tabu_fingerprints.clear()
             self.pool.kick_tabu_set.clear()
-            # self.pool.basin_tabu.clear()
             self.pool.active_pool.clear()
             
             if gb and gb[1]:
@@ -621,7 +641,7 @@ class IslandWorker:
         elif T >= 0.5:
             pool_strats = ["SPATIAL_PERTURB", "SMART_PERTURB", "RUIN_RECREATE", "TOPO_INV"]
         else:
-            pool_strats = ["SHOCK", "BOTTLENECK", "LOOP_BALANCE", "ZERO_SUM"]
+            pool_strats = ["SHOCK", "BOTTLENECK", "LOOP_BALANCE", "ZERO_SUM", "TRIM"]
 
         if nx.is_tree(self.ctx.base_G_flow) and "LOOP_BALANCE" in pool_strats:
             pool_strats.remove("LOOP_BALANCE")
@@ -662,9 +682,12 @@ class IslandWorker:
                     kick_target = self.run_best_sol
 
         forced_sol, locked, path_sig, failed_pipe_id = None, None, None, -1
+        used_pct = None 
+        log_msg = ""
         
         if not hasattr(self, 'bottleneck_failed_pipes'): self.bottleneck_failed_pipes = {}
         if not hasattr(self, 'loop_balance_failed_pipes'): self.loop_balance_failed_pipes = {}
+        if not hasattr(self, 'zero_sum_tabu'): self.zero_sum_tabu = {}
         
         n_cap = {"SMALL": 999, "MEDIUM": 25, "LARGE": 40, "XLARGE": 60}
 
@@ -676,7 +699,11 @@ class IslandWorker:
             'dyn_bonus': self.base_dyn_bonus,
             'global_archive': self.global_archive,
             'max_perturb': n_cap.get(self.network_class, 40),
-            'zero_sum_tabu': self.zero_sum_tabu
+            'zero_sum_tabu': self.zero_sum_tabu,
+            'mu_ruin_pct': getattr(self, 'mu_ruin_pct', 0.05),
+            'mu_perturb_pct': getattr(self, 'mu_perturb_pct', 0.10),
+            'mu_spatial_pct': getattr(self, 'mu_spatial_pct', 0.20),
+            'mu_escape_pct': getattr(self, 'mu_escape_pct', 0.20)
         }
 
         try:
@@ -692,12 +719,22 @@ class IslandWorker:
             elif strategy == "BASIN_ESCAPE": res = self.kicker.basin_escape(kick_target, **kick_args)
             else: res = self.kicker.forcing_hand_kick(kick_target, **kick_args)
 
-            if len(res) == 4:
-                forced_sol, locked, log_msg, extra_info = res
-                if strategy in ["BOTTLENECK", "LOOP_BALANCE"]: failed_pipe_id = extra_info
-                elif strategy == "TOPO_INV": path_sig = extra_info
-            else:
-                forced_sol, locked, log_msg = res
+            if not isinstance(res, tuple) or len(res) < 3:
+                self.ctx.log(f"      -> Unexpected return format from {strategy}")
+                return
+
+            forced_sol = res[0]
+            locked = res[1]
+            log_msg = res[2]
+            
+            if len(res) >= 4:
+                extra_info = res[3]
+                if strategy in ["BOTTLENECK", "LOOP_BALANCE"]: 
+                    failed_pipe_id = extra_info
+                elif strategy == "TOPO_INV": 
+                    path_sig = extra_info
+                elif strategy in ["RUIN_RECREATE", "SMART_PERTURB", "SPATIAL_PERTURB", "BASIN_ESCAPE"]: 
+                    used_pct = extra_info
 
         except Exception as e:
             self.ctx.log(f"      -> Critical execution error in {strategy}: {e}")
@@ -711,14 +748,16 @@ class IslandWorker:
                 elif strategy == "LOOP_BALANCE": self.loop_balance_failed_pipes[failed_pipe_id] = round_idx
             reason = log_msg if log_msg else "Unhealable structural damage / No targets"
             self.ctx.log(f"      -> Kick '{strategy}' failed. Reason: {reason}")
+            if strategy in ["TRIM", "LOOP_BALANCE", "BOTTLENECK", "TOPO_INV"]:
+                decay_factor = 0.98
+            else:
+                decay_factor = 0.90
+
+            self.strat_wins[strategy] = self.strat_wins.get(strategy, 1.0) * decay_factor
             return
         
         self.strat_consecutive_fails[strategy] = 0
             
-        # if failed_pipe_id != -1: 
-        #     if strategy == "BOTTLENECK": self.bottleneck_failed_pipes[failed_pipe_id] = round_idx
-        #     elif strategy == "LOOP_BALANCE": self.loop_balance_failed_pipes[failed_pipe_id] = round_idx
-
         c, p, feas, _ = self.ctx.get_cached_stats(forced_sol)
 
         base_h_min = self.ctx.simulator.config.h_min
@@ -753,9 +792,6 @@ class IslandWorker:
             if self.run_best_sol:
                 self.pool.basin_tabu.append(tuple(self.run_best_sol))
                 
-        # elif T >= 0.7:
-        #     final_sol = forced_sol
-        #     self.ctx.log(f"        [EXPLORATION] Squeeze bypassed (T={T:.2f}). Letting solution drift.")
         else:
             quick_passes = max(1, 2 - int(T * 2))
             
@@ -852,6 +888,16 @@ class IslandWorker:
                     reward = 10.0 * improvement_pct * 100 
                     self.strat_wins[strategy] = self.strat_wins.get(strategy, 0) + max(1.0, reward)
                     
+                    if used_pct is not None:
+                        if strategy == "RUIN_RECREATE":
+                            self.mu_ruin_pct = 0.9 * getattr(self, 'mu_ruin_pct', 0.05) + 0.1 * used_pct
+                        elif strategy == "SMART_PERTURB":
+                            self.mu_perturb_pct = 0.9 * getattr(self, 'mu_perturb_pct', 0.10) + 0.1 * used_pct
+                            self.ctx.log(f"   🧠 [LEARNING] SMART Perturb optimal size updated to {self.mu_perturb_pct:.1%}")
+                        elif strategy == "SPATIAL_PERTURB":
+                            self.mu_spatial_pct = 0.9 * getattr(self, 'mu_spatial_pct', 0.20) + 0.1 * used_pct
+                            self.ctx.log(f"   🧠 [LEARNING] SPATIAL Perturb optimal size updated to {self.mu_spatial_pct:.1%}")
+                    
                     if diff > 0:
                         for k in list(self.strat_wins.keys()):
                             self.strat_wins[k] *= 0.97
@@ -878,6 +924,10 @@ class IslandWorker:
                     
                     if effective_cost < self.global_best_cost: self._update_global_best(shared_progress)
                     self.ctx.log(f"      -> POOL FLUSHED. Adopted Major Escape: {effective_cost/1e6:.4f}M$")
+                    
+                    if used_pct is not None:
+                        self.mu_escape_pct = 0.9 * getattr(self, 'mu_escape_pct', 0.20) + 0.1 * used_pct
+                        self.ctx.log(f"   🧠 [LEARNING] Escape optimal size updated to {self.mu_escape_pct:.1%}")
                     
                 elif effective_cost < water_level and not self.pool.is_basin_tabu(final_sol):
                     hamming_dist = self.pool.hamming_distance(final_sol, self.run_best_sol)
@@ -908,7 +958,7 @@ class IslandWorker:
                         
                 elif T >= 0.95 and not self.pool.is_basin_tabu(final_sol):
                     self.pool.active_pool.append((score * 1.20, effective_cost, final_sol))
-                    self.stagnation_counter = int(self.stag_limit * 1.0)
+                    self.stagnation_counter = int(self.stag_limit * 2.0)
                     self.ctx.log(f"     -> 🚀 HAIL MARY ACCEPT (Forced Escape): {effective_cost/1e6:.4f}M$")
                 else:
                     self.ctx.log(f"     -> Rejected (Poor or Tabu Basin): {effective_cost/1e6:.4f}M$")
@@ -1100,7 +1150,9 @@ class IslandWorker:
         self.pool.tabu_fingerprints.clear()
         self.stagnation_counter += 1
         
-        forced_rescue, _, _ = self.kicker.smart_perturbation_kick(self.run_best_sol, T=1.0)
+        res1 = self.kicker.smart_perturbation_kick(self.run_best_sol, T=1.0)
+        forced_rescue = res1[0] if (isinstance(res1, tuple) and len(res1) > 0) else None
+
         if forced_rescue is not None:
             c, p, feas, _ = self.ctx.get_cached_stats(forced_rescue)
             if feas and p >= self.ctx.simulator.config.h_min:
@@ -1108,7 +1160,9 @@ class IslandWorker:
                 self.stagnation_counter = 0 
         
         if not self.pool.active_pool:
-            healed_seed, _, _ = self.kicker.smart_perturbation_kick(self.run_best_sol, T=0.6)
+            res2 = self.kicker.smart_perturbation_kick(self.run_best_sol, T=0.6)
+            healed_seed = res2[0] if (isinstance(res2, tuple) and len(res2) > 0) else None
+
             if healed_seed is not None:
                 c, p, feas, _ = self.ctx.get_cached_stats(healed_seed)
                 if feas:
@@ -1457,7 +1511,6 @@ class AnalyticalSolver:
                         try:
                             c, sol, _, sims_done, worker_basins = res.get()
                             if sol is not None: epoch_results.append((c, sol))
-                            # global_failed_basins.update(worker_basins)
                         except Exception as e:
                             print(f"     [Error] Worker {wid+1} crashed: {e}")
 

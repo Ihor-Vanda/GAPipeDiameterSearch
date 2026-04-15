@@ -1,4 +1,4 @@
-from .fast_math import fast_hamming_distance # 🔴 Додайте імпорт
+from .fast_math import fast_hamming_distance
 import numpy as np
 import collections
 

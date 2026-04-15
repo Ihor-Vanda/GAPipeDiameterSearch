@@ -21,7 +21,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 from ga_config import GAConfig
 from water_sim import WaterSimulator
 from analytical_solver import AnalyticalSolver
-from ga_optimizer import GeneticOptimizer
+from Old.ga_optimizer import GeneticOptimizer
 from ga_data import load_config
 from plot import plot_convergence, plot_network_map, export_solution
 from ga_utils import format_time
@@ -116,9 +116,8 @@ def analytical_worker_task(args):
     shared_progress  = args[7]
     log_dir          = args[8]
     epoch            = args[9]
-    failed_basins    = args[10]
-    max_sims         = args[11] if len(args) > 11 else float('inf')
-    n_workers        = args[12] if len(args) > 12 else (len(shared_progress) if shared_progress else 1)
+    max_sims         = args[10] if len(args) > 10 else float('inf')
+    n_workers        = args[11] if len(args) > 11 else (len(shared_progress) if shared_progress else 1)
 
     global worker_sim_instance
     if worker_sim_instance is None:
@@ -126,6 +125,9 @@ def analytical_worker_task(args):
 
     import random
     import numpy as np
+    import os
+    import sys
+    
     random.seed(seed_mod)
     np.random.seed(seed_mod)
 
@@ -137,6 +139,7 @@ def analytical_worker_task(args):
         logs_folder = os.path.join(log_dir, "logs") if "logs" not in log_dir else log_dir
         os.makedirs(logs_folder, exist_ok=True)
         log_file_path = os.path.join(logs_folder, f"worker_{worker_id+1:02d}.txt")
+        
         log_file_handle = open(log_file_path, "a", encoding="utf-8")
         log_file_handle.write(f"\n\n{'='*50}\n 🚀 STARTING EPOCH {epoch+1} | WORKER {worker_id+1:02d}\n{'='*50}\n")
         log_file_handle.flush()
@@ -146,6 +149,9 @@ def analytical_worker_task(args):
                 self.file_handle = file_handle
             def write(self, message):
                 self.file_handle.write(message)
+                self.file_handle.flush()
+            def writelines(self, lines):
+                self.file_handle.writelines(lines)
                 self.file_handle.flush()
             def flush(self):
                 self.file_handle.flush()
@@ -164,6 +170,7 @@ def analytical_worker_task(args):
 
         ctx = SolverContext(worker_sim_instance, diams, v_opt=v_opt)
         ctx.log_file = log_file_path 
+        
         ls = LocalSearch(ctx)
         kicker = KickStrategies(ctx, ls)
         
@@ -175,6 +182,7 @@ def analytical_worker_task(args):
         c_best, sol_best = worker.run(time_budget, global_best_cost, shared_progress)
         
         return c_best, sol_best, None, ctx.sim_count, worker.pool.basin_tabu
+        
     finally:
         sys.stdout = original_stdout
         if log_file_handle:
