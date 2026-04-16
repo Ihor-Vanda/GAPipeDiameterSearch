@@ -1,78 +1,97 @@
-# Water Distribution Network (WDN) — Алгоритм оптимізації діаметрів
+# Water Distribution Network — Документація оптимізатора діаметрів
 
-> **Мова коду:** Python 3.10+ (Numba JIT, EPANET C-API, multiprocessing)  
-> **Парадигма:** Iterated Local Search (ILS) + Island Model паралелізм + UCB1-адаптація стратегій  
-> **Задача:** мінімізація капітальної вартості мережі водопостачання при виконанні обмеження на мінімальний тиск у всіх вузлах
+> **Платформа:** Python 3.10+, Windows/Linux  
+> **Метод:** Iterated Local Search + UCB1-адаптація + Island Model паралелізм  
+> **Задача:** мінімізація капітальної вартості мережі водопостачання при виконанні обмежень тиску
 
 ---
 
 ## Зміст
 
-1. [Архітектура проекту](#1-архітектура-проекту)
-2. [Модель задачі — формальна постановка](#2-модель-задачі--формальна-постановка)
+1. [Структура проекту](#1-структура-проекту)
+2. [Модель задачі та формули](#2-модель-задачі-та-формули)
 3. [Шар симуляції — EPANET C-API](#3-шар-симуляції--epanet-c-api)
-4. [SolverContext — центральна структура даних](#4-solvercontext--центральна-структура-даних)
-5. [Генерація початкових рішень (SeedFactory)](#5-генерація-початкових-рішень-seedfactory)
-6. [Локальний пошук (LocalSearch)](#6-локальний-пошук-localsearch)
-7. [Головний цикл оптимізації (IslandWorker.run)](#7-головний-цикл-оптимізації-islandworkerrun)
-8. [Механізм диверсифікації — Kick Strategies](#8-механізм-диверсифікації--kick-strategies)
-9. [Самоадаптивні параметри кіків (μ-Learning)](#9-самоадаптивні-параметри-кіків-μ-learning)
-10. [Паралелізм та Island Model](#10-паралелізм-та-island-model)
-11. [Фінальна полірування та звітність](#11-фінальна-полірування-та-звітність)
-12. [Налаштування параметрів](#12-налаштування-параметрів)
+4. [SolverContext — спільна структура даних воркера](#4-solvercontext--спільна-структура-даних-воркера)
+5. [SolutionPool та tabu-пам'ять](#5-solutionpool-та-tabu-память)
+6. [Генерація початкових рішень — SeedFactory](#6-генерація-початкових-рішень--seedfactory)
+7. [Локальний пошук — LocalSearch](#7-локальний-пошук--localsearch)
+8. [Головний цикл оптимізації — IslandWorker](#8-головний-цикл-оптимізації--islandworker)
+9. [Диверсифікація — KickStrategies](#9-диверсифікація--kickstrategies)
+10. [Самонавчання параметрів кіків (μ-Learning)](#10-самонавчання-параметрів-кіків-μ-learning)
+11. [Паралелізм та Island Model](#11-паралелізм-та-island-model)
+12. [Режим fast_analytical](#12-режим-fast_analytical)
+13. [Звітність та візуалізація](#13-звітність-та-візуалізація)
+14. [Налаштування та запуск](#14-налаштування-та-запуск)
 
 ---
 
-## 1. Архітектура проекту
+## 1. Структура проекту
 
 ```
-├── main.py                                  — CLI-точка входу, multiprocessing pool
-├── gui.py                                   — Tkinter GUI (альтернативна точка входу)
-├── water_sim.py                             — EPANET C-API обгортка (WaterSimulator)
-├── analytical_solver/orchestrator.py        — SeedFactory · IslandWorker · AnalyticalSolver
-├── analytical_solver/context.py             — SolverContext (кеш, граф, CSR-Dijkstra)
-├── analytical_solver/local_search.py        — LocalSearch (gradient_squeeze · heal · swap)
-├── analytical_solver/kicks.py               — KickStrategies (10 стратегій диверсифікації)
-├── analytical_solver/pool.py                — SolutionPool (tabu · basin_tabu · Hamming)
-├── analytical_solver/cache.py               — LRUCache (OrderedDict, O(1) get/set)
-├── analytical_solver/fast_math.py           — Numba JIT (Dijkstra · Hamming · crossover)
-└── plot.py                                  — CSV · INP · звіт · convergence.png · map.png
+GAPipeDiameterSearch/
+├── main.py                      ← CLI-точка входу
+├── gui.py                       ← GUI (CustomTkinter)
+├── ga_config.py                 ← GAConfig dataclass
+├── ga_data.py                   ← load_config (читання costs.csv)
+├── ga_utils.py                  ← silence_warnings, format_time, DualLogger
+├── water_sim.py                 ← WaterSimulator (EPANET C-API обгортка)
+├── plot.py                      ← export_solution, plot_convergence, plot_network_map
+├── analytical_solver.py         ← монолітна копія (legacy, для сумісності)
+│
+└── analytical_solver/           ← модульний пакет (активна версія)
+    ├── __init__.py              ← re-export AnalyticalSolver
+    ├── orchestrator.py          ← SeedFactory, IslandWorker, AnalyticalSolver
+    ├── context.py               ← SolverContext
+    ├── local_search.py          ← LocalSearch
+    ├── kicks.py                 ← KickStrategies
+    ├── pool.py                  ← SolutionPool
+    ├── cache.py                 ← LRUCache
+    └── fast_math.py             ← Numba JIT функції
 ```
 
-### Граф залежностей
+### Граф залежностей між модулями
 
 ```
 main.py / gui.py
-    └── AnalyticalSolver
-            ├── SolverContext ──► LRUCache, fast_dijkstra (Numba)
-            ├── SeedFactory   ──► LocalSearch, SolverContext
-            ├── IslandWorker  ──► SolutionPool, KickStrategies, LocalSearch
-            │       └── SolutionPool ──► fast_hamming_distance (Numba)
-            └── WaterSimulator (EPANET C-API, wntr)
+    │
+    ├── GAConfig (ga_config.py) ──► load_config (ga_data.py)
+    ├── WaterSimulator (water_sim.py) ──► EPANET C-API (ENepanet)
+    │
+    └── AnalyticalSolver (orchestrator.py)
+            ├── SolverContext (context.py)
+            │       ├── LRUCache (cache.py)
+            │       └── fast_dijkstra (fast_math.py, Numba JIT)
+            ├── SeedFactory (orchestrator.py)
+            ├── SolutionPool (pool.py)
+            │       └── fast_hamming_distance (fast_math.py, Numba JIT)
+            ├── LocalSearch (local_search.py)
+            └── KickStrategies (kicks.py)
 ```
 
 ---
 
-## 2. Модель задачі — формальна постановка
+## 2. Модель задачі та формули
 
 ### Змінні рішення
 
-Мережа водопостачання містить `n` трубопроводів. Кожна труба `i` отримує діаметр з дискретного каталогу розмірів:
+Мережа містить `n` труб. Кожна труба `i` отримує діаметр із дискретного каталогу:
 
 ```
-d_i ∈ {D_0, D_1, ..., D_K}   D_j < D_{j+1}, одиниці — метри СІ
+Каталог: {D₀, D₁, ..., D_K}   де D_j < D_{j+1}, одиниці — метри СІ
+Змінна:  x_i ∈ {0, 1, ..., K}  (цілочисельний індекс)
+Рішення: x = [x₀, x₁, ..., x_{n-1}]
 ```
 
-Алгоритм оперує **цілочисельними індексами** `x_i ∈ {0, 1, ..., K}`, де `K = max_d_idx`.  
-Рішення = вектор `x = [x_0, x_1, ..., x_{n-1}]`.
-
-### Цільова функція (вартість)
+### Цільова функція — капітальна вартість
 
 ```
-C(x) = Σ_i  L_i · cost(D_{x_i})
+C(x) = Σᵢ  Lᵢ · cost(D_{x_i})
 ```
 
-де `L_i` — довжина труби `i` (метри), `cost(D)` — вартість за метр для діаметру `D` ($/м) із `costs.csv`.
+де:
+
+- `Lᵢ` — довжина труби `i` (метри, з `water_sim.py → wn.get_link(p).length`)
+- `cost(D)` — вартість прокладання за метр для діаметру `D` (з `costs.csv`)
 
 ### Обмеження
 
@@ -80,898 +99,1129 @@ C(x) = Σ_i  L_i · cost(D_{x_i})
 p_j(x) ≥ h_min   для всіх вузлів-споживачів j
 ```
 
-де `p_j` — тиск у вузлі `j` в метрах водяного стовпа, `h_min` — задається параметром `--hmin`.
+де `p_j` — тиск (м вод. ст.), `h_min` — задається `--hmin`.
 
-### Штрафна функція (лише для `evaluate()`)
-
-```
-f(x) = C(x) + penalty_factor · Σ_j max(0, h_min - p_j(x))
-```
-
-Використовується тільки в `WaterSimulator.evaluate()` для генетичного алгоритму (legacy). Основний алгоритм оперує **feasibility-aware score**:
+### Penalized score (всередині алгоритму)
 
 ```
-score(x) = C(x) - p_surplus(x) · dyn_bonus
+score(x) = C(x) − p_surplus(x) · dyn_bonus
 ```
 
-де `p_surplus = min_j(p_j) - h_min` — мінімальний надлишок тиску,  
-`dyn_bonus = best_cost × 0.001 × U(0.95, 1.05)` — стохастичний бонус за тиск.
+де:
 
-Рішення прийнятне якщо `p_surplus ≥ 0` (або `≥ -0.5` в epsilon-relaxed режимі beam search).
+- `p_surplus = min_j(p_j) − h_min` — мінімальний надлишок тиску
+- `dyn_bonus = min(run_best, global_best) · 0.001 · U(0.95, 1.05)` — стохастичний ваговий коефіцієнт
+
+Знак «мінус» означає: рішення з більшим надлишком тиску (при рівній вартості) отримує **кращий** score. Це запобігає відкиданню рішень, що перевищують `h_min` із запасом — вони більш стабільні.
+
+### Функція штрафу (лише для `evaluate()` — legacy GA mode)
+
+```
+f(x) = C(x) + penalty_factor · Σⱼ max(0, h_min − pⱼ(x))
+```
+
+Використовується лише в `WaterSimulator.evaluate()` для зворотньої сумісності з GA-режимом.
+
+### Relaxed-feasibility (epsilon window у beam search)
+
+```
+is_strictly_valid  = p_surplus ≥ 0.0
+is_epsilon_valid   = p_surplus ≥ −0.5 м
+
+score_epsilon = C(x) + |p_surplus| · dyn_bonus · 50.0
+```
+
+Рішення з легким порушенням можуть потрапити у пул, але не оголошуються рекордом.
 
 ---
 
 ## 3. Шар симуляції — EPANET C-API
 
-### Чому C-API, а не Python WNTR
+### Архітектура
 
-`wntr.sim.EpanetSimulator` щоразу записує та перечитує файли. C-API (`ENepanet`) тримає мережу у пам'яті між симуляціями, що дає **10–50× прискорення** для коротких серій.
+`WaterSimulator` є тонкою обгорткою навколо `wntr.epanet.toolkit.ENepanet`. Вся мережа зберігається в C-пам'яті між симуляціями — файли на диск не записуються. Це дає **10–50×** прискорення порівняно зі стандартним `wntr.sim.EpanetSimulator`.
 
-### Ініціалізація (`WaterSimulator.__init__`)
+### Ініціалізація (`__init__`)
 
-1. `wntr.network.WaterNetworkModel(inp_file)` — читання топології для отримання довжин та назв компонентів (wntr завжди конвертує довжини в метри).
-2. `ENepanet(inp_file, rpt_file, bin_file)` → `ENopen()` — відкриття мережі в C-пам'яті.
-3. **Автодетекція одиниць**: `flow_units = ENgetflowunits()`
-   - `flow_units < 5` → US Customary: `diam × 39.3701` (м→дюйми), тиск `× 0.7032` (PSI→м), втрати `× 0.3048` (ft→м)
-   - `flow_units ≥ 5` → Metric: `diam × 1000` (м→мм), тиск і втрати без змін
+```
+1. wntr.network.WaterNetworkModel(inp_file)
+   → топологія (граф, назви труб, довжини у метрах)
 
-### Цикл гідравлічного розрахунку (in-memory)
+2. ENepanet(inp_file, rpt_file, bin_file) → ENopen()
+   → відкрити мережу в C-пам'яті
 
-```python
-ENopen H()        # відкрити гідравлічний розрахунок
-ENinitH(0)        # 0 = не писати результати у файл
-while True:
-    ENrunH()      # розрахунок одного часового кроку
-    tstep = ENnextH()
-    if tstep <= 0: break
-ENcloseH()
+3. ENgetflowunits() → автодетекція системи одиниць:
+   flow_units < 5  → US Customary:
+     diam_mult = 39.3701  (м → дюйми для C-API)
+     press_mult = 0.7032  (PSI → м при читанні)
+     hl_mult    = 0.3048  (ft  → м при читанні)
+   flow_units ≥ 5  → Metric:
+     diam_mult = 1000.0   (м → мм для C-API)
+     press_mult = 1.0
+     hl_mult    = 1.0
+
+4. Кешування C-індексів для кожної труби та вузла
+   (ENgetlinkindex, ENgetnodeindex)
 ```
 
-Вузлові тиски і швидкості залишаються в C-пам'яті після `ENcloseH()`.
+### In-memory гідравлічний цикл (`_run_simulation_core`)
+
+```python
+ENopenH()           # відкрити hydraulic solver
+ENinitH(0)          # 0 = не записувати результати у файл
+loop:
+    ENrunH()        # розрахунок поточного кроку
+    tstep = ENnextH()
+    if tstep <= 0: break
+ENcloseH()          # вузли зберігають результати останнього кроку в пам'яті
+```
 
 ### Методи симулятора
 
-| Метод                          | Що робить              | Повертає                          |
-| ------------------------------ | ---------------------- | --------------------------------- |
-| `evaluate(x, pf, eps)`         | Повна оцінка з штрафом | `cost + penalty`                  |
-| `get_stats(x)`                 | Вартість + гідравліка  | `(cost, p_min, p_max, crit_node)` |
-| `get_heuristics(x)`            | Питомі втрати тиску    | `[hl_i/L_i, ...]` м/м             |
-| `get_hydraulic_state(diams_m)` | Потоки + feasibility   | `(flows, is_feasible)`            |
+| Метод                          | Вхід              | Вихід                             | Призначення         |
+| ------------------------------ | ----------------- | --------------------------------- | ------------------- |
+| `evaluate(x, pf, eps)`         | індекси x         | `cost + penalty`                  | Legacy GA режим     |
+| `get_stats(x)`                 | індекси x         | `(cost, p_min, p_max, crit_node)` | Основна оцінка      |
+| `get_heuristics(x)`            | індекси x         | `[hl_i/Lᵢ, ...]` м/м              | Питомі втрати тиску |
+| `get_hydraulic_state(diams_m)` | діаметри в метрах | `(flows[], is_feasible)`          | Velocity-seeding    |
 
-`get_stats` — головний метод. Повертає:
+**`get_stats`** — найчастіший виклик. Після симуляції ітерує `junction_c_indices`, знаходить `min_p` та відповідний `crit_node`:
 
-- **cost** = Σ L_i × cost[x_i]
-- **p_min** = мінімальний тиск серед вузлів-споживачів
-- **crit_node** = ім'я вузла з мінімальним тиском (критичний вузол)
+```python
+for c_idx in self.junction_c_indices:
+    p = ENgetnodevalue(c_idx, EN_PRESSURE) * press_si_mult
+    if p < min_p: min_p = p; crit_node_idx = c_idx
+```
+
+### Захист `__del__`
+
+```python
+def __del__(self):
+    try:
+        if hasattr(self, 'api') and self.api is not None:
+            self.api.ENclose()
+    except:
+        pass
+```
+
+`hasattr` перевірка захищає від `AttributeError` якщо `__init__` завершився з помилкою до присвоєння `self.api`.
 
 ---
 
-## 4. SolverContext — центральна структура даних
+## 4. SolverContext — спільна структура даних воркера
 
-`SolverContext` ізолює весь стан одного воркера.
+Кожен воркер має свій `SolverContext`, що ізолює весь стан пошуку.
 
 ### LRU-кеш симуляцій
 
 ```python
-sim_cache    = LRUCache(maxsize=50_000)   # ключ: tuple(x), значення: (cost, p_min, p_max, crit_node)
-heuristic_cache = LRUCache(maxsize=50_000)   # ключ: tuple(x), значення: [hl/L, ...]
+sim_cache       = LRUCache(maxsize=50_000)
+heuristic_cache = LRUCache(maxsize=50_000)
 ```
 
-`get_cached_stats(x)`:
+`get_cached_stats(x)` працює так:
 
-1. Шукає `tuple(x)` в `sim_cache`.
-2. При cache miss: `sim_count++`, `simulator.get_stats(x)`, зберігає результат.
-3. Попадання: O(1) без жодного звернення до EPANET.
+```
+key = tuple(x)
+→ cache hit:  O(1) без EPANET
+→ cache miss: sim_count++, get_stats(x), зберегти
+```
 
-### CSR-граф для Dijkstra
+`LRUCache` реалізований на `collections.OrderedDict`. При переповненні (`.popitem(last=False)`) видаляється найстарший запис.
 
-При ініціалізації будується CSR (Compressed Sparse Row) представлення графу мережі для `fast_dijkstra` (Numba):
+### CSR-граф для швидкого Dijkstra
+
+При ініціалізації будується Compressed Sparse Row (CSR) представлення:
 
 ```python
-csr_indptr[i]..csr_indptr[i+1]   — діапазон суміжних вузлів для вузла i
-csr_indices[k]                   — вузол-сусід
-csr_edge_pipe[k]                 — індекс труби на ребрі (u, v)
+csr_indptr[i]..csr_indptr[i+1]  → суміжні вузли для вузла i
+csr_indices[k]                  → вузол-сусід
+csr_edge_pipe[k]                → індекс труби на ребрі (u, v)
 ```
 
-Ваги ребер обчислюються динамічно: `w_e = 100.0 / (x[pipe_e] + 1.0)` — менший діаметр дає більшу вагу → Dijkstra знаходить шлях через **найширші** труби.
+Ваги рахуються динамічно перед кожним Dijkstra:
+
+```python
+csr_weights = 100.0 / (indices_arr[csr_edge_pipe] + 1.0)
+```
+
+Менший діаметр → більша вага → Dijkstra знаходить шлях через **найширші** труби. Це і є "домінантний шлях постачання".
 
 ### `get_dominant_path(x, crit_node)`
 
 ```
-Dijkstra(джерела → crit_node, ваги = 100/(x+1))
-→ найкоротший (за inverse-diameter) шлях
-→ список індексів труб на цьому шляху
+target_id = node_to_id[crit_node]
+path_ids = fast_dijkstra(source_ids → target_id, weights = 100/(x+1))
+→ список індексів труб на домінантному шляху
 ```
 
-Це "домінантний шлях постачання" — найбільш вузьке місце між джерелом і критичним вузлом.
+### `is_ghost_solution(x, cost)`
 
-### Калібрування (`_calibrate_simulator`)
-
-10 пробних симуляцій з невеликими варіаціями → вимірює `sim_speed` (сим/сек). Використовується для обчислення `time_limit_sec` коли `max_sims` задано.
-
-### `is_ghost_solution`
-
-Захист від "кешових привидів" — артефактів, де кешований результат дає оптимістичну оцінку, а реальна симуляція дає гірший результат. Викликається лише при поліпшенні > 2%:
+Захист від кешових артефактів. Викликається при поліпшенні > 2%:
 
 ```python
-def is_ghost_solution(self, x, cost):
-    # перевірити кеш → якщо p_min < h_min - 0.01 → це привид
+cached = sim_cache.get(tuple(x))
+if cached: return cached[1] < h_min - 0.01  # перевірка p_min з кешу
+
+# cache miss → реальна симуляція
+result = simulator.get_stats(x)
+sim_count += 1
+return result[1] < h_min - 0.01
+```
+
+### Калібрування `_calibrate_simulator`
+
+10 пробних симуляцій після 3 прогрівальних → `sim_speed` (сим/с). Використовується для обчислення `time_limit_sec` коли `max_sims` заданий.
+
+### `baseline_bonus`
+
+```python
+avg_cost_diff = mean(|cost[j+1] - cost[j]|)
+avg_length    = mean(Lᵢ)
+baseline_bonus = avg_cost_diff × avg_length × 0.8
+```
+
+Стартовий масштаб для `dyn_bonus`, залежить від конкретного каталогу діаметрів і розмірів труб мережі.
+
+---
+
+## 5. SolutionPool та tabu-пам'ять
+
+### Структура пулу
+
+```python
+active_pool       = [(score, cost, sol), ...]  # основний beam пул
+tabu_fingerprints = {fingerprint: round_added} # exact-match tabu
+kick_tabu_set     = {path_signature, ...}      # tabu для TOPO-INV шляхів
+basin_tabu        = deque(maxlen=500)          # FIFO пам'ять басейнів
+```
+
+### Точна tabu-перевірка (`is_tabu`)
+
+```python
+fingerprint = (int(cost / 50) * 50, tuple(x))  # cost bucket + точний вектор
+added_at = tabu_fingerprints.get(fp)
+return (current_round - added_at) < tenure=80
+```
+
+### Basin signature (`get_basin_signature`)
+
+Огрублений підпис для визначення "вже дослідженого регіону":
+
+```python
+if n ≤ 50: return tuple(x)   # точний підпис для малих мереж
+
+chunk_size = n // 25         # ~25 сегментів для великих
+sig = [round(mean(x[i:i+chunk_size])) for i in range(0, n, chunk_size)]
+return tuple(sig)
+```
+
+Два рішення, що відрізняються лише декількома трубами, матимуть однаковий basin signature — вважаються тим же "басейном притягання".
+
+### `basin_tabu` — FIFO через `deque(maxlen=500)`
+
+```python
+self.basin_tabu = collections.deque(maxlen=500)
+
+# Додавання: O(1), автоматичне витіснення найстарішого при len=500
+self.basin_tabu.append(sig)
+
+# Перевірка:
+sig in self.basin_tabu  # O(n) але n ≤ 500, прийнятно
+```
+
+### `hamming_distance`
+
+```python
+arr1 = np.array(sol1, dtype=np.int32)
+arr2 = np.array(sol2, dtype=np.int32)
+return fast_hamming_distance(arr1, arr2)   # Numba JIT, O(n)
 ```
 
 ---
 
-## 5. Генерація початкових рішень (SeedFactory)
+## 6. Генерація початкових рішень — SeedFactory
 
-### Метод 1: Velocity-Based Seeding (`make_diverse_seeds`)
+### Velocity-Based Seeding (`make_diverse_seeds`)
 
-Ключова ідея: для заданої цільової швидкості `v` обчислити ідеальний діаметр кожної труби з рівняння нерозривності:
-
-```
-d_ideal = sqrt(4 · |Q_i| / (π · v))
-```
-
-де `Q_i` — потік через трубу `i` (м³/с).
-
-**Алгоритм (ітеративний)**:
+**Фізична ідея**: для трубопроводу з потоком Q і цільовою швидкістю v ідеальний діаметр:
 
 ```
-Для кожної v ∈ {1.0, 1.2, 0.8} м/с:
-  x ← [max_d_idx, ..., max_d_idx]   (старт з максимальних діаметрів)
+d_ideal = √(4·|Q| / (π·v))
+```
+
+**Ітеративний алгоритм** (конвергує, бо діаметри впливають на потоки):
+
+```
+Для v ∈ {1.0, 1.2, 0.8} м/с:
+  x ← [max_d_idx × n]   (старт з максимуму)
 
   Повторювати до 10 разів:
-    diams_m = [ctx.diameters[x_i] for i]
-    flows, _ = simulator.get_hydraulic_state(diams_m)   ← гідравлічний розрахунок
+    diams_m = [ctx.diameters[x_i] for i in 0..n]
+    flows, _ = simulator.get_hydraulic_state(diams_m)   ← симуляція
 
-    Для кожної труби i:
-      d_ideal = sqrt(4·|flows[i]| / (π·v))
-      x_i_new = bisect_left(ctx.diameters, d_ideal)     ← округлення до каталогу
+    for i in range(n):
+      d = sqrt(4·|flows[i]| / (π·v))
+      pos = bisect_left(ctx.diameters, d)   ← двійковий пошук у каталозі
+      x[i] = min(pos, max_d_idx)
 
-    Якщо x_new == x: break   ← збіжність
-    x ← x_new
+    if x == x_prev: break   ← збіжність
 
-  Якщо x infeasible → heal_network(x)
-  x ← gradient_squeeze(x, max_passes=12, quick_mode=True)
+  if infeasible(x): heal_network(x)
+  x = gradient_squeeze(x, max_passes=12, quick_mode=True)
   seeds.append(x)
 ```
 
-Три різні швидкості дають три різні початкові точки в просторі рішень, що відповідають різним режимам роботи мережі.
+### Backbone Seeding (`make_backbone_seed`)
 
-### Метод 2: Backbone Seeding (`make_backbone_seed`)
-
-Стратифікований підхід: труби сортуються за потоком `|Q_i|` і поділяються на три категорії:
+Стратифікація труб за потоком:
 
 ```
-Топ 20% за потоком (магістральні):   x_i = max_d_idx
-Решта 30% (транзитні):                x_i = ideal_d(Q_i, v=1.2)
-Низ 50% за потоком (периферійні):    x_i = 0
+Відсортувати труби за |Q_i| спадаючи:
+  Топ 20% (магістральні):     x_i = max_d_idx
+  Решта 30% (транзитні):       x_i = d_ideal(Q_i, v=1.2)  (rounded to catalog)
+  Низ 50% (периферійні):       x_i = 0
+→ heal_network → gradient_squeeze(max_passes=2)
 ```
 
-Потім `heal_network` відновлює feasibility, `gradient_squeeze` оптимізує.
+### Reserve Pool (`make_reserve_pool`)
 
-### Метод 3: Fast Sweep (`make_diverse_seeds_for_fast`)
+4 рішення з `x_i ~ Uniform(0, max_d_idx)`, зцілені і грубо оптимізовані. Зберігаються у `self.reserve_pool` воркера для `_emergency_pool_diversity`.
 
-16 різних швидкостей `v ∈ {0.5, 0.6, ..., 2.0}` з 5 ітераціями кожна. Використовується лише в `solve_fast()` режимі.
+### Warm Seeds та система каст (`make_warm_seeds`)
 
-### Метод 4: Reserve Pool (`make_reserve_pool`)
+На Epoch > 0 кожному воркеру призначається роль залежно від `worker_id % 4`:
 
-4 випадкові рішення `x_i ~ Uniform(0, max_d_idx)`, зцілені та грубо оптимізовані. Використовуються як резерв для `_emergency_pool_diversity`.
-
-### Warm Seeds для наступних епох (`make_warm_seeds`)
-
-На Epoch > 0 кожному воркеру призначається роль **касти** на основі `worker_id % 4`:
-
-| Роль           | Умова                  | Стратегія генерації                                                     |
-| -------------- | ---------------------- | ----------------------------------------------------------------------- |
-| **EXPLOITER**  | `adjusted_id % 4 == 0` | `x_base` + `n_pipes//10` мікромутацій ±1                                |
-| **RELINKER**   | `adjusted_id % 4 == 1` | Greedy Path-Relinking між `x_base` та найвіддаленішим архівним рішенням |
-| **ARCHITECT**  | `adjusted_id % 4 == 2` | Консенсус топ-3 архіву + `n_pipes//15` мутацій ±2                       |
-| **EXPLORER**   | `adjusted_id % 4 == 3` | `x_base` + `n_pipes//5` макромутацій ±2                                 |
-| **ADVENTURER** | останній воркер        | Примусово `make_diverse_seeds()` (глобальна різноманітність)            |
+| Роль           | Умова                  | Стратегія                                 | Інтенсивність мутацій |
+| -------------- | ---------------------- | ----------------------------------------- | --------------------- |
+| **EXPLOITER**  | `adjusted_id % 4 == 0` | ±1 на `n//10` трубах від `archive[rank]`  | Мала                  |
+| **RELINKER**   | `adjusted_id % 4 == 1` | Greedy Path-Relinking між двома архівними | Середня               |
+| **ARCHITECT**  | `adjusted_id % 4 == 2` | Консенсус топ-3 + ±2 на `n//15` трубах    | Середня               |
+| **EXPLORER**   | `adjusted_id % 4 == 3` | ±2 на `n//5` трубах від `archive[rank]`   | Велика                |
+| **ADVENTURER** | Останній воркер        | Примусово `make_diverse_seeds()`          | Повна                 |
 
 ### Greedy Path-Relinking (`greedy_path_relink`)
 
 ```
 diff = [i : x_A[i] ≠ x_B[i]]
-Перемішати diff випадково
+random.shuffle(diff)       ← стохастичне впорядкування
 
 current = x_A
-best_intermediate = x_A
-best_cost = cost(x_A)
+best = x_A;  best_cost = cost(x_A)
 
-Для кожного pipe_idx в diff:
-    test = current; test[pipe_idx] = x_B[pipe_idx]
+for pipe_idx in diff:
+    test = current
+    test[pipe_idx] = x_B[pipe_idx]
 
-    Якщо test feasible AND cost(test) < best_cost:
-        best_cost = cost(test); best_intermediate = test
+    if feasible(test):
+        current = test
+        if cost(test) < best_cost:
+            best_cost = cost(test)
+            best = test
 
-    Якщо test feasible: current = test
-
-Повернути best_intermediate
+return best   ← найкраща ПРОМІЖНА точка (не обов'язково x_B!)
 ```
-
-Ключова відмінність від стандартного path-relinking: зберігається не кінцева точка `x_B`, а найкраща проміжна точка на шляху.
 
 ---
 
-## 6. Локальний пошук (LocalSearch)
+## 7. Локальний пошук — LocalSearch
 
 ### `gradient_squeeze` — основний польоровщик
 
-**Ідея**: жадібний покроковий спуск по пенальній цільовій функції `score = cost - p_surplus · dyn_bonus`.
+Жадібний покроковий спуск по `score = cost − p_surplus · dyn_bonus`:
 
 ```
 Ініціалізація:
-  Якщо dyn_bonus не заданий: dyn_bonus = cost_start × 0.001
-  score_best = cost - p_surplus × dyn_bonus
-  milestone_cost = cost; milestone_pass = 0
+  dyn_bonus = cost_start × 0.001  (якщо не передано)
+  score_best = cost − (p_min − h_min) × dyn_bonus
+  milestone_cost = cost;  milestone_pass = 0
+  active_indices = [i for i not in locked_pipes]
 
-WHILE improved AND (not max_passes OR passes ≤ max_passes):
-  improved = False
+WHILE improved:
   passes++
+  if passes > max_passes: break
 
-  Перемішати порядок активних труб (виключаючи locked_pipes)
+  ── Рання зупинка (кожні 3 проходи) ──
+  rel_improvement = (milestone_cost − cost) / milestone_cost
+  if rel_improvement < min_rel_improvement (0.0003): break
 
-  ── Рання зупинка кожні 3 проходи ──
-  if passes - milestone_pass ≥ 3:
-    rel_improvement = (milestone_cost - cost) / milestone_cost
-    if rel_improvement < min_rel_improvement (0.0003 = 0.03%): break
-    оновити milestone
+  random.shuffle(active_indices)
 
-  Для кожної труби idx:
-    ── quick_mode: пропустити "тихі" труби ──
-    if quick_mode AND unit_losses[idx] < 0.1: continue
+  ── Адаптивний поріг фільтрації (quick_mode) ──
+  p_surplus = p_min − h_min
+  is_critically_tight = p_surplus < 0.1
+  loss_threshold = 0.02 (tight) / 0.10 (normal)
 
-    ── Спроба downgrade (зменшити діаметр) ──
+  for idx in active_indices:
+    if quick_mode AND unit_losses[idx] >= loss_threshold: continue
+
+    ── Спроба DOWNGRADE ──
     if x[idx] > 0:
-      test[idx] = x[idx] - 1
-      (c, p, feas) = get_cached_stats(test)
+      test = x; test[idx] -= 1
+      c, p, feas = get_cached_stats(test)
       if feas AND p ≥ h_min:
-        new_score = c - (p - h_min) × dyn_bonus
-        if new_score < score_best: прийняти
+        new_score = c − (p − h_min) × dyn_bonus
+        if new_score < best_score: прийняти
 
-    ── Спроба upgrade (збільшити діаметр) — лише без quick_mode ──
-    if not quick_mode AND x[idx] < max_d_idx:
-      test[idx] = x[idx] + 1
-      (c, p, feas) = get_cached_stats(test)
-      if feas AND p ≥ h_min:
-        new_score = c - (p - h_min) × dyn_bonus
-        if new_score < score_best: прийняти
+    ── Спроба UPGRADE (тільки без quick_mode) ──
+    if x[idx] < max_d_idx:
+      test = x; test[idx] += 1
+      ... аналогічно
 
-Повернути поточний x
+return current_x
 ```
 
-**Параметри виклику:**
+**Режими виклику:**
 
-| Параметр              | Значення                | Ефект                                         |
-| --------------------- | ----------------------- | --------------------------------------------- |
-| `quick_mode=True`     | пропускати `hl/L < 0.1` | 3–5× швидше, менш ретельно                    |
-| `max_passes=N`        | обмеження ітерацій      | N=1 → швидка перевірка, N=None → до збіжності |
-| `locked_pipes`        | set індексів            | заморожені труби не змінюються                |
-| `min_rel_improvement` | 0.0003                  | рання зупинка при мікрокроках                 |
+| Комбінація                 | Де використовується      | Симуляцій на прохід |
+| -------------------------- | ------------------------ | ------------------- |
+| `quick=True, passes=1`     | Hyperband швидка оцінка  | ~n/5                |
+| `quick=True, passes=2-3`   | Після кіків, beam search | ~n/3                |
+| `quick=True, passes=12`    | Velocity seeding         | ~n/2                |
+| `quick=False, passes=5`    | Beam search top-1        | ~n                  |
+| `quick=False, passes=None` | Final Polish             | до збіжності        |
 
 ### `heal_network` — відновлення feasibility
 
+Ітеративне виправлення порушень тиску через посилення критичного шляху:
+
 ```
 WHILE infeasible:
-  crit_node = вузол з мінімальним тиском
+  crit_node = вузол з мінімальним тиском  (з get_cached_stats)
   path_pipes = get_dominant_path(x, crit_node)   ← Dijkstra
+  unit_losses = get_cached_heuristics(x)
 
-  Для кожної труби idx на path_pipes (не в locked):
-    Розрахувати ефективність збільшення:
-      Якщо n ≥ 200:
-        efficiency = unit_losses[idx] / sqrt(delta_cost · abs_cost)   ← нормований
-      Інакше:
-        efficiency = unit_losses[idx]
+  candidates = []
+  for idx in path_pipes (не в locked_pipes):
+    if x[idx] < max_d_idx:
+      if n ≥ 200:
+        delta_cost = (costs[x[idx]+1] − costs[x[idx]]) × L[idx]
+        eff = unit_losses[idx] / (delta_cost × √(max(1, delta_cost)))
+      else:
+        eff = unit_losses[idx]
+      candidates.append((idx, eff))
 
-  best_pipe = argmax(efficiency)
+  best_pipe = argmax(eff)
   x[best_pipe] += 1
-  locked.add(best_pipe)
+  locked_pipes.add(best_pipe)   ← запобігає регресу
   boosts++
 
-  Якщо candidates пустий: return x, False, boosts
-
+if candidates empty: return x, False, boosts
 return x, True, boosts
 ```
 
-Кожне збільшення фіксується в `locked` — гарантує монотонне зростання діаметрів на критичному шляху без регресу.
+**Ключовий момент**: при `n ≥ 200` ефективність нормується на вартість збільшення — алгоритм обирає трубу, що дасть найбільший тиск за найменшу ціну.
 
 ### `swap_search` — мікрооптимізація (кожні 8 раундів)
 
-Комбінаторний пошук "обмін вартості":
+Комбінаторний пошук "обмінів вартості":
 
-1. Знайти "ліниві" труби (низькі `unit_losses`) → кандидати на downgrade.
-2. Знайти труби на критичному шляху → кандидати на upgrade.
-3. Спробувати downgrade ленивих.
-4. Для малих мереж (≤200 труб): спробувати `upgrade[i] + downgrade[j] + downgrade[k]` трійки.
+```
+Отримати lazy_pipes (sorted за unit_loss зростаючи)
+Отримати path_pipes до crit_node
 
-### `evaluate_candidate` — атомарна оцінка кандидата
+if p_surplus > 0.02:   ← не занадто тісно
+  for p in lazy_pipes[:down_limit] (unit_loss < 0.05):
+    test = x; test[p] -= 1
+    if feasible AND better_score: прийняти
 
-```python
-test_sol = base + upgrade/downgrade pipe(s)
-squeezed = gradient_squeeze(test_sol, locked=upgraded_pipes, max_passes=3, quick_mode=True)
-(cost, p_min, _, _) = get_cached_stats(squeezed)
-
-if not feasible OR p_min < h_min: return inf, -inf, None
-score = cost - (p_surplus × dyn_bonus)
-return score, cost, squeezed
+if n ≤ 200:   ← тільки для малих мереж
+  for up_pipe in path_pipes[-15:]:
+    for (d1, d2) in combinations(lazy_pipes[:20], 2):
+      test = x; test[up_pipe] += 1; test[d1] -= 1; test[d2] -= 1
+      if feasible AND better_score: прийняти
 ```
 
-Використовується в `_generate_mutations` для паралельної оцінки сусідніх рішень.
+Трійки `(up, down₁, down₂)` дають **нейтральні** за вартістю обміни, що можуть покращити score.
+
+### `evaluate_candidate` — атомарна оцінка (для beam mutations)
+
+```python
+test = base + upgrade/downgrade на pipes_to_mod
+squeezed = gradient_squeeze(test, locked=upgraded_pipes, max_passes=3, quick=True)
+cost, p_min = get_cached_stats(squeezed)
+if p_surplus < 0: return inf, -inf, None
+return cost − p_surplus × dyn_bonus, cost, squeezed
+```
+
+### `get_high_impact_pipes` — пріоритизація для LARGE мереж
+
+```python
+for i in range(n):
+  save_potential = L[i] × (costs[x[i]] − costs[x[i]-1])  # потенційна економія
+  risk = max(unit_losses[i], 1e-5)
+  impact = save_potential × (1 + risk)
+return top_k by impact (descending)
+```
 
 ---
 
-## 7. Головний цикл оптимізації (IslandWorker.run)
+## 8. Головний цикл оптимізації — IslandWorker
 
-### Ініціалізація стану воркера
+### Стан воркера при запуску
 
 ```python
-self.run_best_cost = float('inf')
-self.run_best_sol  = None
-self.stagnation_counter = 0
-self.stag_limit = 4                 # адаптивно зростає до 12
-self.progress_ratio = 0.0           # 0 → 1 протягом часового бюджету
-self.is_late_game = False           # True коли progress > 0.5
+run_best_cost = +∞
+run_best_sol  = None
+stagnation_counter = 0
+stag_limit = 4              # адаптивно зростає до 12
+progress_ratio = 0.0        # elapsed / time_budget
+is_late_game = False        # True коли progress > 0.5
 
-# Самоадаптивні параметри кіків:
-self.mu_ruin_pct    = 0.05   # оптимальний розмір R&R кластеру
-self.mu_perturb_pct = 0.10   # SMART_PERTURB
-self.mu_spatial_pct = 0.20   # SPATIAL_PERTURB
-self.mu_escape_pct  = 0.20   # BASIN_ESCAPE
+# μ-learning параметри кіків:
+mu_ruin_pct    = 0.05
+mu_perturb_pct = 0.10
+mu_spatial_pct = 0.20
+mu_escape_pct  = 0.20
+
+# UCB1 статистика:
+strat_wins = {s: 1.0 for s in all_tracked}
+strat_tries = {s: 1.0 for s in all_tracked}
+strat_consecutive_fails = {s: 1.0 for s in all_tracked}
 ```
 
 ### Адаптивні параметри за часом
 
 ```python
-progress_ratio = elapsed / time_budget   # або epoch_sims / max_sims
+progress_ratio = elapsed / time_budget         # або epoch_sims / max_sims
 is_late_game   = progress_ratio > 0.5
-stag_limit     = 4 + int(8 × progress_ratio)   # 4 → 12
+stag_limit     = 4 + int(8 × progress_ratio)   # 4 на старті → 12 наприкінці
 dyn_bonus      = min(run_best, global_best) × 0.001 × U(0.95, 1.05)
 ```
 
-`stag_limit` зростає з часом — на пізніх стадіях алгоритм "терпіть" більше раундів без прогресу перед запуском агресивних стратегій.
-
-### Температура T (аналог simulated annealing)
+### Температура T — "термометр відчаю"
 
 ```python
 T = min(1.0, stagnation_counter / (stag_limit × 3.0))
 ```
 
-`T ∈ [0, 1]` — показник "відчаю". При `T = 0`: алгоритм у режимі активної оптимізації. При `T = 1`: максимальна стагнація, агресивна диверсифікація.
-
-| T         | Інтерпретація            | Активні стратегії                                       |
-| --------- | ------------------------ | ------------------------------------------------------- |
-| 0.0 – 0.5 | Активний локальний пошук | SHOCK, BOTTLENECK, LOOP_BALANCE, ZERO_SUM, TRIM         |
-| 0.5 – 0.9 | Помірна стагнація        | SPATIAL_PERTURB, SMART_PERTURB, RUIN_RECREATE, TOPO_INV |
-| 0.9 – 1.0 | Глибока стагнація        | BASIN_ESCAPE, SPATIAL_PERTURB, RUIN_RECREATE            |
+| T         | Стан               | Наслідки                                  |
+| --------- | ------------------ | ----------------------------------------- |
+| 0.0 – 0.3 | Активний прогрес   | Холодні стратегії, жорстке прийняття      |
+| 0.3 – 0.6 | Помірна стагнація  | Вибір цілі з пулу, розширений water_level |
+| 0.6 – 0.9 | Глибока стагнація  | Теплі стратегії, bypass squeeze           |
+| 0.9 – 1.0 | Критична стагнація | BASIN_ESCAPE, HAIL MARY, найдальша ціль   |
 
 ### Структура одного раунду
 
 ```
-Раунд round_idx:
-
-1.  IPC     → _process_ipc()          читати стан інших воркерів
-2.  RESCUE  → _check_rescue()         перевірити відставання від global_best
-3.  UPDATE  → shared_progress[id]     публікувати поточний стан
-4.  PROGRESS → оновити progress_ratio, is_late_game, stag_limit
-5.  RESTART → _check_mini_restart()   якщо дуже довга стагнація
-6.  TABU    → kick_tabu_set.clear()   кожні 6 раундів
-7.  SWAP    → _apply_swap()           кожні 8 раундів
-8.  KICK    → _apply_kick()           якщо stagnation_counter ≥ 2
-9.  FLUSH   → _force_flush_next       якщо BASIN_ESCAPE спрацював
-10. MUTATE  → _generate_mutations()
-11. BEAM    → _beam_search_and_update()
-12. MIGRATE → _spatial_crossover()    кожні migration_interval симуляцій
+╔══════════════════════════════════════════════════════════════════╗
+║  РАУНД round_idx                                                 ║
+╠══════════════════════════════════════════════════════════════════╣
+║ 1. IPC SYNC    → _process_ipc()      читати стан peer воркерів   ║
+║ 2. RESCUE      → _check_rescue()     відстаємо > 2% від global?  ║
+║ 3. PUBLISH     → shared_progress[id] = {round, sims, best_cost}  ║
+║ 4. PROGRESS    → оновити ratio, late_game, stag_limit, dyn_bonus ║
+║ 5. MINI-RESTART→ _check_mini_restart() якщо дуже довга стагнація ║
+║ 6. TABU CLEAR  → kick_tabu_set.clear() кожні 6 раундів           ║
+║ 7. SWAP        → _apply_swap()       кожні 8 раундів             ║
+║ 8. KICK        → _apply_kick()       якщо stagnation ≥ 2         ║
+║ 9. FLUSH FLAG  → _force_flush_next?                              ║
+║ 10. MUTATE     → _generate_mutations()                           ║
+║ 11. BEAM       → _beam_search_and_update()                       ║
+║ 12. MIGRATE    → _spatial_crossover() кожні migration_interval   ║
+╚══════════════════════════════════════════════════════════════════╝
 ```
 
 ### `_generate_mutations` — beam-мутації
 
-Для кожного рішення в `active_pool`:
+```python
+for (score, cost, parent_sol) in active_pool:
+  unit_losses = get_cached_heuristics(parent_sol)
+  high_friction = sorted(pipes, by unit_loss, desc)  # апгрейди
+  low_friction  = sorted(pipes, by unit_loss, asc)   # даунгрейди
 
-- Обчислити `unit_losses = get_cached_heuristics(x)` → сортування труб
-- `high_friction` (кандидати на upgrade): труби з найвищими `hl/L`
-- `low_friction` (кандидати на downgrade): труби з найнижчими `hl/L`
-- Адаптивні ліміти за надлишком тиску `p_surplus`:
+  # Адаптивні ліміти за p_surplus:
+  if p_surplus > 10: down_limit=15, up_limit=SINGLE_CANDIDATES
+  elif p_surplus < 2: down_limit=3,  up_limit=SINGLE_CANDIDATES//2
+  else:               down_limit=8,  up_limit=SINGLE_CANDIDATES
+
+  # LARGE/XLARGE: обмежити кандидатів топ-K за impact
+  if network_class in (LARGE, XLARGE):
+    focus = get_high_impact_pipes(parent_sol, top_k=n//5)
+    фільтрувати high_friction і low_friction через focus
+
+  for pipe in high_friction[:up_limit]:   → evaluate_candidate(upgrade)
+  for pipe in low_friction[:down_limit]:  → evaluate_candidate(downgrade)
+  for (p1,p2) in combinations(high[:5], 2): → evaluate_candidate(upgrade)
+```
+
+`SINGLE_CANDIDATES` = `{SMALL:n//5, MEDIUM:n//10, LARGE:n//20, XLARGE:10}`
+
+### `_beam_search_and_update` — відбір та оновлення
 
 ```python
-if p_surplus > 10: downgrade_limit = 15, upgrade_limit = SINGLE_CANDIDATES
-elif p_surplus < 2: downgrade_limit = 3,  upgrade_limit = SINGLE_CANDIDATES // 2
-else:               downgrade_limit = 8,  upgrade_limit = SINGLE_CANDIDATES
-```
+min_dist = max(1, (n × 0.05) × (1 − progress_ratio)³)
+  ← мінімальна Hamming відстань між рішеннями в пулі
+  ← зменшується до нуля наприкінці (конвергенція дозволяється)
 
-`SINGLE_CANDIDATES` залежить від класу мережі:
+dynamic_beam = max(3, BEAM_WIDTH × (1 + 0.5 × (1 − progress_ratio)))
+  ← пул ширший на початку, звужується наприкінці
 
-```python
-{"SMALL": n//5, "MEDIUM": n//10, "LARGE": n//20, "XLARGE": 10}
-```
+for rank, (score, cost, sol) in enumerate(next_gen_sorted):
+  if is_tabu(sol, cost): continue
 
-Для LARGE/XLARGE — додатково фільтрувати через `get_high_impact_pipes(top_k=n//5)`.
+  # Диференційоване уточнення:
+  if   rank == 0:    gradient_squeeze(max_passes=5, quick=not(round%2==0))
+  elif rank < 3:     gradient_squeeze(max_passes=3, quick=True)
+  else:              без уточнення
 
-Також генеруються парні апгрейди `(p1, p2)` для труб із `high_friction[:5]`.
+  # Перевірка різноманітності:
+  for peer in unique_next_pool:
+    if hamming(sol, peer) < min_dist: відкинути
 
-### `_beam_search_and_update` — відбір рішень
+  # Ghost Shield:
+  if cost < run_best AND improvement > 2%:
+    is_ghost = is_ghost_solution(sol, cost)
+    if is_ghost: continue
 
-```
-min_dist = max(1, (n × 0.05) × (1 - progress_ratio)³)
-  → мінімальна Hamming-відстань між рішеннями у пулі
-  → зменшується до 0 наприкінці (дозволяє схожі рішення)
-
-Для кожного кандидата (rank, score, cost, sol):
-  1. Пропустити якщо tabu
-  2. Уточнення:
-       rank == 0: gradient_squeeze(max_passes=5, quick_mode=not(round%2==0))
-       rank ∈ 1..2: gradient_squeeze(max_passes=3, quick_mode=True)
-       rank ≥ 3: без уточнення
-  3. Перевірка різноманітності: hamming(sol, peer) ≥ min_dist для всіх peers
-  4. Якщо cost < run_best AND diff > 0.5%: found_new_record = True, stagnation=0
-  5. Якщо diff ≤ 0.5% (мікрокрок): stagnation -= 2 (не скидати)
-
-dynamic_beam = max(3, BEAM_WIDTH × (1 + 0.5 × (1 - progress_ratio)))
-  → на початку пул ширший, наприкінці звужується
+  # Оновлення рекорду:
+  if cost < run_best:
+    diff = run_best − cost
+    if diff > run_best × 0.005: found_new_record = True; stagnation = 0
+    else:                        stagnation = max(0, stagnation − 2)  # мікрокрок
 
 active_pool = unique_next_pool[:dynamic_beam]
+if found_new_record: stagnation = 0; kick_tabu.clear()
+else:                stagnation += 1
 ```
-
-**Epsilon-relaxation**: рішення з `p_surplus ∈ [-0.5, 0)` потрапляють у пул з пенальтним score `= cost + |p_surplus| × dyn_bonus × 50.0`, але не оголошуються рекордом.
 
 ### `_emergency_pool_diversity`
 
-Після кожного beam update:
-
 ```python
-avg_dist = fast_avg_hamming(pool_matrix)  # середня Hamming між всіма парами
-diversity_threshold = (n // 8) × (1 - progress_ratio)
+avg_dist = fast_avg_hamming(pool_matrix)
+diversity_threshold = (n // 8) × (1 − progress_ratio)
 
-Якщо avg_dist < threshold AND reserve_pool не пустий:
-    замінити останнє рішення пулу на резервний seed
+if avg_dist < threshold AND reserve_pool not empty:
+    замінити останній елемент пулу на reserve seed
 ```
 
-### `_check_mini_restart` — повний перезапуск воркера
+### `_check_mini_restart`
 
 ```python
-multiplier = 6 (LARGE) або 10 (SMALL/MEDIUM), / 2 якщо is_late_game
-
-Якщо stagnation_counter ≥ stag_limit × multiplier:
-    очистити tabu, pool, kick_tabu
-    згенерувати 4 мутанти від global_best з n_perturb = min(30..45, n//5) зсувами ±2
-    heal → squeeze → додати у пул
-    stagnation_counter = 0
+multiplier = {LARGE: 6, інші: 10} // 2 якщо is_late_game
+if stagnation_counter ≥ stag_limit × multiplier:
+    очистити tabu + pool
+    згенерувати 4 мутанти від global_best:
+        n_perturb = min(30..45, n//5)
+        for each: heal → squeeze → додати в пул
+    stagnation = 0
 ```
 
 ---
 
-## 8. Механізм диверсифікації — Kick Strategies
+## 9. Диверсифікація — KickStrategies
 
 ### UCB1 вибір стратегії
 
 ```python
-exploration_C = 0.15 + 0.25 × T   # T=0: 0.15; T=1: 0.40
+exploration_C = 0.15 + 0.25 × T   # T=0 → 0.15; T=1 → 0.40
 
-score(s) = wins[s] / tries[s]  +  C × √(ln(n_total) / tries[s])
-         ← exploitation term   ←  exploration term
+ucb1_score(s) = wins[s]/tries[s]  +  C × √(ln(n_total) / tries[s])
+              ← exploitation        ← exploration
 
-strategy = argmax score(s) серед valid_strats
+strategy = argmax ucb1_score(s) серед valid_strats
 ```
 
-Ця формула балансує між вибором стратегій, що раніше приносили результат, та дослідженням менш випробуваних.
+**Пул стратегій за T:**
 
-**consecutive_fails захист**: якщо стратегія провалилась `max_fails` разів поспіль (`3` при T<0.5, `5` при T≥0.5) — виключається з `valid_strats` до першого успіху.
+| T             | active_pool_strats                                      |
+| ------------- | ------------------------------------------------------- |
+| T < 0.5       | SHOCK, BOTTLENECK, LOOP_BALANCE, ZERO_SUM, TRIM         |
+| 0.5 ≤ T < 0.9 | SPATIAL_PERTURB, SMART_PERTURB, RUIN_RECREATE, TOPO_INV |
+| T ≥ 0.9       | BASIN_ESCAPE, SPATIAL_PERTURB, RUIN_RECREATE            |
 
-**При провалі кіку**: `strat_wins[s] × 0.90` — швидка деградація рейтингу.
+**Consecutive fails захист**: при `n_fails ≥ max_fails` (3 при T<0.5, 5 при T≥0.5) — стратегія виключається з вибору до першого успіху.
 
-**При успіху**: `reward = 10 × improvement_pct × 100` + decay всіх стратегій × 0.97 (відносна переоцінка переможця).
+**Вибір цілі для кіку:**
 
-### `_apply_kick` — повний pipeline
-
-```
-1. ВИБІР ЦІЛІ для кіку:
-   T ≥ 0.8: kick_target = найбільш несхоже рішення в пулі (max Hamming від run_best)
-   T ≥ 0.4: kick_target = random.choice(active_pool)
-   T < 0.4: round % 3:
-     0 → run_best_sol
-     1 → active_pool[0]
-     2 → random.choice(active_pool)
-
-2. ВИКОНАННЯ кіку → (forced_sol, locked, log_msg, used_pct)
-
-3. РАННЬА ВІДМОВА:
-   raw_deficit > catastrophic_limit = max(20, h_min × (1 + T)):
-       відкинути без heal
-
-4. HEAL (якщо потрібно):
-   heal_locks = set() для SPATIAL/SMART/RUIN (дозволяємо heal гнучко)
-   heal_locks = locked для решти
-   heal_network(forced_sol, heal_locks) → якщо fails → discard
-
-5. SQUEEZE:
-   BASIN_ESCAPE: без squeeze (пряма ін'єкція)
-   Інші:
-     quick_passes = max(1, 2 - int(T × 2))    # T=0→2; T=0.5→1; T=1→1
-     quick_sol = gradient_squeeze(quick_passes, quick_mode=True)
-
-     HYPERBAND оцінка:
-       hb_margin = 0.03 - 0.02 × progress_ratio   # 3% → 1% наприкінці
-       is_promising = quick_f AND quick_cost < run_best × (1 + hb_margin)
-
-       Якщо promising:
-         gap = (quick_cost - run_best) / run_best
-         deep_passes:
-           T ≥ 0.6 → 1
-           T ≥ 0.4 → 2
-           gap < -0.01% → 8 (LARGE) або 5 (SMALL)
-           gap ≤ 0.2% → 3
-           gap ≤ 2% → 2
-           gap ≤ 5% → 2
-           інше → 1
-
-         CONSENSUS FREEZE (T < 0.2, is_late_game, archive ≥ 3):
-           raw_consensus = {i : всі топ-3 архіву мають однакове x_i}
-           freeze_pct = 25% (progress>0.6) або 10%
-           max_frozen = n × freeze_pct; 0 якщо progress > 0.88
-           consensus_locked = обмежений набір frozen pipes
-
-         final_sol = gradient_squeeze(quick_sol, deep_passes, locked=consensus_locked ∪ locked_for_squeeze)
-
-6. ПРИЙНЯТТЯ рішення:
-   deficit = max(0, h_min - p_final)
-   is_relaxed_valid = feas AND deficit ≤ 0.5 × T
-
-   effective_cost = cost + deficit × (run_best × 0.10)   # пенальтя
-   explosion_threshold = run_best × (1.5 + 0.5 × T)      # відкинути вибухи
-
-   score = effective_cost - p_surplus × dyn_bonus   (якщо feasible)
-   score = effective_cost                           (якщо relaxed)
-
-   if effective_cost < run_best:        → Direct Record
-   elif strategy == BASIN_ESCAPE:       → Pool Flush
-   elif effective_cost < water_level:   → Add to Pool
-   elif T ≥ 0.95:                       → HAIL MARY (Accept anyway)
-   else:                                → Reject
-
-   water_level = run_best × (1 + 0.03 + 0.07 × T)   # 3%→10% від run_best
+```python
+T ≥ 0.8: max Hamming від run_best серед feasible рішень у пулі
+T ≥ 0.4: random.choice(active_pool)
+T < 0.4: round % 3:
+  0 → run_best_sol
+  1 → active_pool[0]
+  2 → random.choice(active_pool)
 ```
 
-### Детальний опис кожної стратегії
-
-#### SHOCK (`forcing_hand_kick`) — T < 0.5
+### Pipeline прийняття kicked-рішення
 
 ```
-aggressiveness = 0.05 + 0.35 × T   # 5%→40% труб критичного шляху
+КРОК 1 — РАННІЙ ВІДСІВ:
+  raw_deficit = max(0, h_min − p_raw)
+  catastrophic_limit = max(20, h_min × (1 + T))
+  if raw_deficit > catastrophic_limit: DISCARD
+
+КРОК 2 — HEAL:
+  max_allowed_deficit = 0.5 × T   ← relaxed h_min
+  if not feas OR p < h_min − max_allowed_deficit:
+    heal_locks = set()   для SPATIAL/SMART/RUIN
+    heal_locks = locked  для решти
+    healed, ok = heal_network(sol, heal_locks)
+    if not ok: DISCARD
+
+КРОК 3 — SQUEEZE (не для BASIN_ESCAPE):
+  quick_passes = max(1, 2 − int(T × 2))   # T=0→2, T=0.5→1, T=1→1
+  quick_sol = gradient_squeeze(passes=quick_passes, quick=True)
+
+  HYPERBAND оцінка:
+    hb_margin = 0.03 − 0.02 × progress_ratio   # 3% → 1%
+    is_promising = feasible AND quick_cost < run_best × (1 + hb_margin)
+
+    if promising:
+      gap = (quick_cost − run_best) / run_best
+      deep_passes:
+        T ≥ 0.6 → 1
+        T ≥ 0.4 → 2
+        gap < −0.01% → 8 (LARGE) або 5 (SMALL)
+        gap ≤ 0.2% → 3
+        gap ≤ 2%  → 2
+        інше      → 1
+
+      CONSENSUS FREEZE (T < 0.2, is_late_game, archive ≥ 3):
+        знайти труби однакові у топ-3 архіві
+        заморозити до freeze_pct=25% від них
+        (вимкнути якщо progress > 0.88)
+
+      final = gradient_squeeze(quick_sol, locked=consensus∪locked, passes=deep_passes)
+
+КРОК 4 — ПРИЙНЯТТЯ:
+  deficit = max(0, h_min − p_final)
+  effective_cost = cost + deficit × (run_best × 0.10)
+  explosion_threshold = run_best × (1.5 + 0.5 × T)
+
+  if effective_cost > explosion_threshold: REJECT (Hard)
+
+  water_level = run_best × (1 + 0.03 + 0.07 × T)   # 3% → 10%
+
+  if effective_cost < run_best → Direct Record Update
+  elif BASIN_ESCAPE AND deficit=0 → Pool Flush
+  elif effective_cost < water_level AND not basin_tabu → Add to Pool
+  elif T ≥ 0.95 → HAIL MARY (прийняти примусово)
+  else → Reject
+```
+
+### Детальні стратегії (формули параметрів)
+
+#### SHOCK (`forcing_hand_kick`)
+
+```
+aggressiveness = 0.05 + 0.35 × T
 limit = max(1, len(path_pipes) × aggressiveness)
-Збільшити limit труб з найвищими unit_losses на критичному шляху
+Збільшити limit труб з найвищим unit_loss на critical path
 ```
 
-#### BOTTLENECK (`upstream_bottleneck_kick`) — T < 0.5
+#### BOTTLENECK (`upstream_bottleneck_kick`)
 
 ```
-Фаза 1 — Taper Detection:
-  Пройти path_pipes зворотно
-  Знайти першу трубу де x[curr] < x[prev] (звуження)
-  → збільшити на 1, заблокувати
+Фаза 1 — Taper Detection (пройти path_pipes у зворотньому напрямку):
+  if x[curr] < x[prev]: збільшити curr → return
 
-Фаза 2 — Fallback (якщо звуження нема):
+Фаза 2 — Fallback:
   search_depth = len(path) × (0.3 + 0.4 × T)
   boost_pct = 0.05 + 0.15 × T
   Підняти boost_pct% найгірших труб у search_depth
+
+Pipe tenure = 10 раундів (failed_pipes tabu)
 ```
 
-Труби з failed_pipes пропускаються (tabu tenure = 10 раундів).
-
-#### TOPO_INV (`topological_inversion_kick`) — T ∈ [0.5, 0.9)
+#### TOPO_INV (`topological_inversion_kick`)
 
 ```
-Знайти 5 альтернативних шляхів до crit_node (різні ваги ребер)
-Відкинути шляхи з tabu-підписом
-Вибрати шлях з мінімальним overlap з домінантним шляхом
+Знайти до 5 альтернативних шляхів до crit_node
+  (множачи ваги відвіданих ребер × 5 після кожного SP)
+Відфільтрувати tabu-підписи
+Вибрати шлях з мінімальним overlap з домінантним
 
+target_capacity_idx = mean(x[i] for i in dom_pipes)
 aggressiveness = 0.10 + 0.50 × T
 max_pipes = len(alt_path) × aggressiveness
-
-Підняти всі вибрані труби до target_capacity_idx = mean(x_i on dominant path)
+Підняти chosen pipes до min(target_capacity_idx, max_d_idx)
 ```
 
-#### LOOP_BALANCE (`loop_balancing_kick`) — T < 0.5
+#### LOOP_BALANCE (`loop_balancing_kick`)
 
 ```
-cycles = nx.cycle_basis(G)   (кешується)
-restrict_pct = 0.10 + 0.30 × T   # частка труб у циклі
+cycles = nx.cycle_basis(G)   (кешується в self._cached_cycles)
+restrict_pct = 0.10 + 0.30 × T
+max_allowed_drop = 1 + int(2 × T)
 
-Для кожного циклу:
-  Вибрати restrict_pct% труб
-  Спробувати знизити їх на drop = 1..max_drop
-  heal + quick_squeeze → перевірити вартість
-  Зібрати кандидатів (до 5)
+Для кожного циклу (до 5 кандидатів):
+  chosen = random.sample(cycle_pipes, n_restrict)
+  for drop in range(max_drop, 0, -1):
+    kicked = x; kicked[chosen] -= drop
+    healed, ok = heal_network(kicked, locked=chosen)
+    if ok: squeeze → record as candidate
 
-Повернути random.choice(top-3 кандидатів)
-LOOP_BALANCE_PIPE_TENURE = min(80, n // 5)
+Повернути random.choice(top-3 за вартістю)
+Pipe tenure = min(80, n // 5) раундів
 ```
 
-Для деревоподібних мереж автоматично виключається.
-
-#### ZERO_SUM (`zero_sum_shift_kick`) — T < 0.5
+#### ZERO_SUM (`zero_sum_shift_kick`)
 
 ```
-Для кожної труби i:
-  upgrades: c_up = L_i × (cost[x_i+1] - cost[x_i])
-            score = unit_loss[i] / c_up   ← bang per buck
+upgrades[i] = (i, cost_invest, unit_loss[i] / cost_invest)
+  cost_invest = L[i] × (costs[x[i]+1] − costs[x[i]])
 
-  downgrades: c_down = L_i × (cost[x_i] - cost[x_i-1])
-              score = c_down / unit_loss[i]   ← ніщо не втрачаємо
+downgrades[i] = (i, cost_save, cost_save / unit_loss[i])
+  cost_save = L[i] × (costs[x[i]] − costs[x[i]-1])
 
+Виключити труби з zero_sum_tabu (tenure 15 раундів)
 search_pool_size = max(15, n // 10)
 tests_limit = 5 (T<0.3) або 2 (T≥0.3)
+max_downgrades = n//50 × {1, 3, 6} залежно від T
 
-Для кожного апгрейду зі списку:
-  Накопичувати downgrades поки savings > cost_invest
-  heal → якщо ok та cost < best: зберегти
-
-Труби в zero_sum_tabu (tenure 15 раундів) пропускати
+for up in valid_upgrades[:search_pool_size]:
+  накопичувати downgrades поки savings > cost_invest
+  heal → evaluate → зберегти як кандидат
 ```
 
-#### TRIM (`peripheral_trim_kick`) — T < 0.5
+#### TRIM (`peripheral_trim_kick`)
 
 ```
-periphery = труби поза домінантним шляхом з x_i ≤ 0.6 × max_d_idx
-  сортовані за зростанням unit_losses (найтихіші)
+periphery = труби поза critical path з x[i] ≤ 0.6 × max_d_idx
+  сортовані за unit_loss зростаючи
 
-trim_pct = 0.02 + 0.13 × T   # 2%→15% периферії
-combo = random.sample(periphery[:combo_limit], pipes_to_cut)
+trim_pct = 0.02 + 0.13 × T
+pipes_to_cut = max(1, len(periphery) × trim_pct)
 
-25 спроб → heal → evaluate → вибрати random.choice(top-3)
+25 спроб: random.sample → heal → evaluate
+Повернути random.choice(top-3)
 ```
 
-#### SMART_PERTURB (`smart_perturbation_kick`) — T ∈ [0.5, 0.9)
+#### SMART_PERTURB (`smart_perturbation_kick`)
 
 ```
-μ = mu_perturb_pct + 0.15 × T     # самоадаптивне μ
+μ = mu_perturb_pct + 0.15 × T
 σ = 0.02 + 0.05 × T
-target_pct ~ Gauss(μ, σ), clip to [0.01, 0.30]
+target_pct ~ Gauss(μ, σ), clip [0.01, 0.30]
 
 n_perturb = min(max_perturb, n × target_pct)
-max_perturb = {SMALL:∞, MEDIUM:25, LARGE:40, XLARGE:60}
+  max_perturb = {SMALL:∞, MEDIUM:25, LARGE:40, XLARGE:60}
 
-Вибрати n_perturb труб (переважно 0 < x < max_d)
-Якщо T > 0.6: delta ~ {-2,-1,+1,+2} (зважено до ±1)
-Інакше: delta ~ {-1, +1}
+Вибрати труби з 0 < x < max_d (або всі якщо замало)
+if T > 0.6: delta ~ {-2,-1,+1,+2} weights=[1,3,3,1]
+else:        delta ~ {-1, +1}
 
-heal → return used_pct (для μ-learning)
+heal → return (healed, locked, msg, target_pct)
 ```
 
-#### RUIN_AND_RECREATE — T ∈ [0.5, 0.9)
+#### RUIN_AND_RECREATE (`ruin_and_recreate_kick`)
 
 ```
-Епіцентр:
-  T < 0.8: crit_node
-  T ≥ 0.8: random node (повне руйнування)
+ruin_center = crit_node (T < 0.8) або random node (T ≥ 0.8)
 
-μ_ruin = mu_ruin_pct + 0.10 × T
-σ_ruin = 0.01 + 0.04 × T
-target_pct ~ Gauss(μ_ruin, σ_ruin), clip to [0.01, 0.25]
+μ = mu_ruin_pct + 0.10 × T
+σ = 0.01 + 0.04 × T
+target_pct ~ Gauss(μ, σ), clip [0.01, 0.25]
+target_pipes = max(3, n × target_pct)
 
-cutoff = {n<50: 3, n<200: 4, n<1000: 6, n≥1000: 8}   # адаптивний
-Зібрати cluster_pipes ближніх труб через BFS з cutoff
+cutoff = {n<50:3, n<200:4, n<1000:6, n≥1000:8}
+BFS від ruin_center з cutoff → cluster_pipes (closest first)
 
-max_drop = min(temp_drop, max_d_idx // 3)   # обмеження каталогом
-  temp_drop = 1 + int(2 × T)
+max_catalog_drop = max(1, max_d_idx // 3)
+max_drop = min(1 + int(2 × T), max_catalog_drop)
 
-Для кожної труби в кластері: x_i -= random.randint(1, max_drop)
-heal(kicked, locked=set())   # без обмежень для heal
-return used_pct (для μ-learning)
+for p in cluster_pipes:
+  x[p] = max(0, x[p] − random.randint(1, max_drop))
+
+heal(kicked, locked=set())   ← locked=set() для максимальної гнучкості
+return (healed, set(), msg, target_pct)
 ```
 
-#### BASIN_ESCAPE (`basin_escape`) — T ≥ 0.9
+#### BASIN_ESCAPE (`basin_escape`)
 
 ```
-Знайти найвіддаленіше рішення в global_archive (max Hamming)
+Знайти diverse_sol з global_archive з max Hamming до indices
 Потрібно best_dist ≥ max(2, n × 0.03)
 
-μ_esc = mu_escape_pct + 0.30 × T   # 0.20 + 0.30 → 0.50 при T=1
-σ_esc = 0.05 + 0.05 × T
-target_pct ~ Gauss(μ_esc, σ_esc), clip to [0.05, 0.60]
+μ = mu_escape_pct + 0.30 × T
+σ = 0.05 + 0.05 × T
+target_pct ~ Gauss(μ, σ), clip [0.05, 0.60]
 
 n_replace = len(diff_pipes) × target_pct
 Замінити n_replace труб значеннями з diverse_sol
 
-heal → pool.basin_tabu.append(run_best_sol signature)
-   (поточний басейн позначається як досліджений)
+heal(kicked, set())
+basin_tabu.append(signature(run_best_sol))   ← поточний басейн ← tabu
 
-Якщо accepted: active_pool.clear() + forced_flush
-               run_best = effective_cost
-               ipc_immunity = 50
-return used_pct (для μ-learning)
+if accepted:
+  active_pool.clear()
+  _force_flush_next = True
+  ipc_immunity = 50
+return (healed, set(), msg, target_pct)
 ```
 
-#### SPATIAL_PERTURB — T ≥ 0.5
+#### SPATIAL_PERTURB (`spatial_perturb_kick`)
 
 ```
-base_radius = {n<50: 2, n<200: 3, n<1000: 5, n≥1000: 8}
+base_radius = {n<50:2, n<200:3, n<1000:5, n≥1000:8}
 radius = base_radius + int(base_radius × T)
 
-Вибрати випадковий epicenter
-local_nodes = BFS від epicenter з cutoff=radius
+epicenter = random.choice(G.nodes())
+local_nodes = BFS(epicenter, cutoff=radius)
 local_pipes = всі труби суміжні з local_nodes
 
-μ_sp = mu_spatial_pct + 0.15 × T   # незалежний параметр від SMART!
-σ_sp = 0.02 + 0.05 × T
-target_pct ~ Gauss(μ_sp, σ_sp), clip to [0.01, 0.40]
+locked = {i : i not in local_pipes}   ← заморозити все поза патчем
 
+μ = mu_spatial_pct + 0.15 × T   ← НЕЗАЛЕЖНИЙ від mu_perturb!
+σ = 0.02 + 0.05 × T
+target_pct ~ Gauss(μ, σ), clip [0.01, 0.40]
 target_mutations = min(max_perturb, len(local_pipes) × target_pct)
-Мутувати вибрані труби, решта → locked
 
-Fallback на SMART_PERTURB якщо local_pipes порожній
-return used_pct (для μ-learning)
+Мутувати target_mutations труб у local_pipes
+Fallback → smart_perturbation_kick якщо local_pipes порожній
+
+return (kicked, locked, msg, target_pct)
 ```
 
 ---
 
-## 9. Самоадаптивні параметри кіків (μ-Learning)
+## 10. Самонавчання параметрів кіків (μ-Learning)
 
-### Концепція
+### Exponential Moving Average (EMA)
 
-Замість фіксованого `pct = 0.02 + 0.18 × T` кожна стратегія навчається оптимальному розміру втручання через **exponential moving average**:
-
-```
-Якщо кік → прямий рекорд (direct record):
-    μ_new = 0.9 × μ_old + 0.1 × used_pct
+```python
+μ_new = 0.9 × μ_old + 0.1 × used_pct
 ```
 
-де `used_pct` — частка труб, яку фактично зачепив даний кік.
+де `used_pct` — фактична частка труб, задіяних кіком (повертається як `res[3]`).
 
-### Параметри та початкові значення
+### Параметри та умови оновлення
 
-| Параметр         | Стратегія       | μ₀   | Діапазон sampling          | Ефект при зростанні        |
-| ---------------- | --------------- | ---- | -------------------------- | -------------------------- |
-| `mu_ruin_pct`    | RUIN_RECREATE   | 0.05 | Gauss(μ+0.10T, 0.01+0.04T) | більший кластер руйнування |
-| `mu_perturb_pct` | SMART_PERTURB   | 0.10 | Gauss(μ+0.15T, 0.02+0.05T) | більше збурених труб       |
-| `mu_spatial_pct` | SPATIAL_PERTURB | 0.20 | Gauss(μ+0.15T, 0.02+0.05T) | більше мутацій у патчі     |
-| `mu_escape_pct`  | BASIN_ESCAPE    | 0.20 | Gauss(μ+0.30T, 0.05+0.05T) | більше "генів" від донора  |
+| Параметр         | Стратегія       | μ₀   | Умова оновлення                               |
+| ---------------- | --------------- | ---- | --------------------------------------------- |
+| `mu_ruin_pct`    | RUIN_RECREATE   | 0.05 | `deficit == 0 AND cost < run_best`            |
+| `mu_perturb_pct` | SMART_PERTURB   | 0.10 | `deficit == 0 AND cost < run_best`            |
+| `mu_spatial_pct` | SPATIAL_PERTURB | 0.20 | `deficit == 0 AND cost < run_best`            |
+| `mu_escape_pct`  | BASIN_ESCAPE    | 0.20 | `BASIN_ESCAPE accepted AND used_pct not None` |
 
-**Важливо**: `mu_perturb_pct` і `mu_spatial_pct` — **різні параметри** (виправлено). SMART і SPATIAL мають різну семантику `used_pct` (частка від усіх труб vs частка від local_pipes).
+**Критично**: `mu_perturb_pct` і `mu_spatial_pct` — **різні параметри**. Семантика `target_pct` відрізняється: SMART рахує від `n`, SPATIAL — від `len(local_pipes)`.
 
-### Умова оновлення μ
-
-Оновлення відбувається лише при **прямому рекорді** (`effective_cost < run_best_cost`):
-
-- Для RUIN/SMART/SPATIAL — у блоці `"if deficit == 0 and effective_cost < run_best"`
-- Для BASIN_ESCAPE — окремо, з виправленою умовою (без зайвої перевірки `effective_cost < run_best` в `else` гілці)
-
-### Стохастика навколо μ
-
-Gaussian sampling забезпечує **exploration навколо поточного μ**:
+### Динамічне sampling навколо μ
 
 ```
-target_pct = max(lower, min(upper, random.gauss(dynamic_mu, dynamic_sigma)))
+dynamic_mu = μ + slope × T      # μ зростає зі стагнацією
+dynamic_sigma = σ₀ + σ_T × T    # дисперсія теж зростає
+target_pct = max(lo, min(hi, Gauss(dynamic_mu, dynamic_sigma)))
 ```
 
-При стагнації (T → 1) `dynamic_mu` збільшується лінійно → алгоритм автоматично переходить до агресивніших кіків.
+При T → 1 алгоритм автоматично пробує **більші** розміри втручання, навіть якщо μ навчився малим.
+
+### UCB1 reward/decay при успіху
+
+```python
+improvement_pct = diff / run_best_cost
+reward = 10.0 × improvement_pct × 100   # пропорційно відносному поліпшенню
+strat_wins[strategy] += max(1.0, reward)
+
+# Відносна переоцінка всіх стратегій:
+for k in strat_wins:
+    strat_wins[k] *= 0.97
+    strat_tries[k] = max(1.0, strat_tries[k] * 0.97)
+```
 
 ---
 
-## 10. Паралелізм та Island Model
+## 11. Паралелізм та Island Model
 
 ### Архітектура
 
 ```
 AnalyticalSolver.solve_standalone()
-    └── epoch = 1 (один безперервний прогін)
-          └── tasks = N_workers × (diameters, time_budget, global_best, archive, seed, ...)
-                 └── mp_pool.apply_async(worker_task, task)
-                       └── IslandWorker.run(time_budget, global_best, shared_progress)
+  │
+  ├── multiprocessing.Pool(N workers, initializer=worker_init)
+  │       └── worker_init: WaterSimulator у temp dir кожного процесу
+  │
+  └── для кожного воркера:
+        mp_pool.apply_async(worker_task, args=(
+            diameters, v_opt, time_budget, global_best, archive,
+            seed, worker_id, shared_progress, log_dir, epoch,
+            max_sims, n_workers
+        ))
 ```
 
 ### Shared Memory (`multiprocessing.Manager().dict()`)
 
-| Ключ                                 | Значення                   | Хто пише                 | Хто читає |
-| ------------------------------------ | -------------------------- | ------------------------ | --------- |
-| `shared_progress[wid]`               | `{round, sims, best_cost}` | воркер wid               | всі       |
-| `shared_progress['global_best']`     | `(cost, sol)`              | воркер що знайшов рекорд | всі       |
-| `shared_progress[f'best_sol_{wid}']` | `(cost, sol)`              | воркер wid               | всі       |
-| `shared_progress['global_archive']`  | список `(cost, sol)`       | оркестратор (кожні 30s)  | воркери   |
+| Ключ                                 | Тип                        | Пише                   | Читає    |
+| ------------------------------------ | -------------------------- | ---------------------- | -------- |
+| `shared_progress[wid]`               | `{round, sims, best_cost}` | воркер `wid`           | всі      |
+| `shared_progress['global_best']`     | `(cost, sol)`              | воркер-переможець      | всі      |
+| `shared_progress[f'best_sol_{wid}']` | `(cost, sol)`              | воркер `wid`           | peer IPC |
+| `shared_progress['global_archive']`  | `[(cost, sol), ...]`       | оркестратор кожні ~30с | всі      |
 
-### IPC — пасивна ін'єкція (`_process_ipc`)
-
-Умова прийняття рішення від peer воркера:
+### Passive IPC (`_process_ipc`)
 
 ```python
-peer_cost < run_best × 0.995    # на 0.5% краще
-peer_cost < last_injected - 1.0  # нове (не вже бачили)
-NOT (is_adventurer AND progress < 0.85)  # adventurer ігнорує до пізньої стадії
-NOT (stagnation < stag_limit AND NOT massively_better)  # не перебивати активний прогрес
+for i in range(n_workers) if i != self_id:
+  peer = shared_progress[f'best_sol_{i}']
+
+  Умови прийняття peer рішення:
+    peer_cost < run_best × 0.995        # краще на 0.5%
+    peer_cost < last_injected_cost − 1  # справді нове
+    NOT (is_adventurer AND progress < 0.85)  # ADVENTURER чекає до пізньої гри
+    NOT (stagnation < stag_limit AND diff < 2%)  # не переривати активний пошук
 ```
 
-### Rescue механізм (`_check_rescue`)
+### Rescue (`_check_rescue`)
 
 ```python
-global_lag = (run_best - global_best) / global_best
+global_lag = (run_best − global_best) / global_best
 
 if (global_lag > 2% AND stagnation ≥ 2×stag_limit) OR global_lag > 5%:
-    Прийняти global_best рішення
-    pool.clear → вставити (global_best, score - 1e6)  # пріоритет
+    run_best = global_best_cost
+    pool.insert(global_best_sol with score − 1e6)  # пріоритет у beam
     stagnation = 0; kick_tabu.clear()
 ```
 
-### Migration з 3-dimensional crossover (`_spatial_crossover`)
+### Migration — 3-dimensional crossover
 
-```python
-T_migration = stagnation_counter / (stag_limit × 3)
+```
+T_migration = stagnation / (stag_limit × 3)
 
-T < 0.3:  # Cold migration
-    hybrid = spatial_crossover(run_best_sol, gb_sol, T=0.25)
+T < 0.3:   COLD migration
+  hybrid = spatial_crossover(run_best, global_best, T=0.25)
 
-    # додатковий peer noise
-    peer_sol = шукати серед воркерів sol з cost ≠ gb_cost
-    if peer_sol: hybrid = spatial_crossover(hybrid, peer_sol, T=0.05)
+  # Додатковий peer noise (3D):
+  знайти peer зі cost ≠ global_best (різноманітність)
+  if found: hybrid = spatial_crossover(hybrid, peer_sol, T=0.05)
 
-    heal → вставити в active_pool[0]; stagnation=0; ipc_immunity=50
+  heal → pool.insert(0, hybrid); stagnation=0; ipc_immunity=50
 
-T ∈ [0.3, 0.7):  # Warm migration
-    hybrid = spatial_crossover(run_best_sol, gb_sol, T)
-    if hybrid cost < run_best: прийняти як новий run_best
+T ∈ [0.3, 0.7):   WARM migration
+  hybrid = spatial_crossover(run_best, global_best, T)
+  if hybrid < run_best: прийняти як новий run_best
 
-T ≥ 0.7:  # Exploration Shield — ігнорувати global_best
+T ≥ 0.7:   EXPLORATION SHIELD — ігнорувати global_best
 ```
 
-`spatial_crossover` — регіональна трансплантація: вибрати epicenter, зібрати `local_nodes` в BFS-радіусі `2 + 6×T`, замінити `local_pipes` від donor_sol.
+`spatial_crossover`: epicenter → BFS(radius=2+6T) → `local_pipes` отримують значення від `donor_sol`.
 
-### Migration interval (адаптивний)
+### `_migration_interval_sims` — адаптивна частота
 
 ```python
-_migration_interval_sims = max(1000, (max_sims // 20) × (1.0 - 0.6 × progress_ratio))
+interval = max(1000, (max_sims // 20) × (1 − 0.6 × progress_ratio))
 ```
 
-На початку — рідкий обмін (кожні 5% бюджету). Наприкінці — частіший (кожні 2%).
+Початок: рідко (кожні ~5% бюджету). Кінець: частіше (кожні ~2%).
 
 ### Глобальний архів (`_build_diverse_archive`)
 
-Після закінчення кожного epoch оркестратор будує топ-6 архів:
-
-1. Топ-2 рішення за вартістю (elite).
-2. Решта: додати якщо `min_hamming_to_archive ≥ max(15, min(45, n × 0.08))`.
-
-Цей архів передається воркерам наступного epoch для `make_warm_seeds`.
-
----
-
-## 11. Фінальна полірування та звітність
-
-### Final Polish
+Після epoch оркестратор збирає топ-6 різноманітних рішень:
 
 ```python
-polished = gradient_squeeze(global_best_sol, max_passes=None, quick_mode=False, dyn_bonus=best_cost × 0.001)
+archive = sorted_results[:elite_count=2]   # топ-2 за вартістю
+
+min_diff = max(15, min(45, n × 0.08))      # мінімальна Hamming від архіву
+
+for cost, sol in sorted_results[2:]:
+  if min_hamming_to_archive(sol) ≥ min_diff:
+    archive.append(...)
+  if len(archive) == 6: break
 ```
-
-Необмежений повний local search без `quick_mode` — перевіряє кожну трубу в обидва боки до абсолютної збіжності.
-
-### Експорт (`plot.py`)
-
-| Файл                      | Зміст                                                          |
-| ------------------------- | -------------------------------------------------------------- |
-| `solution_champion.csv`   | Pipe ID, діаметр, довжина, вартість кожної труби               |
-| `optimized_network.inp`   | EPANET-файл з оптимальними діаметрами (для подальшого аналізу) |
-| `engineering_report.txt`  | Тиск у кожному вузлі, швидкість і втрати у кожній трубі        |
-| `convergence.png`         | Крива збіжності: cost(M$) vs симуляцій                         |
-| `convergence_history.csv` | Числові дані для convergence.png                               |
-| `network_map.png`         | Кольорова карта топології (ширина ліній ∝ діаметр)             |
 
 ---
 
-## 12. Налаштування параметрів
+## 12. Режим `fast_analytical`
+
+Запускається з `--run_mode fast_analytical`. Не використовує Island Model — один потік без кіків.
+
+```
+1. make_diverse_seeds_for_fast():
+   16 швидкостей {0.5, 0.6, ..., 2.0} × 5 ітерацій velocity-seeding
+
+2. make_backbone_seed(v) для v ∈ {0.8, 1.0, 1.2, 1.5, 1.8}:
+   Trunk-Branch стратифікація
+
+3. Відфільтрувати feasible seeds (дедублікувати)
+
+4. Сортувати за вартістю; взяти top-5
+
+5. Для кожного з top-5:
+   polished = gradient_squeeze(raw_sol, max_passes=None, quick=False)
+   Якщо кращий → глобальний рекорд
+```
+
+Час: секунди – хвилини. Якість: хороша стартова точка, не конкурує з `analytical` за якістю.
+
+---
+
+## 13. Звітність та візуалізація
+
+### `export_solution`
+
+```python
+# Читати оптимальні діаметри і записати:
+1. solution_champion.csv
+   Pipe ID | Start Node | End Node | Diameter (mm) | Length | Cost
+
+2. optimized_network.inp
+   EPANET файл з оптимальними діаметрами (wntr.network.write_inpfile)
+
+3. engineering_report.txt (через wntr.sim.EpanetSimulator):
+   - Вартість / Час / Кількість симуляцій
+   - Тиск у кожному вузлі (sorted by pressure asc)
+   - Швидкість і втрати у кожній трубі (sorted by velocity desc)
+```
+
+### `plot_convergence`
+
+Крива збіжності зі step-функцією (монотонно спадна):
+
+```python
+plt.step(evals, costs_M, where='post')
+# Також зберігає convergence_history.csv
+```
+
+### `plot_network_map`
+
+Кольорова теплова карта топології:
+
+```python
+edge_color = real_diams_m        # колір по діаметру (viridis)
+line_widths = 1 + 4 × normalized_diam   # ширина ∝ діаметр
+# Вузли: чорні (junction), сині квадрати (reservoir), червоні трикутники (tank)
+```
+
+### Дерево виведення
+
+```
+OutputDataExperiments/
+└── YYYY-MM-DD_HH-MM-SS/
+    ├── logs/
+    │   ├── run_YYYY-MM-DD_HH-MM-SS.txt    ← stdout + stderr (DualLogger)
+    │   └── worker_01.txt ... worker_N.txt  ← детальні логи воркерів
+    ├── plots/
+    │   ├── convergence.png
+    │   └── network_map.png
+    └── tables/
+        ├── solution_champion.csv
+        ├── optimized_network.inp
+        ├── engineering_report.txt
+        ├── convergence_history.csv
+        └── runs_summary.csv    (якщо --runs > 1)
+```
+
+---
+
+## 14. Налаштування та запуск
 
 ### CLI параметри
 
-| Аргумент     | За замовчуванням            | Опис                                             |
-| ------------ | --------------------------- | ------------------------------------------------ |
-| `--inp`      | `InputData/Hanoi/Hanoi.inp` | Шлях до EPANET `.inp` файлу                      |
-| `--costs`    | `InputData/Hanoi/costs.csv` | Таблиця діаметрів і вартостей                    |
-| `--hmin`     | `30.0`                      | Мінімальний тиск (м вод. ст.)                    |
-| `--units`    | `mm`                        | `mm` або `in` (дюйми)                            |
-| `--cores`    | `0` (всі)                   | Кількість процесів (Островів)                    |
-| `--runs`     | `1`                         | Незалежних запусків                              |
-| `--run_mode` | `analytical`                | `analytical` або `fast_analytical`               |
-| `--v_opt`    | `1.0`                       | Ціл. швидкість потоку (м/с) для velocity-seeding |
-| `--max_sims` | `None` (∞)                  | Глобальний бюджет симуляцій                      |
-| `--config`   | `None`                      | JSON-файл (перезаписує CLI аргументи)            |
+| Аргумент     | За замовч. | Тип    | Опис                                   |
+| ------------ | ---------- | ------ | -------------------------------------- |
+| `--inp`      | Hanoi.inp  | str    | Шлях до EPANET `.inp`                  |
+| `--costs`    | costs.csv  | str    | Таблиця діаметрів і вартостей          |
+| `--hmin`     | 30.0       | float  | Мінімальний тиск (м вод. ст.)          |
+| `--units`    | mm         | mm\|in | Одиниці діаметрів у costs.csv          |
+| `--cores`    | 0 (всі)    | int    | Кількість островів                     |
+| `--runs`     | 1          | int    | Незалежних запусків                    |
+| `--run_mode` | analytical | str    | `analytical` або `fast_analytical`     |
+| `--v_opt`    | 1.0        | float  | Цільова швидкість для velocity-seeding |
+| `--max_sims` | None (∞)   | int    | Глобальний бюджет симуляцій            |
+| `--config`   | None       | str    | JSON (перезаписує CLI аргументи)       |
 
-### JSON конфігурація
+### JSON конфіг (рекомендовано для повторних запусків)
 
 ```json
 {
@@ -982,59 +1232,43 @@ polished = gradient_squeeze(global_best_sol, max_passes=None, quick_mode=False, 
   "cores": 8,
   "runs": 3,
   "v_opt": 1.2,
-  "max_sims": 5000000
+  "max_sims": 15000000
 }
+```
+
+```bash
+python main.py --config balerma_15M.json
 ```
 
 ### Класи мереж та автоналаштування
 
-| Клас   | Умова          | Beam Width | SINGLE_CANDIDATES | Поведінка                  |
-| ------ | -------------- | ---------- | ----------------- | -------------------------- |
-| SMALL  | n < 50         | 5          | n//5              | Повний пошук, всі комбо    |
-| MEDIUM | 50 ≤ n < 200   | 5          | n//10             | Стандарт                   |
-| LARGE  | 200 ≤ n < 1000 | 8          | n//20             | Focus на high_impact pipes |
-| XLARGE | n ≥ 1000       | 8          | 10                | Мінімальні кандидати       |
+| Клас   | n труб  | beam_width | SINGLE_CANDIDATES | Особливості                           |
+| ------ | ------- | ---------- | ----------------- | ------------------------------------- |
+| SMALL  | < 50    | 5          | n//5              | Повний swap, точна basin sig          |
+| MEDIUM | 50–199  | 5          | n//10             | Стандарт                              |
+| LARGE  | 200–999 | 8          | n//20             | focus на high_impact, обмежений SMART |
+| XLARGE | ≥ 1000  | 8          | 10                | Мінімальні кандидати, великі radii    |
 
 ### Ключові внутрішні константи
 
-| Параметр              | Значення                                 | Де задається                | Роль                                |
-| --------------------- | ---------------------------------------- | --------------------------- | ----------------------------------- |
-| `BASE_SIM_BUDGET`     | SMALL:1M MEDIUM:3M LARGE:1.5M XLARGE:30M | `AnalyticalSolver.__init__` | Бюджет якщо `max_sims=None`         |
-| `stag_limit`          | 4 → 12                                   | адаптивно                   | Поріг стагнації перед T-зростанням  |
-| `min_rel_improvement` | 0.0003                                   | `gradient_squeeze`          | Рання зупинка LS                    |
-| `water_level`         | best×(1+0.03+0.07T)                      | `_apply_kick`               | Вхід нових рішень у пул             |
-| `explosion_threshold` | best×(1.5+0.5T)                          | `_apply_kick`               | Відкидання вибухів                  |
-| `basin_tabu maxlen`   | 500                                      | `pool.py` (deque)           | FIFO-пам'ять відвіданих басейнів    |
-| `tabu tenure`         | 80 раундів                               | `is_tabu`                   | Скільки раундів рішення tabu        |
-| `ipc_immunity`        | 30 (старт) / 50 (після rescue)           | `IslandWorker`              | Захист від надто ранньої міграції   |
-| `migration_interval`  | max_sims/(20…50)                         | адаптивно                   | Частота міжостровного обміну        |
-| `LRU maxsize`         | 50 000                                   | `SolverContext`             | Для великих мереж збільшити до 200k |
+| Параметр              | Значення                                    | Де задається                |
+| --------------------- | ------------------------------------------- | --------------------------- |
+| `BASE_SIM_BUDGET`     | SMALL:1M, MEDIUM:3M, LARGE:1.5M, XLARGE:30M | `AnalyticalSolver.__init__` |
+| `stag_limit`          | 4 → 12                                      | Адаптивно в `run()`         |
+| `water_level`         | `best × (1 + 0.03 + 0.07T)`                 | `_apply_kick`               |
+| `explosion_threshold` | `best × (1.5 + 0.5T)`                       | `_apply_kick`               |
+| `min_rel_improvement` | 0.0003                                      | `gradient_squeeze`          |
+| `basin_tabu maxlen`   | 500                                         | `pool.py` (deque)           |
+| `tabu tenure`         | 80 раундів                                  | `is_tabu`                   |
+| `ipc_immunity`        | 30 / 50 (після rescue)                      | `IslandWorker`              |
+| `LRU cache maxsize`   | 50 000                                      | `SolverContext`             |
 
-### Рекомендовані значення для тестових мереж
+### Рекомендовані налаштування за мережею
 
-| Мережа  | n труб | Клас  | `--max_sims` | `--cores` | Очікуваний результат             |
-| ------- | ------ | ----- | ------------ | --------- | -------------------------------- |
-| Hanoi   | 34     | SMALL | 1M           | 5         | ~6.08 M$ (відомий оптимум ~6.08) |
-| Balerma | 454    | LARGE | 15M          | 5+        | ~1.93–1.96 M$                    |
-
-### Виведення результатів
-
-```
-OutputDataExperiments/
-└── 2026-04-14_10-51-09/
-    ├── logs/
-    │   ├── run_2026-04-14_10-51-09.txt     ← головний лог
-    │   └── worker_01.txt                   ← детальний лог воркера
-    ├── plots/
-    │   ├── convergence.png
-    │   └── network_map.png
-    └── tables/
-        ├── solution_champion.csv
-        ├── optimized_network.inp
-        ├── engineering_report.txt
-        ├── convergence_history.csv
-        └── runs_summary.csv
-```
+| Мережа  | n   | Клас  | `--max_sims` | `--cores` | Цільовий результат |
+| ------- | --- | ----- | ------------ | --------- | ------------------ |
+| Hanoi   | 34  | SMALL | 1M           | 5         | ~6.08 M$           |
+| Balerma | 454 | LARGE | 15M          | 5+        | ~1.93–1.96 M$      |
 
 ### Формат `costs.csv`
 
@@ -1047,5 +1281,7 @@ diameter,cost_per_meter
 300,180.50
 ```
 
-Перший стовпець — діаметр у мм (або дюймах якщо `--units in`).  
-Другий стовпець — вартість прокладання за метр (будь-яка єдина валюта).
+Перший стовпець — діаметр (мм або дюйми залежно від `--units`).  
+Другий стовпець — вартість за метр (будь-яка валюта, але єдина для всіх рядків).
+
+Підтримуються варіанти назв стовпців: `Diameter/Diam/D/diameter/size` і `Cost/cost/Price/price/UnitCost`.
