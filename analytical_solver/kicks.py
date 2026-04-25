@@ -33,7 +33,9 @@ class KickStrategies:
 
     def upstream_bottleneck_kick(self, indices, T, **kwargs):
         failed_pipes = kwargs.get('failed_pipes', {})
+        boosted_pipes = kwargs.get('boosted_pipes', {})
         current_round = kwargs.get('current_round', 0)
+        tenure = 5
         
         _, _, _, crit_node = self.ctx.get_cached_stats(indices)
         if not crit_node or crit_node == "ERR": return indices, set(), "", -1
@@ -43,24 +45,45 @@ class KickStrategies:
         
         kicked, locked = list(indices), set()
         
+        valid_taper_violations = []
         for i in range(len(path_pipes) - 1, 0, -1):
             curr_p, prev_p = path_pipes[i], path_pipes[i-1]
-            if curr_p in failed_pipes and (current_round - failed_pipes[curr_p]) < 10: continue
+            
+            if curr_p in failed_pipes and (current_round - failed_pipes[curr_p]) < 10: 
+                continue
                 
             if indices[curr_p] < indices[prev_p]:
                 if kicked[curr_p] < self.ctx.max_d_idx:
-                    kicked[curr_p] += 1
-                    locked.add(curr_p)
-                    return kicked, locked, f"BOTTLENECK: Boosted Pipe {curr_p} (Taper Violation)", curr_p
+                    valid_taper_violations.append(curr_p)
+
+        if valid_taper_violations:
+            target_pipe = None
+            for p in valid_taper_violations:
+                if p not in boosted_pipes or (current_round - boosted_pipes[p]) >= tenure:
+                    target_pipe = p
+                    break
+            
+            if target_pipe is None:
+                target_pipe = valid_taper_violations[0]
+
+            kicked[target_pipe] += 1
+            locked.add(target_pipe)
+            return kicked, locked, f"BOTTLENECK: Boosted Pipe {target_pipe} (Taper Violation)", target_pipe
                     
         unit_losses = self.ctx.get_cached_heuristics(indices)
         search_depth = max(1, int(len(path_pipes) * (0.3 + 0.4 * T)))
         
-        candidates = [(idx, unit_losses[idx]) for idx in path_pipes[:search_depth] 
-                      if indices[idx] < self.ctx.max_d_idx 
-                      and not (idx in failed_pipes and (current_round - failed_pipes[idx]) < 10)]
+        base_candidates = [(idx, unit_losses[idx]) for idx in path_pipes[:search_depth] 
+                           if indices[idx] < self.ctx.max_d_idx 
+                           and not (idx in failed_pipes and (current_round - failed_pipes[idx]) < 10)]
         
-        if not candidates: return indices, set(), "", -1
+        if not base_candidates: return indices, set(), "", -1
+
+        candidates = [c for c in base_candidates 
+                      if c[0] not in boosted_pipes or (current_round - boosted_pipes[c[0]]) >= tenure]
+        
+        if not candidates:
+            candidates = base_candidates
         
         boost_pct = 0.05 + (0.15 * T)
         n_boost = max(1, int(len(candidates) * boost_pct))
@@ -283,10 +306,11 @@ class KickStrategies:
             return best_sol, best_locked, f"ZERO-SUM ({mode_str}): P{best_up} upgraded. Cost: {best_cost/1e6:.4f}M$"
             
         return None, None, ""
-
+    
     def peripheral_trim_kick(self, indices, T, **kwargs):
         indices_copy, periphery_pipes = self.ctx.get_lazy_periphery(indices)
-        if not periphery_pipes: return None, None, ""
+        if not periphery_pipes: 
+            return None, None, "No targets"
         
         trim_pct = 0.02 + (0.13 * T)
         pipes_to_cut = max(1, int(len(periphery_pipes) * trim_pct))
@@ -299,11 +323,22 @@ class KickStrategies:
         for _ in range(max_checks):
             combo = random.sample(periphery_pipes[:combo_limit], pipes_to_cut)
             
-            if any(indices_copy[p] == 0 for p in combo): continue
+            valid_combo = False
+            for p in combo:
+                if indices_copy[p] > 0:
+                    valid_combo = True
+                    break
+            
+            if not valid_combo: 
+                continue
             
             test_sol = list(indices_copy)
-            for p in combo: test_sol[p] -= 1
-            locked = set(combo)
+            locked = set()
+            
+            for p in combo: 
+                if test_sol[p] > 0:
+                    test_sol[p] -= 1
+                    locked.add(p)
             
             healed_sol, is_feasible, boosts = self.ls.heal_network(test_sol, locked)
             if is_feasible:
@@ -311,10 +346,12 @@ class KickStrategies:
                 h_score = h_c - ((h_p - self.ctx.simulator.config.h_min) * dyn_bonus)
                 candidates.append((h_score, healed_sol, locked, boosts))
                 
-        if not candidates: return None, None, ""
+        if not candidates: 
+            return None, None, "No valid trim candidates found or heal failed"
         
         candidates.sort(key=lambda x: x[0])
         chosen = random.choice(candidates[:3])
+        
         return chosen[1], chosen[2], f"TRIM: Shrunk {len(chosen[2])} peripheral pipes. Healed {chosen[3]}x."
 
     def smart_perturbation_kick(self, indices, T, **kwargs):        
@@ -354,9 +391,8 @@ class KickStrategies:
         ruin_center = crit_node if T < 0.8 else random.choice(list(self.ctx.base_G_flow.nodes()))
         
         base_mu = kwargs.get('mu_ruin_pct', 0.05)
-        dynamic_mu = base_mu + (0.10 * T) 
         dynamic_sigma = 0.01 + (0.04 * T)
-        target_pct = random.gauss(dynamic_mu, dynamic_sigma)
+        target_pct = random.gauss(base_mu, dynamic_sigma)
         target_pct = max(0.01, min(0.25, target_pct))
         
         target_pipes = max(3, int(self.ctx.num_pipes * target_pct))
@@ -397,90 +433,97 @@ class KickStrategies:
     
     def basin_escape(self, indices, T, **kwargs):
         global_archive = kwargs.get('global_archive', [])
-        if not global_archive or len(global_archive) < 2: return None, None, "Archive too small"
+        if not global_archive or len(global_archive) < 2:
+            return None, None, "Archive too small"
 
-        best_dist, diverse_sol = -1, None
-        for _, arch_sol in global_archive:
+        num_pipes = len(indices)
+        min_dist_threshold = max(5, int(num_pipes * 0.05))
+        
+        target_sol = None
+        max_dist = -1
+        
+        for arch_cost, arch_sol in global_archive:
             dist = sum(1 for a, b in zip(indices, arch_sol) if a != b)
-            if dist > best_dist: best_dist, diverse_sol = dist, arch_sol
+            
+            if dist > max_dist and dist >= min_dist_threshold:
+                max_dist = dist
+                target_sol = arch_sol
+                
+        if target_sol is None:
+            return None, None, f"Archive degenerated. No distinct basins found."
 
-        if diverse_sol is None or best_dist < max(2, int(self.ctx.num_pipes * 0.03)):
-            return None, None, "No diverse target"
-
-        diff_pipes = [i for i in range(self.ctx.num_pipes) if indices[i] != diverse_sol[i]]
+        diff_pipes = [i for i in range(num_pipes) if indices[i] != target_sol[i]]
         
         base_mu = kwargs.get('mu_escape_pct', 0.20)
-        dynamic_mu = base_mu + (0.30 * T)
-        dynamic_sigma = 0.05 + (0.05 * T)
-        target_pct = random.gauss(dynamic_mu, dynamic_sigma)
-        target_pct = max(0.05, min(0.60, target_pct))
+        target_pct = max(0.05, min(0.60, random.gauss(base_mu + (0.20 * T), 0.05 + (0.05 * T))))
         
         n_replace = max(1, int(len(diff_pipes) * target_pct))
-        
-        if n_replace < 1: return None, None, ""
-        
         replace_pipes = random.sample(diff_pipes, n_replace)
         kicked = list(indices)
-        for p in replace_pipes: kicked[p] = diverse_sol[p]
+        for p in replace_pipes: kicked[p] = target_sol[p]
 
+        cost_limit = kwargs.get('cost_limit', float('inf'))
         healed, ok, boosts = self.ls.heal_network(kicked, set())
-        if not ok: return None, None, "Heal failed"
-
-        return healed, set(), f"BASIN-ESCAPE: Transplanted {n_replace} pipes (Size: {target_pct:.1%}). Healed {boosts}x.", target_pct
+        if not ok: 
+            return None, None, "Heal failed after transplant"
+            
+        log_msg = f"BASIN-ESCAPE: Transplanted {n_replace} pipes (Size: {target_pct:.1%}). Healed {boosts}x."
+        return healed, set(), log_msg, target_pct
     
-    def spatial_perturb_kick(self, indices, T, **kwargs):  
-        if not hasattr(self.ctx, 'base_G_flow'):
-            return self.smart_perturbation_kick(indices, T, **kwargs)
-
-        G = self.ctx.base_G_flow
-        if not G.nodes: return None, None, ""
-
-        base_radius = 2 if self.ctx.num_pipes < 50 else (3 if self.ctx.num_pipes < 200 else (5 if self.ctx.num_pipes < 1000 else 8))
-        radius = base_radius + int(base_radius * T)
-        
-        epicenter = random.choice(list(G.nodes()))
-        local_nodes = set(nx.single_source_shortest_path_length(G, epicenter, cutoff=radius).keys())
-        
-        local_pipes = set()
-        
-        if G.is_multigraph():
-            for u, v, k in G.edges(keys=True):
-                if (u in local_nodes or v in local_nodes) and isinstance(k, int):
-                    local_pipes.add(k)
-        else:
-            for u, v, data in G.edges(data=True):
-                if u in local_nodes or v in local_nodes:
-                    for val in data.values():
-                        if isinstance(val, int) and 0 <= val < self.ctx.num_pipes:
-                            local_pipes.add(val)
-                            break
-                            
-        if not local_pipes: 
-            return self.smart_perturbation_kick(indices, T, **kwargs)
-
-        kicked = list(indices)
-        locked = set()
-        
-        for i in range(self.ctx.num_pipes):
-            if i not in local_pipes:
-                locked.add(i)
-                
-        mutations_made = 0
-        max_perturb = kwargs.get('max_perturb', self.ctx.num_pipes)
+    def spatial_perturb_kick(self, indices, **kwargs):
+        T = kwargs.get('T', 0.5)
+        num_pipes = len(indices)
         
         base_mu = kwargs.get('mu_spatial_pct', 0.20)
-        dynamic_mu = base_mu + (0.15 * T)
-        dynamic_sigma = 0.02 + (0.05 * T)
-        target_pct = random.gauss(dynamic_mu, dynamic_sigma)
-        target_pct = max(0.01, min(0.40, target_pct))
+        dynamic_sigma = 0.02 + (0.10 * T) 
+        target_pct = max(0.02, min(0.60, random.gauss(base_mu, dynamic_sigma)))
         
-        target_mutations = min(max_perturb, max(1, int(len(local_pipes) * target_pct)))
+        target_size = max(2, int(num_pipes * target_pct))
         
-        for p_idx in random.sample(list(local_pipes), min(len(local_pipes), target_mutations)):
-            shift = random.choice([-2, -1, 1, 2]) if T > 0.6 else random.choice([-1, 1])
-            new_val = kicked[p_idx] + shift
-            if 0 <= new_val <= self.ctx.max_d_idx:
-                kicked[p_idx] = new_val
-                mutations_made += 1
+        max_p = kwargs.get('max_perturb', int(num_pipes * 0.50))
+        target_size = min(target_size, max_p)
 
-        return kicked, locked, f"SPATIAL-PERTURB: Epicenter {epicenter} (R={radius}). Mutated {mutations_made} pipes. Frozen {len(locked)}.", target_pct
+        import networkx as nx
+        physical_G = nx.Graph(self.ctx.base_G_flow) 
+
+        local_pipes = set()
+        
+        for _ in range(5):
+            epicenter_node = random.choice(list(physical_G.nodes()))
+            
+            radius = 1
+            while len(local_pipes) < target_size and radius < 20:
+                subgraph = nx.ego_graph(physical_G, epicenter_node, radius=radius, undirected=True)
+                
+                for u, v in subgraph.edges():
+                    key = (u, v)
+                    if key in self.ctx.edge_to_pipe:
+                        local_pipes.add(self.ctx.edge_to_pipe[key])
+                    elif (v, u) in self.ctx.edge_to_pipe:
+                        local_pipes.add(self.ctx.edge_to_pipe[(v, u)])
+                        
+                radius += 1
+                
+                if radius > 1 and len(subgraph.nodes()) == len(nx.ego_graph(physical_G, epicenter_node, radius=radius-1).nodes()):
+                    break
+                    
+            if len(local_pipes) >= target_size:
+                break 
+
+        if len(local_pipes) < target_size:
+            local_pipes = set(random.sample(range(num_pipes), target_size))
+
+        local_pipes = list(local_pipes)[:target_size]
+
+        kicked = list(indices)
+        for p in local_pipes:
+            shift = random.choice([-2, -1, 1, 2])
+            kicked[p] = max(1, min(self.ctx.max_d_idx - 1, kicked[p] + shift))
+
+        healed, ok, boosts = self.ls.heal_network(kicked, set())
+        if not ok:
+            return None, None, "Heal failed after spatial perturb"
+
+        log_msg = f"SPATIAL-PERTURB: Shifted {len(local_pipes)} pipes (Size: {target_pct:.1%}). Healed {boosts}x."
+        
+        return healed, set(), log_msg, target_pct

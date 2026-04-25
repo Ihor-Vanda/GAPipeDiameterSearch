@@ -256,9 +256,14 @@ class IslandWorker:
             "SMART_PERTURB", "RUIN_RECREATE", "BASIN_ESCAPE", "SUBMARINE", "SPATIAL_PERTURB"
         ]
         
-        self.strat_wins = {s: 1.0 for s in all_tracked}
-        self.strat_tries = {s: 1.0 for s in all_tracked}
-        self.strat_consecutive_fails = {s: 1.0 for s in all_tracked}
+        self.strat_wins_cold = {s: 1.0 for s in all_tracked}
+        self.strat_wins_hot = {s: 1.0 for s in all_tracked} 
+
+        self.strat_tries_cold = {s: 1.0 for s in all_tracked}
+                
+        self.strat_tries_hot = {s: 1.0 for s in all_tracked}
+        
+        self.strat_consecutive_fails = {s: 0.0 for s in all_tracked}
         
         n = self.ctx.num_pipes
         single_cands = {"SMALL": max(6, n//5), "MEDIUM": max(6, n//10), 
@@ -310,7 +315,10 @@ class IslandWorker:
         self._last_ping_time = time.time()
         
         if self.max_sims != float('inf'):
-            self._migration_interval_sims = max(1000, self.max_sims // 20)
+            if self.progress_ratio > 0.8:
+                self._migration_interval_sims = max(1000, self.max_sims // 100) 
+            else:
+                self._migration_interval_sims = max(1000, int((self.max_sims // 20) * (1.0 - 0.6 * self.progress_ratio)))
         else:
             self._migration_interval_sims = 15000
             
@@ -356,10 +364,15 @@ class IslandWorker:
             self.progress_ratio = min(1.0, epoch_sims / max(1, self.max_sims)) \
                 if self.max_sims != float('inf') else min(1.0, elapsed / time_budget)
             self.is_late_game = self.progress_ratio > 0.5 
-            self.stag_limit = 4 + int(8 * self.progress_ratio)
+            
+            self.stag_limit = max(4, int(12 * (1.0 - self.progress_ratio)))
             
             if self.max_sims != float('inf'):
-                self._migration_interval_sims = max(1000, int((self.max_sims // 20) * (1.0 - 0.6 * self.progress_ratio)))
+                base_interval = self.max_sims // 20
+                if self.progress_ratio > 0.8:
+                    self._migration_interval_sims = max(1000, base_interval // 5)
+                else:
+                    self._migration_interval_sims = max(1000, int(base_interval * (1.0 - 0.6 * self.progress_ratio)))
             
             self._check_mini_restart(gb)
             if round_idx > 0 and round_idx % 6 == 0: self.pool.kick_tabu_set.clear()
@@ -539,10 +552,11 @@ class IslandWorker:
         
         if getattr(self, 'ipc_immunity', 0) > 0:
             return
-            
-        global_lag = (self.run_best_cost - self.global_best_cost) / max(self.global_best_cost, 1)
         
-        if (global_lag > 0.02 and self.stagnation_counter >= self.stag_limit * 2) or global_lag > 0.05:
+        global_lag = (self.run_best_cost - self.global_best_cost) / max(self.global_best_cost, 1.0)
+        lag_threshold = 0.005 if self.is_late_game else 0.02 
+        
+        if (global_lag > lag_threshold and self.stagnation_counter >= self.stag_limit * 2) or global_lag > 0.05:
             if gb and gb[1]:
                 self.ctx.log(f"   [RESCUE] Worker lagging by {global_lag:.1%}. Abandoning dead basin and adopting Global Best {gb[0]/1e6:.4f}M$!")
                 
@@ -631,341 +645,355 @@ class IslandWorker:
                     self.pool.active_pool.insert(0, (c - (p_surplus * eff_bonus) - (self.run_best_cost * 0.1), c, swapped))
     
     def _apply_kick(self, round_idx, shared_progress, gb):
-        n_total = sum(self.strat_tries.values())
+        ABLATION_MODE = True 
+ 
+        real_T = min(1.0, self.stagnation_counter / max(1, self.stag_limit * 3.0))
+        T = 0.5 if ABLATION_MODE else real_T
+        
+        is_late_game = self.progress_ratio >= 0.5
+        active_wins = self.strat_wins_hot if is_late_game else self.strat_wins_cold
+        active_tries = self.strat_tries_hot if is_late_game else self.strat_tries_cold
+        n_total = sum(active_tries.values())
 
-        T = min(1.0, self.stagnation_counter / max(1, self.stag_limit * 3.0))
-
-        if T >= 0.9:
-            pool_strats = ["BASIN_ESCAPE", "SPATIAL_PERTURB", "RUIN_RECREATE"]
-            if len(self.global_archive) < 2: pool_strats.remove("BASIN_ESCAPE")
-        elif T >= 0.5:
-            pool_strats = ["SPATIAL_PERTURB", "SMART_PERTURB", "RUIN_RECREATE", "TOPO_INV"]
+        if not hasattr(self, '_last_strategy'): self._last_strategy = None
+        if not hasattr(self, '_strategy_burst_count'): self._strategy_burst_count = 0
+ 
+        if real_T >= 0.90:
+            if len(self.global_archive) >= 2:
+                pool_strats = ["BASIN_ESCAPE"] 
+            else:
+                pool_strats = ["RUIN_RECREATE", "SPATIAL_PERTURB", "TOPO_INV"]
+        elif real_T >= 0.40:
+            pool_strats = ["SHOCK", "BOTTLENECK", "LOOP_BALANCE", "ZERO_SUM", "TRIM",
+                           "SPATIAL_PERTURB", "SMART_PERTURB", "RUIN_RECREATE", "TOPO_INV"]
         else:
             pool_strats = ["SHOCK", "BOTTLENECK", "LOOP_BALANCE", "ZERO_SUM", "TRIM"]
-
+ 
         if nx.is_tree(self.ctx.base_G_flow) and "LOOP_BALANCE" in pool_strats:
             pool_strats.remove("LOOP_BALANCE")
-
+ 
         max_fails = 3 if T < 0.5 else 5
-        valid_strats = [s for s in pool_strats if s in self.strat_wins and self.strat_consecutive_fails.get(s, 0) < max_fails]
-        
+        valid_strats = [s for s in pool_strats if s in active_wins and self.strat_consecutive_fails.get(s, 0) < max_fails]
         if not valid_strats:
-            valid_strats = [s for s in pool_strats if s in self.strat_wins]
-        
-        untried_strats = [s for s in pool_strats if s not in self.strat_wins]
-        
-        if untried_strats: 
+            valid_strats = [s for s in pool_strats if s in active_wins]
+ 
+        untried_strats = [s for s in pool_strats if s not in active_wins]
+
+        use_bandit = not ABLATION_MODE and not is_late_game and T < 0.60
+ 
+        if untried_strats:
             strategy = random.choice(untried_strats)
+        elif not use_bandit:
+            last_s = getattr(self, '_last_strategy', None)
+            vnd_pool = [s for s in valid_strats if s != last_s] if valid_strats else [s for s in pool_strats if s != last_s]
+            
+            if not vnd_pool:
+                vnd_pool = valid_strats if valid_strats else pool_strats
+                
+            strategy = random.choice(vnd_pool)
         else:
-            exploration_C = 0.15 + (0.25 * T) 
-            strategy = max(valid_strats, key=lambda s: (self.strat_wins[s] / max(1, self.strat_tries.get(s, 1))) + exploration_C * math.sqrt(math.log(max(1, n_total)) / max(1, self.strat_tries.get(s, 1))))
+            exploration_C = 0.05 + (0.15 * real_T)
+            
+            def get_ucb_score(s):
+                base_score = active_wins[s] / max(1, active_tries.get(s, 1))
+                explore_bonus = exploration_C * math.sqrt(math.log(max(1, n_total)) / max(1, active_tries.get(s, 1)))
+                
+                burst_penalty = 1.0
+                if s == getattr(self, '_last_strategy', None):
+                    burst = getattr(self, '_strategy_burst_count', 0)
+                    burst_penalty = 0.5 ** burst
+                
+                return (base_score + explore_bonus) * burst_penalty
 
-        self.strat_tries[strategy] = self.strat_tries.get(strategy, 0) + 1
-        self.ctx.log(f"[FORCE] Temp: {T:.2f} (Stag: {self.stagnation_counter}/{self.stag_limit}) -> Applying '{strategy}'...")
+            strategy = max(valid_strats, key=get_ucb_score)
+            
+        if strategy == getattr(self, '_last_strategy', None):
+            self._strategy_burst_count += 1
+        else:
+            self._last_strategy = strategy
+            self._strategy_burst_count = 1
 
-        if T >= 0.8 and self.pool.active_pool:
+        active_tries[strategy] = active_tries.get(strategy, 0) + 1
+
+        mode_label = "[VND RAND]" if not use_bandit else f"[UCB1 Temp: {T:.2f}]"
+        self.ctx.log(f"{mode_label} (Stag: {self.stagnation_counter}/{self.stag_limit}) -> Applying '{strategy}'...")
+ 
+        if real_T >= 0.8 and self.pool.active_pool:
             source_pool = [x for x in self.pool.active_pool if self.ctx.get_cached_stats(x[2])[1] >= self.ctx.simulator.config.h_min]
             if not source_pool: source_pool = self.pool.active_pool
-            kick_target = max([x[2] for x in source_pool], key=lambda s: self.pool.hamming_distance(s, self.run_best_sol))
-            
-        elif T >= 0.4 and self.pool.active_pool:
+            kick_target = max(source_pool, key=lambda x: self.pool.hamming_distance(x[2], self.run_best_sol))[2]
+        elif real_T >= 0.4 and self.pool.active_pool:
             kick_target = random.choice([x[2] for x in self.pool.active_pool])
-            
         else:
             kick_mode = round_idx % 3
             if kick_mode == 0: kick_target = self.run_best_sol
             elif kick_mode == 1 and self.pool.active_pool: kick_target = self.pool.active_pool[0][2]
-            else:
-                if self.pool.active_pool:
-                    kick_target = random.choice([x[2] for x in self.pool.active_pool])
-                else:
-                    kick_target = self.run_best_sol
-
+            else: kick_target = random.choice([x[2] for x in self.pool.active_pool]) if self.pool.active_pool else self.run_best_sol
+ 
         forced_sol, locked, path_sig, failed_pipe_id = None, None, None, -1
-        used_pct = None 
-        log_msg = ""
-        
+        used_pct, log_msg = None, ""
+ 
         if not hasattr(self, 'bottleneck_failed_pipes'): self.bottleneck_failed_pipes = {}
         if not hasattr(self, 'loop_balance_failed_pipes'): self.loop_balance_failed_pipes = {}
         if not hasattr(self, 'zero_sum_tabu'): self.zero_sum_tabu = {}
-        
-        n_cap = {"SMALL": 999, "MEDIUM": 25, "LARGE": 40, "XLARGE": 60}
-
+        if not hasattr(self, 'bottleneck_boosted_pipes'): self.bottleneck_boosted_pipes = {}
+ 
         kick_args = {
             'T': T,
             'failed_pipes': self.bottleneck_failed_pipes if strategy == "BOTTLENECK" else self.loop_balance_failed_pipes,
+            'boosted_pipes': getattr(self, 'bottleneck_boosted_pipes', {}),
             'current_round': round_idx,
             'tabu_set': self.pool.kick_tabu_set,
             'dyn_bonus': self.base_dyn_bonus,
             'global_archive': self.global_archive,
-            'max_perturb': n_cap.get(self.network_class, 40),
+            'max_perturb': int(self.ctx.num_pipes * 0.50),
             'zero_sum_tabu': self.zero_sum_tabu,
-            'mu_ruin_pct': getattr(self, 'mu_ruin_pct', 0.05),
+            'mu_ruin_pct':    getattr(self, 'mu_ruin_pct',    0.05),
             'mu_perturb_pct': getattr(self, 'mu_perturb_pct', 0.10),
             'mu_spatial_pct': getattr(self, 'mu_spatial_pct', 0.20),
-            'mu_escape_pct': getattr(self, 'mu_escape_pct', 0.20)
+            'mu_escape_pct':  getattr(self, 'mu_escape_pct',  0.20),
         }
 
         try:
-            if strategy == "SHOCK": res = self.kicker.forcing_hand_kick(kick_target, **kick_args)
-            elif strategy == "BOTTLENECK": res = self.kicker.upstream_bottleneck_kick(kick_target, **kick_args)
-            elif strategy == "TOPO_INV": res = self.kicker.topological_inversion_kick(kick_target, **kick_args)
-            elif strategy == "LOOP_BALANCE": res = self.kicker.loop_balancing_kick(kick_target, **kick_args)
-            elif strategy == "ZERO_SUM": res = self.kicker.zero_sum_shift_kick(kick_target, **kick_args)
-            elif strategy == "SPATIAL_PERTURB": res = self.kicker.spatial_perturb_kick(kick_target, **kick_args)
-            elif strategy == "TRIM": res = self.kicker.peripheral_trim_kick(kick_target, **kick_args)
-            elif strategy == "SMART_PERTURB": res = self.kicker.smart_perturbation_kick(kick_target, **kick_args)
-            elif strategy == "RUIN_RECREATE": res = self.kicker.ruin_and_recreate_kick(kick_target, **kick_args)
-            elif strategy == "BASIN_ESCAPE": res = self.kicker.basin_escape(kick_target, **kick_args)
-            else: res = self.kicker.forcing_hand_kick(kick_target, **kick_args)
-
-            if not isinstance(res, tuple) or len(res) < 3:
-                self.ctx.log(f"      -> Unexpected return format from {strategy}")
-                return
-
-            forced_sol = res[0]
-            locked = res[1]
-            log_msg = res[2]
-            
+            if   strategy == "SHOCK":          res = self.kicker.forcing_hand_kick(kick_target, **kick_args)
+            elif strategy == "BOTTLENECK":     res = self.kicker.upstream_bottleneck_kick(kick_target, **kick_args)
+            elif strategy == "TOPO_INV":       res = self.kicker.topological_inversion_kick(kick_target, **kick_args)
+            elif strategy == "LOOP_BALANCE":   res = self.kicker.loop_balancing_kick(kick_target, **kick_args)
+            elif strategy == "ZERO_SUM":       res = self.kicker.zero_sum_shift_kick(kick_target, **kick_args)
+            elif strategy == "SPATIAL_PERTURB":res = self.kicker.spatial_perturb_kick(kick_target, **kick_args)
+            elif strategy == "TRIM":           res = self.kicker.peripheral_trim_kick(kick_target, **kick_args)
+            elif strategy == "SMART_PERTURB":  res = self.kicker.smart_perturbation_kick(kick_target, **kick_args)
+            elif strategy == "RUIN_RECREATE":  res = self.kicker.ruin_and_recreate_kick(kick_target, **kick_args)
+            elif strategy == "BASIN_ESCAPE":   res = self.kicker.basin_escape(kick_target, **kick_args)
+            else:                              res = self.kicker.forcing_hand_kick(kick_target, **kick_args)
+ 
+            if not isinstance(res, tuple) or len(res) < 3: return
+            forced_sol, locked, log_msg = res[0], res[1], res[2]
+ 
             if len(res) >= 4:
-                extra_info = res[3]
-                if strategy in ["BOTTLENECK", "LOOP_BALANCE"]: 
-                    failed_pipe_id = extra_info
-                elif strategy == "TOPO_INV": 
-                    path_sig = extra_info
-                elif strategy in ["RUIN_RECREATE", "SMART_PERTURB", "SPATIAL_PERTURB", "BASIN_ESCAPE"]: 
-                    used_pct = extra_info
-
+                if strategy in ["BOTTLENECK", "LOOP_BALANCE"]: failed_pipe_id = res[3]
+                elif strategy == "TOPO_INV": path_sig = res[3]
+                elif strategy in ["RUIN_RECREATE", "SMART_PERTURB", "SPATIAL_PERTURB", "BASIN_ESCAPE"]: used_pct = res[3]
         except Exception as e:
-            self.ctx.log(f"      -> Critical execution error in {strategy}: {e}")
+            self.ctx.log(f"      -> Error in {strategy}: {e}")
             return
 
         if forced_sol is None or locked is None:
             self.strat_consecutive_fails[strategy] = self.strat_consecutive_fails.get(strategy, 0) + 1
-            
-            if failed_pipe_id != -1: 
+            if failed_pipe_id != -1:
                 if strategy == "BOTTLENECK": self.bottleneck_failed_pipes[failed_pipe_id] = round_idx
                 elif strategy == "LOOP_BALANCE": self.loop_balance_failed_pipes[failed_pipe_id] = round_idx
-            reason = log_msg if log_msg else "Unhealable structural damage / No targets"
-            self.ctx.log(f"      -> Kick '{strategy}' failed. Reason: {reason}")
-            if strategy in ["TRIM", "LOOP_BALANCE", "BOTTLENECK", "TOPO_INV"]:
-                decay_factor = 0.98
-            else:
-                decay_factor = 0.90
-
-            self.strat_wins[strategy] = self.strat_wins.get(strategy, 1.0) * decay_factor
-            return
-        
-        self.strat_consecutive_fails[strategy] = 0
             
+            reason = log_msg if log_msg else "No targets"
+            self.ctx.log(f"      -> Kick '{strategy}' failed. Reason: {reason}")
+            
+            if strategy == "TOPO_INV" and "All paths tabu" in reason:
+                self.pool.kick_tabu_set.clear()
+                self.ctx.log("      -> [TABU CLEARED] Topo paths memory reset to unblock strategy.")
+            
+            if use_bandit:
+                active_wins[strategy] = max(0.1, active_wins.get(strategy, 1.0) * 0.25)
+            return
+ 
+        self.strat_consecutive_fails[strategy] = 0
+ 
         c, p, feas, _ = self.ctx.get_cached_stats(forced_sol)
-
         base_h_min = self.ctx.simulator.config.h_min
-        catastrophic_limit = max(20.0, base_h_min * (1.0 + T))
         
-        raw_deficit = max(0.0, base_h_min - p) if feas else float('inf')
-        
-        if raw_deficit > catastrophic_limit:
-            self.ctx.log(f"      -> Kick Discarded Early (Catastrophic Drop: -{raw_deficit:.1f}m > limit {-catastrophic_limit:.1f}m)")
+        explosion_threshold = self.run_best_cost * (1.5 + 0.5 * T)
+
+        if feas and max(0.0, base_h_min - p) > max(20.0, base_h_min * (1.0 + T)):
             self.strat_consecutive_fails[strategy] = self.strat_consecutive_fails.get(strategy, 0) + 1
             return
-        
-        max_allowed_deficit = 0.5 * T
-        relaxed_h_min = self.ctx.simulator.config.h_min - max_allowed_deficit
-        
+ 
+        relaxed_h_min = base_h_min - (0.0 if ABLATION_MODE else 0.5 * T)
         if not feas or p < relaxed_h_min:
             heal_locks = set() if strategy in ["SPATIAL_PERTURB", "SMART_PERTURB", "RUIN_RECREATE"] else locked
-            
-            forced_sol, ok, _ = self.ls.heal_network(forced_sol, heal_locks)
-            if not ok:
-                if log_msg: self.ctx.log(f"     -> {log_msg}")
-                self.ctx.log(f"     -> Kick Failed (Unhealable structural damage). Discarded.")
+            forced_sol, ok, boosts = self.ls.heal_network(forced_sol, heal_locks)
+            if not ok: 
+                if boosts > 0: self.ctx.log(f"     -> Heal Aborted Early: Cost exceeded limit.")
                 return
-
+ 
         if log_msg: self.ctx.log(f"     -> {log_msg}")
-            
-        base_margin = 0.03 + (0.07 * T)
-        water_level = self.run_best_cost * (1.0 + base_margin)
-        
+ 
         if strategy == "BASIN_ESCAPE":
-            final_sol = forced_sol 
-            if self.run_best_sol:
-                self.pool.basin_tabu.append(tuple(self.run_best_sol))
-                
+            final_sol = forced_sol
+            if self.run_best_sol: self.pool.basin_tabu.append(tuple(self.run_best_sol))
         else:
             quick_passes = max(1, 2 - int(T * 2))
-            
             locked_for_squeeze = set() if strategy in ["SMART_PERTURB", "SPATIAL_PERTURB", "RUIN_RECREATE"] else locked
-            
             quick_sol = self.ls.gradient_squeeze(forced_sol, locked_pipes=locked_for_squeeze, max_passes=quick_passes, quick_mode=True, dyn_bonus=self.base_dyn_bonus)
-                
             quick_cost, quick_p, quick_f, _ = self.ctx.get_cached_stats(quick_sol)
-            
+ 
             hb_margin = 0.03 - (0.02 * self.progress_ratio)
-            hyperband_threshold = self.run_best_cost * (1.0 + hb_margin)
-            
-            is_promising = quick_f and quick_p >= self.ctx.simulator.config.h_min and (quick_cost < hyperband_threshold)
-            
-            if is_promising:
+            if quick_f and quick_p >= base_h_min and quick_cost < self.run_best_cost * (1.0 + hb_margin):
                 gap = (quick_cost - self.run_best_cost) / max(self.run_best_cost, 1.0)
-                
-                if T >= 0.6: deep_passes = 1
-                elif T >= 0.4: deep_passes = 2 
-                elif gap < -0.0001: deep_passes = 8 if self.ctx.num_pipes >= 200 else 5 
-                elif gap <= 0.002: deep_passes = 3 
-                elif gap <= 0.02: deep_passes = 2
-                elif gap <= 0.05: deep_passes = 2
-                else: deep_passes = 1
-                
+                if   T >= 0.6: deep_passes = 1
+                elif T >= 0.4: deep_passes = 2
+                elif gap < -0.0001: deep_passes = 8 if self.ctx.num_pipes >= 200 else 5
+                elif gap <= 0.02: deep_passes = 3 if gap <= 0.002 else 2
+                else: deep_passes = 2 if gap <= 0.05 else 1
+ 
                 consensus_locked = set()
-                if len(self.global_archive) >= 3 and self.is_late_game and T < 0.2 and not getattr(self, '_force_flush_next', False):
+                if len(self.global_archive) >= 3 and is_late_game and T < 0.2 and not getattr(self, '_force_flush_next', False):
                     arch_sols = [x[1] for x in self.global_archive]
-                    raw_consensus = set()
-                    for i in range(self.ctx.num_pipes):
-                        if all(sol[i] == arch_sols[0][i] for sol in arch_sols):
-                            raw_consensus.add(i)
-                    
-                    freeze_pct = 0.25 if self.progress_ratio > 0.6 else 0.10
-                    max_frozen = max(5, int(self.ctx.num_pipes * freeze_pct))
-                    if self.progress_ratio > 0.88: max_frozen = 0
-                    
-                    if len(raw_consensus) > max_frozen and max_frozen > 0:
+                    raw_consensus = {i for i in range(self.ctx.num_pipes) if all(sol[i] == arch_sols[0][i] for sol in arch_sols)}
+                    max_frozen = 0 if self.progress_ratio > 0.88 else max(5, int(self.ctx.num_pipes * (0.25 if self.progress_ratio > 0.6 else 0.10)))
+                    if len(raw_consensus) > max_frozen > 0:
                         interesting = [i for i in raw_consensus if 0 < arch_sols[0][i] < self.ctx.max_d_idx]
                         consensus_locked = set(list(interesting)[:max_frozen])
-                    elif max_frozen > 0:
-                        consensus_locked = raw_consensus
-                            
+                    elif max_frozen > 0: consensus_locked = raw_consensus
+ 
                 safe_consensus = consensus_locked - (locked if locked else set())
                 final_locked = locked_for_squeeze.union(safe_consensus)
-                
-                self.ctx.log(f"        [HYPERBAND] Gap {gap:.1%}. Deep Squeeze ({deep_passes} passes, {len(safe_consensus)} frozen)...")
                 final_sol = self.ls.gradient_squeeze(quick_sol, locked_pipes=final_locked, max_passes=deep_passes, quick_mode=(gap >= 0), dyn_bonus=self.base_dyn_bonus)
             else:
                 final_sol = quick_sol
-
+ 
         c, p, feas, _ = self.ctx.get_cached_stats(final_sol)
-
-        deficit = max(0.0, self.ctx.simulator.config.h_min - p) if feas else float('inf')
-        is_relaxed_valid = feas and (deficit <= max_allowed_deficit)
-
-        if is_relaxed_valid:
-            dynamic_penalty_factor = self.run_best_cost * 0.10
-            penalty = deficit * dynamic_penalty_factor
-            effective_cost = c + penalty
+        deficit = max(0.0, base_h_min - p) if feas else float('inf')
+        
+        if feas and (deficit <= (0.0 if ABLATION_MODE else 0.5 * T)):
+            effective_cost = c + deficit * (self.run_best_cost * 0.10)
             
-            explosion_threshold = self.run_best_cost * (1.5 + 0.5 * T)
-            
-            if effective_cost > explosion_threshold:
+            if effective_cost > explosion_threshold: 
                 self.ctx.log(f"      -> Hard-Rejected (Cost Explosion): {effective_cost/1e6:.4f}M$")
-                is_relaxed_valid = False
                 
-        if is_relaxed_valid:
-            if deficit == 0:
-                p_surplus = max(0.0, p - self.ctx.simulator.config.h_min)
-                eff_bonus = self.base_dyn_bonus * 0.2 if p_surplus > 10.0 else self.base_dyn_bonus
-                score = effective_cost - (p_surplus * eff_bonus)
+                if use_bandit:
+                    active_wins[strategy] = max(0.1, active_wins.get(strategy, 1.0) * 0.50)
+                
+                if used_pct is not None and not ABLATION_MODE:
+                    shrink = 0.90
+                    if strategy == "RUIN_RECREATE": self.mu_ruin_pct *= shrink
+                    elif strategy == "SMART_PERTURB": self.mu_perturb_pct *= shrink
+                    elif strategy == "SPATIAL_PERTURB": self.mu_spatial_pct *= shrink
+                    self.ctx.log(f"         🧠 [JADE] Shrunk {strategy} size due to explosion.")
+                return
+        else: 
+            return
+ 
+        score = effective_cost - (max(0.0, p - base_h_min) * (self.base_dyn_bonus * 0.2 if max(0.0, p - base_h_min) > 10.0 else self.base_dyn_bonus)) if deficit == 0 else effective_cost
+
+        if deficit == 0 and effective_cost < self.run_best_cost:
+            if (self.run_best_cost - effective_cost) > (self.run_best_cost * 0.02) and self.ctx.is_ghost_solution(final_sol, effective_cost): return
+ 
+            diff = self.run_best_cost - effective_cost
+            self.run_best_cost, self.run_best_sol = effective_cost, final_sol
+            self.pool.active_pool.insert(0, (score, effective_cost, final_sol))
+ 
+            self.stagnation_counter = 0 if diff > (self.run_best_cost * 0.005) else max(0, self.stagnation_counter - 2)
+ 
+            if use_bandit:
+                improvement_pct = diff / max(self.run_best_cost, 1.0)
+                reward = 1.0 + (improvement_pct * 100.0) 
+                new_win_score = active_wins.get(strategy, 1.0) + reward
+                active_wins[strategy] = min(4.0, new_win_score) 
+                
+                for k in list(active_wins.keys()):
+                    if k != strategy:
+                        active_wins[k] = max(1.0, active_wins[k] * 0.80)
+ 
+            if used_pct is not None and not ABLATION_MODE:
+                alpha = 0.15 * (1.0 - 0.5 * (math.log1p(used_pct * 10) / math.log1p(10)))
+                if strategy == "RUIN_RECREATE": self.mu_ruin_pct = (1 - alpha) * self.mu_ruin_pct + alpha * used_pct
+                elif strategy == "SMART_PERTURB": self.mu_perturb_pct = (1 - alpha) * self.mu_perturb_pct + alpha * used_pct
+                elif strategy == "SPATIAL_PERTURB": self.mu_spatial_pct = (1 - alpha) * self.mu_spatial_pct + alpha * used_pct
+                    
+            self.ctx.log(f"   > [FORCE] 💎 Direct Record Update: -${diff:,.0f} ({self.run_best_cost/1e6:.4f}M$)")
+            self._update_global_best(shared_progress)
+
+        elif strategy == "BASIN_ESCAPE" and deficit == 0:
+            self.pool.active_pool.clear()
+            self.pool.active_pool.append((score, effective_cost, final_sol))
+            self.stagnation_counter = 0
+            self.corridor_pool_streak = 0
+            self.bottleneck_failed_pipes.clear()
+            if hasattr(self, 'bottleneck_boosted_pipes'): self.bottleneck_boosted_pipes.clear()
+            self.loop_balance_failed_pipes.clear()
+            self.zero_sum_tabu.clear()
+            self._force_flush_next = True
+            self.run_best_cost = effective_cost
+            self.run_best_sol = list(final_sol)
+            self.ipc_immunity = 50
+            if effective_cost < self.global_best_cost: self._update_global_best(shared_progress)
+            self.ctx.log(f"      -> POOL FLUSHED. Adopted Major Escape: {effective_cost/1e6:.4f}M$")
+ 
+            decay = 0.3
+            for k in self.strat_wins_hot:
+                self.strat_wins_hot[k] = max(1.0, self.strat_wins_hot[k] * decay)
+                self.strat_tries_hot[k] = max(1.0, self.strat_tries_hot[k] * decay)
+            for k in self.strat_wins_cold:
+                self.strat_wins_cold[k] = max(1.0, self.strat_wins_cold[k] * decay)
+                self.strat_tries_cold[k] = max(1.0, self.strat_tries_cold[k] * decay)
+
+            if used_pct is not None and not ABLATION_MODE:
+                self.mu_escape_pct = (1 - 0.10) * self.mu_escape_pct + 0.10 * used_pct
+ 
+        elif effective_cost < (self.run_best_cost * (1.03 + 0.07 * T)) and not self.pool.is_basin_tabu(final_sol):
+            pool_gap = (effective_cost - self.run_best_cost) / max(self.run_best_cost, 1)
+            max_pool_gap = 0.20 if T > 0.6 else (0.08 if is_late_game else 0.15)
+ 
+            if self.ctx.num_pipes >= 200 and pool_gap > max_pool_gap:
+                self.ctx.log(f"     -> Pool Filtered (gap {pool_gap:.1%}): {effective_cost/1e6:.4f}M$")
             else:
-                score = effective_cost
-
-            if deficit == 0 and effective_cost < self.run_best_cost:
-                is_ghost = False
-                if (self.run_best_cost - effective_cost) > (self.run_best_cost * 0.02):
-                    is_ghost = self.ctx.is_ghost_solution(final_sol, effective_cost)
-                    
-                if is_ghost:
-                    self.ctx.log(f"   > [SHIELD] Force illusion blocked ({effective_cost/1e6:.4f}M$)!")
-                else:
-                    diff = self.run_best_cost - effective_cost
-                    self.run_best_cost, self.run_best_sol = effective_cost, final_sol
-                    self.pool.active_pool.insert(0, (score, effective_cost, final_sol))
-                    
-                    if diff > (self.run_best_cost * 0.005): 
-                        self.stagnation_counter = 0
-                    else:
-                        pass
-                    
-                    improvement_pct = diff / self.run_best_cost
-                    reward = 10.0 * improvement_pct * 100 
-                    self.strat_wins[strategy] = self.strat_wins.get(strategy, 0) + max(1.0, reward)
-                    
-                    if used_pct is not None:
-                        if strategy == "RUIN_RECREATE":
-                            self.mu_ruin_pct = 0.9 * getattr(self, 'mu_ruin_pct', 0.05) + 0.1 * used_pct
-                        elif strategy == "SMART_PERTURB":
-                            self.mu_perturb_pct = 0.9 * getattr(self, 'mu_perturb_pct', 0.10) + 0.1 * used_pct
-                            self.ctx.log(f"   🧠 [LEARNING] SMART Perturb optimal size updated to {self.mu_perturb_pct:.1%}")
-                        elif strategy == "SPATIAL_PERTURB":
-                            self.mu_spatial_pct = 0.9 * getattr(self, 'mu_spatial_pct', 0.20) + 0.1 * used_pct
-                            self.ctx.log(f"   🧠 [LEARNING] SPATIAL Perturb optimal size updated to {self.mu_spatial_pct:.1%}")
-                    
-                    if diff > 0:
-                        for k in list(self.strat_wins.keys()):
-                            self.strat_wins[k] *= 0.97
-                            self.strat_tries[k] = max(1.0, self.strat_tries[k] * 0.97)
-                    
-                    self.ctx.log(f"   > [FORCE] 💎 Direct Record Update: -${diff:,.0f} ({self.run_best_cost/1e6:.4f}M$)")
-                    self._update_global_best(shared_progress)
-
-            else:
-                if strategy == "ZERO_SUM" and locked:
-                    up_pipe = list(locked)[0]
-                    self.zero_sum_tabu[up_pipe] = round_idx
-
-                if strategy == "BASIN_ESCAPE" and deficit == 0:
-                    self.pool.active_pool.clear() 
-                    self.pool.active_pool.append((score, effective_cost, final_sol))
-                    self.stagnation_counter = 0 
+                self.pool.active_pool.append((score * 1.05, effective_cost, final_sol))
+                if strategy in ["SMART_PERTURB", "RUIN_RECREATE", "ZERO_SUM", "LOOP_BALANCE"]: 
                     self.corridor_pool_streak = 0
-                    self._force_flush_next = True 
-                    
-                    self.run_best_cost = effective_cost
-                    self.run_best_sol = list(final_sol)
-                    self.ipc_immunity = 50
-                    
-                    if effective_cost < self.global_best_cost: self._update_global_best(shared_progress)
-                    self.ctx.log(f"      -> POOL FLUSHED. Adopted Major Escape: {effective_cost/1e6:.4f}M$")
-                    
-                    if used_pct is not None:
-                        self.mu_escape_pct = 0.9 * getattr(self, 'mu_escape_pct', 0.20) + 0.1 * used_pct
-                        self.ctx.log(f"   🧠 [LEARNING] Escape optimal size updated to {self.mu_escape_pct:.1%}")
-                    
-                elif effective_cost < water_level and not self.pool.is_basin_tabu(final_sol):
+                
+                if use_bandit:
                     hamming_dist = self.pool.hamming_distance(final_sol, self.run_best_sol)
                     diversity_ratio = hamming_dist / self.ctx.num_pipes
-                    
-                    if T >= 0.5 and diversity_ratio > 0.05:
-                        reward = 2.0 * diversity_ratio * T
-                        self.strat_wins[strategy] = self.strat_wins.get(strategy, 0) + reward
+                    if T >= 0.2 and diversity_ratio > 0.02:
+                        soft_reward = 0.5 * diversity_ratio * T
+                        active_wins[strategy] = min(4.0, active_wins.get(strategy, 1.0) + soft_reward)
+                
+                if used_pct is not None and not ABLATION_MODE:
+                    proximity = 1.0 - min(1.0, pool_gap / 0.10)
+                    if proximity > 0:
+                        alpha_weak = 0.03 * proximity 
+                        if strategy == "RUIN_RECREATE": self.mu_ruin_pct = (1 - alpha_weak) * self.mu_ruin_pct + alpha_weak * used_pct
+                        elif strategy == "SMART_PERTURB": self.mu_perturb_pct = (1 - alpha_weak) * self.mu_perturb_pct + alpha_weak * used_pct
+                        elif strategy == "SPATIAL_PERTURB": self.mu_spatial_pct = (1 - alpha_weak) * self.mu_spatial_pct + alpha_weak * used_pct
 
-                    pool_gap = (effective_cost - self.run_best_cost) / max(self.run_best_cost, 1)
-                    
-                    if T > 0.6:
-                        max_pool_gap = 0.20
-                    else:
-                        max_pool_gap = 0.08 if self.is_late_game else 0.15
-                    
-                    if self.ctx.num_pipes >= 200 and pool_gap > max_pool_gap:
-                        self.ctx.log(f"     -> Pool Filtered (gap {pool_gap:.1%}): {effective_cost/1e6:.4f}M$")
-                    else:
-                        self.pool.active_pool.append((score * 1.05, effective_cost, final_sol))
-                        if strategy in ["SMART_PERTURB", "RUIN_RECREATE", "ZERO_SUM", "LOOP_BALANCE"]:
-                            self.corridor_pool_streak = 0
-                            
-                        if deficit > 0:
-                            self.ctx.log(f"      ⚠️ [RELAXATION] Pooled invalid sol (p={p:.2f}m, eff_cost={effective_cost/1e6:.4f}M$)")
-                        else:
-                            self.ctx.log(f"      -> Added to Pool (Water Level Accept): {effective_cost/1e6:.4f}M$")
-                        
-                elif T >= 0.95 and not self.pool.is_basin_tabu(final_sol):
-                    self.pool.active_pool.append((score * 1.20, effective_cost, final_sol))
-                    self.stagnation_counter = int(self.stag_limit * 2.0)
-                    self.ctx.log(f"     -> 🚀 HAIL MARY ACCEPT (Forced Escape): {effective_cost/1e6:.4f}M$")
-                else:
-                    self.ctx.log(f"     -> Rejected (Poor or Tabu Basin): {effective_cost/1e6:.4f}M$")
-            
-            if path_sig: self.pool.kick_tabu_set.add(path_sig)
+                if strategy == "BOTTLENECK" and failed_pipe_id != -1:
+                    self.bottleneck_boosted_pipes[failed_pipe_id] = round_idx
+
+                self.ctx.log(f"      -> Added to Pool (Water Level Accept): {effective_cost/1e6:.4f}M$")
+ 
+        elif T >= 0.95 and not self.pool.is_basin_tabu(final_sol):
+            quick = self.ls.gradient_squeeze(final_sol, max_passes=1, quick_mode=True, dyn_bonus=self.base_dyn_bonus)
+            q_c, q_p, q_f, _ = self.ctx.get_cached_stats(quick)
+ 
+            if q_f and q_p >= base_h_min and q_c < self.run_best_cost:
+                diff = self.run_best_cost - q_c
+                self.run_best_cost, self.run_best_sol = q_c, quick
+                self.pool.active_pool.insert(0, (q_c, q_c, quick))
+                self.stagnation_counter = 0 if diff > (self.run_best_cost * 0.005) else max(0, self.stagnation_counter - 2)
+                
+                if use_bandit:
+                    reward = 1.0 + ((diff / max(self.run_best_cost, 1.0)) * 100.0)
+                    active_wins[strategy] = min(4.0, active_wins.get(strategy, 1.0) + reward)
+                
+                self._update_global_best(shared_progress)
+                self.ctx.log(f"     -> 🚀 HAIL MARY → DIRECT RECORD: {q_c/1e6:.4f}M$")
+            else:
+                self.pool.active_pool.append((score * 1.20, effective_cost, final_sol))
+                self.stagnation_counter = int(self.stag_limit * 1.8) 
+                self.ctx.log(f"     -> 🚀 HAIL MARY ACCEPT: {effective_cost/1e6:.4f}M$")
         else:
-            self.ctx.log(f"     -> Injection/Squeeze Failed: Infeasible/Exploded")
+            self.ctx.log(f"     -> Rejected (Poor or Tabu Basin): {effective_cost/1e6:.4f}M$")
+            
+            if used_pct is not None and not ABLATION_MODE:
+                shrink = 0.95
+                if strategy == "RUIN_RECREATE": 
+                    self.mu_ruin_pct = max(0.02, getattr(self, 'mu_ruin_pct', 0.05) * shrink)
+                elif strategy == "SMART_PERTURB": 
+                    self.mu_perturb_pct = max(0.03, getattr(self, 'mu_perturb_pct', 0.10) * shrink)
+                elif strategy == "SPATIAL_PERTURB": 
+                    self.mu_spatial_pct = max(0.05, getattr(self, 'mu_spatial_pct', 0.20) * shrink)
+ 
+        if path_sig: self.pool.kick_tabu_set.add(path_sig)
+        if strategy == "ZERO_SUM" and locked: self.zero_sum_tabu[list(locked)[0]] = round_idx
 
     def _generate_mutations(self):
         next_gen = []
