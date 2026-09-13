@@ -5,7 +5,7 @@ import math
 class LocalSearch:
     def __init__(self, ctx):
         self.ctx = ctx
-        
+
     def get_high_impact_pipes(self, indices, top_k):
         unit_losses = self.ctx.get_cached_heuristics(indices)
         impact_scores = []
@@ -49,7 +49,7 @@ class LocalSearch:
         passes = 0
 
         cost, p_min, _, _ = self.ctx.get_cached_stats(current_indices)
-        best_score = cost - ((p_min - self.ctx.h_min) * dyn_bonus) if p_min >= self.ctx.h_min else float('inf')
+        best_score = self.ctx.score(cost, p_min, dyn_bonus)
         
         milestone_cost = cost
         milestone_pass = 0
@@ -103,7 +103,7 @@ class LocalSearch:
                     test_sol[idx] -= 1
                     c, p_val, _, _ = self.ctx.get_cached_stats(test_sol)
                     if p_val >= self.ctx.h_min:
-                        score = c - ((p_val - self.ctx.h_min) * dyn_bonus)
+                        score = self.ctx.score(c, p_val, dyn_bonus)
                         if score < best_local_score or (quick_mode and c < best_local_cost):
                             best_local_score, best_local_sol, best_local_cost, best_local_p = score, test_sol, c, p_val
                             
@@ -112,7 +112,7 @@ class LocalSearch:
                     test_sol[idx] += 1
                     c, p_val, _, _ = self.ctx.get_cached_stats(test_sol)
                     if p_val >= self.ctx.h_min:
-                        score = c - ((p_val - self.ctx.h_min) * dyn_bonus)
+                        score = self.ctx.score(c, p_val, dyn_bonus)
                         if score < best_local_score:
                             best_local_score, best_local_sol, best_local_cost, best_local_p = score, test_sol, c, p_val
                             
@@ -181,7 +181,7 @@ class LocalSearch:
             
         p_surplus = best_p - self.ctx.h_min
         
-        best_cost = raw_cost - (p_surplus * dyn_bonus) if p_surplus >= 0 else float('inf')
+        best_cost = self.ctx.score(raw_cost, best_p, dyn_bonus)
             
         path_pipes, _ = self.ctx.get_dominant_path(indices_copy, crit_node)
         unit_losses = self.ctx.get_cached_heuristics(indices_copy)
@@ -204,7 +204,7 @@ class LocalSearch:
                     test_sol[p] -= 1
                     c, p_val, _, _ = self.ctx.get_cached_stats(test_sol)
                     if p_val >= self.ctx.h_min:
-                        score = c - ((p_val - self.ctx.h_min) * dyn_bonus)
+                        score = self.ctx.score(c, p_val, dyn_bonus)
                         if score < best_cost:
                             best_cost, indices_copy = score, test_sol
                             
@@ -224,7 +224,7 @@ class LocalSearch:
                         
                         c, p_val, _, _ = self.ctx.get_cached_stats(test_sol)
                         if p_val >= self.ctx.h_min:
-                            score = c - ((p_val - self.ctx.h_min) * dyn_bonus)
+                            score = self.ctx.score(c, p_val, dyn_bonus)
                             if score < best_cost:
                                 best_cost, indices_copy = score, test_sol
                                 
@@ -252,5 +252,5 @@ class LocalSearch:
         p_surplus = p_min - self.ctx.h_min
         if p_surplus < 0: return float('inf'), -float('inf'), None
         
-        score = cost - (p_surplus * dyn_bonus)
+        score = self.ctx.score(cost, p_min, dyn_bonus)
         return score, cost, squeezed_sol

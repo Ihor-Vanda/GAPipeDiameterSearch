@@ -4,8 +4,18 @@ import numpy as np
 from .cache import LRUCache
 from .fast_math import fast_dijkstra
 
+#: Політики премії за запас тиску (див. SolverContext.score).
+#: "damped"   — понад SURPLUS_KNEE метрів премія множиться на SURPLUS_DAMPING;
+#: "undamped" — премія лінійна без обмежень;
+#: "none"     — премії немає, впорядкування за чистою вартістю.
+SURPLUS_BONUS_POLICIES = ("damped", "undamped", "none")
+SURPLUS_KNEE = 10.0
+SURPLUS_DAMPING = 0.2
+
+
 class SolverContext:
-    def __init__(self, simulator, available_diameters, v_opt=1.0):
+    def __init__(self, simulator, available_diameters, v_opt=1.0,
+                 surplus_bonus_policy="damped"):
         self.simulator = simulator
         self.diameters = sorted(available_diameters)
         self.max_d_idx = len(self.diameters) - 1
@@ -14,6 +24,13 @@ class SolverContext:
         # Обмеження тиску — власне поле контексту, а не ланцюг
         # self.ctx.simulator.config.h_min через три об'єкти.
         self.h_min = simulator.config.h_min
+
+        if surplus_bonus_policy not in SURPLUS_BONUS_POLICIES:
+            raise ValueError(
+                f"surplus_bonus_policy={surplus_bonus_policy!r}; "
+                f"очікується одне з {SURPLUS_BONUS_POLICIES}"
+            )
+        self.surplus_bonus_policy = surplus_bonus_policy
         
         self.comp_name_to_idx = {name: i for i, name in enumerate(simulator.component_names)}
         
@@ -94,6 +111,29 @@ class SolverContext:
         elapsed = time.time() - start
         return 10.0 / elapsed if elapsed > 0 else 1000.0
     
+    def score(self, cost, p_min, dyn_bonus):
+        """Penalized score: вартість мінус премія за запас тиску.
+
+        Премія працює як тай-брейкер — за приблизно рівної вартості
+        обирається рішення із запасом, бо йому є куди спускатися далі.
+        При великому запасі премія стає перекосом: в задачі мінімізації
+        вартості обмеження тиску в оптимумі активне, тому платити за
+        надлишковий напір означає віддалятися від оптимуму. Політика
+        `damped` обмежує це, `undamped` — ні, `none` вимикає премію.
+
+        Замір на Hanoi: 82 % викликів мають запас < 1 м, і лише 0.26 %
+        перевищують SURPLUS_KNEE — тобто в робочому режимі це справді
+        тай-брейкер, а демпфування страхує від рідкісних викидів.
+        """
+        surplus = p_min - self.h_min
+        if surplus < 0:
+            return float('inf')
+        if self.surplus_bonus_policy == "none":
+            return cost
+        if self.surplus_bonus_policy == "damped" and surplus > SURPLUS_KNEE:
+            dyn_bonus *= SURPLUS_DAMPING
+        return cost - surplus * dyn_bonus
+
     def log(self, message):
         print(f"   {message}", flush=True)
 

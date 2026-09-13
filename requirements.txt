@@ -1,0 +1,16 @@
+# Залежності для запуску оптимізатора (main.py і gui.py).
+# Встановлення:  python -m pip install -r requirements.txt
+
+# --- гідравліка та розрахунки ---
+wntr>=1.0              # модель мережі + прив'язки до EPANET Toolkit
+numpy>=1.24
+pandas>=2.0
+networkx>=3.0
+numba>=0.59            # JIT для fast_math (Dijkstra, відстань Хеммінга)
+
+# --- графіка та звіти ---
+matplotlib>=3.7
+
+# --- GUI (потрібен лише для gui.py; main.py працює без них) ---
+customtkinter>=5.2
+Pillow>=10.0

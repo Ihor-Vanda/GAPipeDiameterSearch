@@ -177,9 +177,17 @@ def main():
     parser.add_argument("--run_mode", type=str, choices=["fast_analytical", "analytical"], default="analytical", help="Mode: fast analytical or analytical")
     parser.add_argument("--v_opt", type=float, default=1.0, help="Optimal velocity (m/s) for analytical solver")
     parser.add_argument("--seed", type=int, default=None,
-                        help="RNG seed of the main process. Makes a run reproducible; "
-                             "with --cores 1 the run is bit-exact reproducible. "
-                             "Omit for a non-deterministic run.")
+                        help="RNG seed of the main process. Omit for a non-deterministic run. "
+                             "Combine with --sequential for a bit-exact reproducible run.")
+    parser.add_argument("--sequential", action="store_true",
+                        help="Run a single island in-process, without multiprocessing.Pool, "
+                             "and stop strictly on the simulation budget. Slower, but the only "
+                             "mode that is bit-exact reproducible for a given --seed. "
+                             "Use it for baselines and A/B comparisons.")
+    parser.add_argument("--time_limit", type=float, default=None,
+                        help="Wall-clock limit per run in seconds; 0 = unlimited (stop only on "
+                             "--max_sims). Default: derived from the calibrated simulator speed, "
+                             "which makes the stopping point machine- and load-dependent.")
 
     args, unknown = parser.parse_known_args()
     
@@ -190,6 +198,20 @@ def main():
             for key, value in config_data.items():
                 if key not in cli_args_used and hasattr(args, key):
                     setattr(args, key, value)
+
+    # Порядок обходу множин з рядковими ключами (імена вузлів мережі) залежить
+    # від PYTHONHASHSEED, який Python рандомізує на кожен процес. Через це
+    # прогін з тим самим --seed давав різні результати. Змінну неможливо
+    # застосувати після старту інтерпретатора, тому перезапускаємо процес.
+    # Замір на Hanoi: без цього 4 прогони дали 3 різні результати, з ним —
+    # 4 однакові (6.1883 M$, 40 905 симуляцій).
+    if args.seed is not None and os.environ.get("PYTHONHASHSEED") != "0":
+        if getattr(sys, "frozen", False):
+            print("[WARNING] Збірка PyInstaller: PYTHONHASHSEED не фіксується, "
+                  "прогін не буде побітово відтворюваним.")
+        else:
+            os.environ["PYTHONHASHSEED"] = "0"
+            os.execv(sys.executable, [sys.executable] + sys.argv)
 
     args.inp = os.path.abspath(args.inp)
     args.costs = os.path.abspath(args.costs)
@@ -246,16 +268,37 @@ def main():
     pool = None
     results = []
     try:
-        pool = multiprocessing.Pool(processes=num_cores, initializer=worker_init, initargs=(args.inp, config))
+        global worker_sim_instance
+        if args.sequential:
+            # Один воркер у цьому ж процесі, без Pool і без Manager. Тільки так
+            # прогін справді відтворюваний: у паралельному режимі глобальний
+            # архів наповнює монітор із таймером, тому гілки, що залежать від
+            # розміру архіву (BASIN_ESCAPE, consensus locking), спрацьовують
+            # у різні моменти навіть при однаковому seed.
+            num_cores = 1
+            worker_sim_instance = sim
+            print("   [Sequential] Pool вимкнено — прогін детермінований\n")
+            if args.time_limit is None:
+                # Часовий бюджет за замовчуванням виводиться з калібрування
+                # швидкості симулятора, тому точка зупинки залежить від
+                # завантаження машини. Для детермінованого прогону зупиняємось
+                # виключно за лічильником симуляцій.
+                args.time_limit = 0
+        else:
+            pool = multiprocessing.Pool(processes=num_cores, initializer=worker_init, initargs=(args.inp, config))
         AnalyticalSolver.worker_task = staticmethod(analytical_worker_task)
-        
+
         for i in range(args.runs):
             current_log_dir = os.path.abspath(base_dir) if args.runs == 1 else os.path.abspath(os.path.join(base_dir, f"run_{i+1}"))
             if args.runs > 1: os.makedirs(current_log_dir, exist_ok=True)
-            
+
+            time_limit = None if args.time_limit is None else (
+                float('inf') if args.time_limit <= 0 else args.time_limit
+            )
             solver = AnalyticalSolver(
-                sim, config.diameters_m, v_opt=config.v_opt, pool=pool, 
-                log_dir=current_log_dir, n_workers=num_cores, max_sims=args.max_sims
+                sim, config.diameters_m, v_opt=config.v_opt, pool=pool,
+                log_dir=current_log_dir, n_workers=num_cores, max_sims=args.max_sims,
+                time_limit_sec=time_limit
             )
             
             start_t = time.time()

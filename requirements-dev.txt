@@ -1,0 +1,7 @@
+# Інструменти розробки. Встановлення:
+#   python -m pip install -r requirements.txt -r requirements-dev.txt
+
+pytest>=8.0            # тести: python -m pytest -q
+ruff>=0.5              # лінтер: python -m ruff check --select F,ARG,ERA .
+radon>=6.0             # метрики складності: python -m radon cc -s -n C .
+pyinstaller>=6.0       # збірка gui.exe: pyinstaller gui.spec
