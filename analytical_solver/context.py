@@ -11,6 +11,9 @@ class SolverContext:
         self.max_d_idx = len(self.diameters) - 1
         self.v_opt = v_opt
         self.num_pipes = simulator.n_variables
+        # Обмеження тиску — власне поле контексту, а не ланцюг
+        # self.ctx.simulator.config.h_min через три об'єкти.
+        self.h_min = simulator.config.h_min
         
         self.comp_name_to_idx = {name: i for i, name in enumerate(simulator.component_names)}
         
@@ -64,13 +67,13 @@ class SolverContext:
         cached = self.sim_cache.get(sig)
         if cached is not None:
             _, real_p_min, _, _ = cached
-            return real_p_min < self.simulator.config.h_min - 0.01
+            return real_p_min < self.h_min - 0.01
             
         try:
             result = self.simulator.get_stats(indices)
             self.sim_cache.set(sig, result)
             self.sim_count += 1
-            return result[1] < self.simulator.config.h_min - 0.01
+            return result[1] < self.h_min - 0.01
         except Exception as e:
             self.log(f"     [CRITICAL ERROR in Ghost Check]: {e}")
             return True

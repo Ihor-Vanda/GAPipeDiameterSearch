@@ -55,8 +55,8 @@ class SeedFactory:
                 if new_idx == idx_sol: break
                 idx_sol = new_idx
                 
-            _, p, feas, _ = self.ctx.get_cached_stats(idx_sol)
-            if not feas or p < self.ctx.simulator.config.h_min:
+            _, p, _, _ = self.ctx.get_cached_stats(idx_sol)
+            if p < self.ctx.h_min:
                 idx_sol, is_healed, _ = self.ls.heal_network(idx_sol, set())
                 if not is_healed: continue 
             squeezed_sol = self.ls.gradient_squeeze(idx_sol, max_passes=12, quick_mode=True)
@@ -76,8 +76,8 @@ class SeedFactory:
                 if new_idx == idx_sol: break
                 idx_sol = new_idx
                 
-            _, p, feas, _ = self.ctx.get_cached_stats(idx_sol)
-            if not feas or p < self.ctx.simulator.config.h_min:
+            _, p, _, _ = self.ctx.get_cached_stats(idx_sol)
+            if p < self.ctx.h_min:
                 idx_sol, is_healed, _ = self.ls.heal_network(idx_sol, set())
                 if not is_healed: continue 
                 
@@ -220,9 +220,9 @@ class SeedFactory:
             test = list(current)
             test[pipe_idx] = sol_B[pipe_idx]
             
-            c, p, feas, _ = self.ctx.get_cached_stats(test)
+            c, p, _, _ = self.ctx.get_cached_stats(test)
             
-            if feas and p >= self.ctx.simulator.config.h_min:
+            if p >= self.ctx.h_min:
                 current = test
                 
                 if c < best_cost:
@@ -422,8 +422,8 @@ class IslandWorker:
                                 hybrid_sol = self._spatial_crossover(hybrid_sol, peer_sol, T=0.05)
                                 noise_msg = " + Peer Noise"
                             
-                            c, p, feas, _ = self.ctx.get_cached_stats(hybrid_sol)
-                            if not feas or p < self.ctx.simulator.config.h_min:
+                            c, p, _, _ = self.ctx.get_cached_stats(hybrid_sol)
+                            if p < self.ctx.h_min:
                                 hybrid_sol, ok, _ = self.ls.heal_network(hybrid_sol, set())
                                 if not ok: hybrid_sol = list(gb_sol) 
                                     
@@ -438,12 +438,15 @@ class IslandWorker:
                         elif T < 0.7:
                             hybrid_sol = self._spatial_crossover(self.run_best_sol, gb_sol, T)
                             
-                            c, p, feas, _ = self.ctx.get_cached_stats(hybrid_sol)
-                            if not feas or p < self.ctx.simulator.config.h_min:
+                            c, p, _, _ = self.ctx.get_cached_stats(hybrid_sol)
+                            if p < self.ctx.h_min:
                                 hybrid_sol, ok, _ = self.ls.heal_network(hybrid_sol, set())
-                                if ok: c, p, feas, _ = self.ctx.get_cached_stats(hybrid_sol)
+                                if ok: c, p, _, _ = self.ctx.get_cached_stats(hybrid_sol)
                                 
-                            if feas and c < self.run_best_cost:
+                            # УВАГА: перевірки тиску тут немає й не було — гібрид
+                            # приймається лише за вартістю. Поведінка збережена
+                            # свідомо; це окреме рішення, не частина етапу 2.
+                            if c < self.run_best_cost:
                                 self.ctx.log(f" 🧬 [HYBRID SUCCESS] Created new hybrid solution: {c/1e6:.4f}M$")
                                 self.run_best_cost = c
                                 self.run_best_sol = hybrid_sol
@@ -468,8 +471,8 @@ class IslandWorker:
 
         self.ls.progress_callback = None
         
-        _, final_p, final_feas, _ = self.ctx.get_cached_stats(self.run_best_sol)
-        if not final_feas or final_p < self.ctx.simulator.config.h_min:
+        _, final_p, _, _ = self.ctx.get_cached_stats(self.run_best_sol)
+        if final_p < self.ctx.h_min:
             self.ctx.log(" ⚠️ [FINAL GUARD] Final solution strictly invalid. Applying hard heal.")
             healed_sol, ok, _ = self.ls.heal_network(self.run_best_sol, set())
             if ok:
@@ -483,23 +486,23 @@ class IslandWorker:
     def _initialize_seeds(self, seeds):
         valid_sols = []
         for s in seeds:
-            c, p, feas, _ = self.ctx.get_cached_stats(s)
-            p_surplus = p - self.ctx.simulator.config.h_min
+            c, p, _, _ = self.ctx.get_cached_stats(s)
+            p_surplus = p - self.ctx.h_min
             score = c - (p_surplus * self.base_dyn_bonus)
             
             self.pool.active_pool.append((score, c, s))
             self.pool.add_to_tabu(s, c)
             
-            if feas and p >= self.ctx.simulator.config.h_min:
+            if p >= self.ctx.h_min:
                 valid_sols.append((c, s))
                 
         if not self.pool.active_pool:
             self.ctx.log("   > [WARNING] No valid seeds received. Injecting emergency max-diameter seed.")
             emergency = [self.ctx.max_d_idx] * self.ctx.num_pipes
-            c, p, feas, _ = self.ctx.get_cached_stats(emergency)
+            c, p, _, _ = self.ctx.get_cached_stats(emergency)
             
             self.pool.active_pool.append((c, c, emergency))
-            if feas and p >= self.ctx.simulator.config.h_min:
+            if p >= self.ctx.h_min:
                 valid_sols.append((c, emergency))
                 
         if valid_sols:
@@ -536,9 +539,9 @@ class IslandWorker:
                     continue 
                     
                 peer_sol = list(peer[1])
-                c_p, p_p, feas_p, _ = self.ctx.get_cached_stats(peer_sol)
-                if feas_p and p_p >= self.ctx.simulator.config.h_min and not self.pool.is_basin_tabu(peer_sol):
-                    p_surplus = p_p - self.ctx.simulator.config.h_min
+                c_p, p_p, _, _ = self.ctx.get_cached_stats(peer_sol)
+                if p_p >= self.ctx.h_min and not self.pool.is_basin_tabu(peer_sol):
+                    p_surplus = p_p - self.ctx.h_min
                     score = c_p - (p_surplus * self.base_dyn_bonus)
                     self.pool.active_pool.append((score, c_p, peer_sol))
                     self.ctx.log(f"     [IPC] 💉 Passively injected peer W{i+1} solution ({c_p/1e6:.4f}M$)")
@@ -557,12 +560,12 @@ class IslandWorker:
                 self.ctx.log(f"   [RESCUE] Worker lagging by {global_lag:.1%}. Abandoning dead basin and adopting Global Best {gb[0]/1e6:.4f}M$!")
                 
                 gb_sol = list(gb[1])
-                c_gb, p_gb, feas_gb, _ = self.ctx.get_cached_stats(gb_sol)
-                if feas_gb and p_gb >= self.ctx.simulator.config.h_min:
+                c_gb, p_gb, _, _ = self.ctx.get_cached_stats(gb_sol)
+                if p_gb >= self.ctx.h_min:
                     self.run_best_cost = c_gb
                     self.run_best_sol = gb_sol
                     
-                    p_surplus = p_gb - self.ctx.simulator.config.h_min
+                    p_surplus = p_gb - self.ctx.h_min
                     score = c_gb - (p_surplus * self.base_dyn_bonus)
                     
                     self.pool.active_pool.insert(0, (score - 1e6, c_gb, gb_sol))
@@ -604,9 +607,9 @@ class IslandWorker:
                 if new_seeds:
                     actually_added = 0
                     for seed in new_seeds:
-                        c, p, feas, _ = self.ctx.get_cached_stats(seed)
-                        if feas and p >= self.ctx.simulator.config.h_min:
-                            score = c - ((p - self.ctx.simulator.config.h_min) * self.base_dyn_bonus)
+                        c, p, _, _ = self.ctx.get_cached_stats(seed)
+                        if p >= self.ctx.h_min:
+                            score = c - ((p - self.ctx.h_min) * self.base_dyn_bonus)
                             self.pool.active_pool.append((score, c, seed))
                             actually_added += 1
                             
@@ -619,8 +622,8 @@ class IslandWorker:
     def _apply_swap(self, round_idx, shared_progress):
         if round_idx > 0 and round_idx % 8 == 0:
             swapped = self.ls.swap_search(self.run_best_sol, self.base_dyn_bonus)
-            c, p, feas, _ = self.ctx.get_cached_stats(swapped)
-            if feas and p >= self.ctx.simulator.config.h_min and c < self.run_best_cost:
+            c, p, _, _ = self.ctx.get_cached_stats(swapped)
+            if p >= self.ctx.h_min and c < self.run_best_cost:
                 is_ghost = False
                 if (self.run_best_cost - c) > (self.run_best_cost * 0.02):
                     is_ghost = self.ctx.is_ghost_solution(swapped)
@@ -636,7 +639,7 @@ class IslandWorker:
                     self.stagnation_counter = max(0, self.stagnation_counter - 1)
                     self.pool.kick_tabu_set.clear()
                     
-                    p_surplus = p - self.ctx.simulator.config.h_min
+                    p_surplus = p - self.ctx.h_min
                     eff_bonus = self.base_dyn_bonus * 0.2 if p_surplus > 10.0 else self.base_dyn_bonus
                     self.pool.active_pool.insert(0, (c - (p_surplus * eff_bonus) - (self.run_best_cost * 0.1), c, swapped))
     
@@ -715,7 +718,7 @@ class IslandWorker:
         self.ctx.log(f"{mode_label} (Stag: {self.stagnation_counter}/{self.stag_limit}) -> Applying '{strategy}'...")
  
         if real_T >= 0.8 and self.pool.active_pool:
-            source_pool = [x for x in self.pool.active_pool if self.ctx.get_cached_stats(x[2])[1] >= self.ctx.simulator.config.h_min]
+            source_pool = [x for x in self.pool.active_pool if self.ctx.get_cached_stats(x[2])[1] >= self.ctx.h_min]
             if not source_pool: source_pool = self.pool.active_pool
             kick_target = max(source_pool, key=lambda x: self.pool.hamming_distance(x[2], self.run_best_sol))[2]
         elif real_T >= 0.4 and self.pool.active_pool:
@@ -793,17 +796,17 @@ class IslandWorker:
  
         self.strat_consecutive_fails[strategy] = 0
  
-        c, p, feas, _ = self.ctx.get_cached_stats(forced_sol)
-        base_h_min = self.ctx.simulator.config.h_min
+        c, p, _, _ = self.ctx.get_cached_stats(forced_sol)
+        base_h_min = self.ctx.h_min
         
         explosion_threshold = self.run_best_cost * (1.5 + 0.5 * T)
 
-        if feas and max(0.0, base_h_min - p) > max(20.0, base_h_min * (1.0 + T)):
+        if max(0.0, base_h_min - p) > max(20.0, base_h_min * (1.0 + T)):
             self.strat_consecutive_fails[strategy] = self.strat_consecutive_fails.get(strategy, 0) + 1
             return
  
         relaxed_h_min = base_h_min - (0.0 if ABLATION_MODE else 0.5 * T)
-        if not feas or p < relaxed_h_min:
+        if p < relaxed_h_min:
             heal_locks = set() if strategy in ["SPATIAL_PERTURB", "SMART_PERTURB", "RUIN_RECREATE"] else locked
             forced_sol, ok, boosts = self.ls.heal_network(forced_sol, heal_locks)
             if not ok: 
@@ -814,7 +817,9 @@ class IslandWorker:
  
         if strategy == "BASIN_ESCAPE":
             final_sol = forced_sol
-            if self.run_best_sol: self.pool.basin_tabu.append(tuple(self.run_best_sol))
+            # Записується ПІДПИС басейну, а не вектор рішення: is_basin_tabu()
+            # шукає саме підпис, і для мереж > 50 труб це різні речі.
+            if self.run_best_sol: self.pool.add_basin_to_tabu(self.run_best_sol)
         else:
             quick_passes = max(1, 2 - int(T * 2))
             locked_for_squeeze = set() if strategy in ["SMART_PERTURB", "SPATIAL_PERTURB", "RUIN_RECREATE"] else locked
@@ -846,10 +851,11 @@ class IslandWorker:
             else:
                 final_sol = quick_sol
  
-        c, p, feas, _ = self.ctx.get_cached_stats(final_sol)
-        deficit = max(0.0, base_h_min - p) if feas else float('inf')
-        
-        if feas and (deficit <= (0.0 if ABLATION_MODE else 0.5 * T)):
+        st = self.ctx.get_cached_stats(final_sol)
+        c, p = st.cost, st.p_min
+        deficit = max(0.0, base_h_min - p) if st.simulation_ok else float('inf')
+
+        if st.simulation_ok and (deficit <= (0.0 if ABLATION_MODE else 0.5 * T)):
             effective_cost = c + deficit * (self.run_best_cost * 0.10)
             
             if effective_cost > explosion_threshold: 
@@ -994,8 +1000,8 @@ class IslandWorker:
             high_friction = sorted(range(self.ctx.num_pipes), key=lambda i: unit_losses[i], reverse=True)
             low_friction = sorted(range(self.ctx.num_pipes), key=lambda i: unit_losses[i]) 
             
-            _, p, feas, _ = self.ctx.get_cached_stats(parent_sol)
-            parent_p_surplus = (p - self.ctx.simulator.config.h_min) if feas else 0.0
+            st = self.ctx.get_cached_stats(parent_sol)
+            parent_p_surplus = st.surplus(self.ctx.h_min) if st.simulation_ok else 0.0
             
             if parent_p_surplus > 10.0: downgrade_limit, upgrade_limit = 15, self.SINGLE_CANDIDATES
             elif parent_p_surplus < 2.0: downgrade_limit, upgrade_limit = 3, self.SINGLE_CANDIDATES // 2
@@ -1087,9 +1093,10 @@ class IslandWorker:
                         
                 if not is_diverse and not just_flushed: continue
 
-                real_cost, p_min, feas_min, _ = self.ctx.get_cached_stats(refined_sol)
-                if feas_min:
-                    real_p_surplus = p_min - self.ctx.simulator.config.h_min
+                st = self.ctx.get_cached_stats(refined_sol)
+                real_cost = st.cost
+                if st.simulation_ok:
+                    real_p_surplus = st.surplus(self.ctx.h_min)
                     is_strictly_valid = (real_p_surplus >= 0.0)
                     is_epsilon_valid = (real_p_surplus >= -0.5) 
                     
@@ -1158,11 +1165,10 @@ class IslandWorker:
             
             if avg_dist < diversity_threshold and self.reserve_pool:
                 fresh = self.reserve_pool.pop(0) 
-                c, p, feas, _ = self.ctx.get_cached_stats(fresh)
-                if feas:
-                    p_surplus = p - self.ctx.simulator.config.h_min
-                    score = c - (p_surplus * self.base_dyn_bonus)
-                    self.pool.active_pool[-1] = (score, c, fresh) 
+                st = self.ctx.get_cached_stats(fresh)
+                if st.simulation_ok:
+                    score = st.cost - (st.surplus(self.ctx.h_min) * self.base_dyn_bonus)
+                    self.pool.active_pool[-1] = (score, st.cost, fresh)
 
     def _emergency_respawn(self):
         self.ctx.log("     [EMERGENCY] Beam search deadlocked (no valid/diverse children). Flushing pool & tabu!")
@@ -1174,9 +1180,9 @@ class IslandWorker:
         forced_rescue = res1[0] if (isinstance(res1, tuple) and len(res1) > 0) else None
 
         if forced_rescue is not None:
-            c, p, feas, _ = self.ctx.get_cached_stats(forced_rescue)
-            if feas and p >= self.ctx.simulator.config.h_min:
-                self.pool.active_pool.append((c - 1e6, c, forced_rescue))
+            st = self.ctx.get_cached_stats(forced_rescue)
+            if st.is_feasible(self.ctx.h_min):
+                self.pool.active_pool.append((st.cost - 1e6, st.cost, forced_rescue))
                 self.stagnation_counter = 0 
         
         if not self.pool.active_pool:
@@ -1184,9 +1190,9 @@ class IslandWorker:
             healed_seed = res2[0] if (isinstance(res2, tuple) and len(res2) > 0) else None
 
             if healed_seed is not None:
-                c, p, feas, _ = self.ctx.get_cached_stats(healed_seed)
-                if feas:
-                    self.pool.active_pool.append((c - 1e6, c, healed_seed))
+                st = self.ctx.get_cached_stats(healed_seed)
+                if st.simulation_ok:
+                    self.pool.active_pool.append((st.cost - 1e6, st.cost, healed_seed))
                     self.stagnation_counter = 0
                     self.pool.kick_tabu_set.clear()
             else:
@@ -1308,8 +1314,8 @@ class AnalyticalSolver:
         seen_sigs = set()
         
         for sol in seeds:
-            c, p, feas, _ = self.ctx.get_cached_stats(sol)
-            if feas and p >= self.ctx.simulator.config.h_min:
+            c, p, _, _ = self.ctx.get_cached_stats(sol)
+            if p >= self.ctx.h_min:
                 sig = tuple(sol)
                 if sig not in seen_sigs:
                     seen_sigs.add(sig)
@@ -1330,7 +1336,7 @@ class AnalyticalSolver:
                 polished = self.ls.gradient_squeeze(raw_sol, max_passes=None, quick_mode=False, dyn_bonus=raw_cost * 0.001)
                 p_cost, p_p, _, _ = self.ctx.get_cached_stats(polished)
                 
-                if p_p >= self.ctx.simulator.config.h_min and p_cost < global_best_cost:
+                if p_p >= self.ctx.h_min and p_cost < global_best_cost:
                     global_best_cost = p_cost
                     global_best_sol = polished
                     print(f"     [{rank+1}/{top_n}] Polished {raw_cost/1e6:.4f}M$ ➡️ RECORD: {global_best_cost/1e6:.4f}M$")
@@ -1520,6 +1526,15 @@ class AnalyticalSolver:
             print("\n\n[AnalyticalSolver] 🛑 Отримано сигнал переривання (Ctrl+C)!")
             print("[AnalyticalSolver] М'яка зупинка. Перехід до генерації звітів...")
 
+        # Результати воркерів, повернуті напряму. У паралельному режимі ті самі
+        # значення приходять і через shared_progress, але в послідовному
+        # (pool=None) це єдине джерело — без цього рішення воркера втрачалось
+        # і solve_standalone повертав запасний варіант «усі максимальні».
+        for c, sol in epoch_results:
+            if sol is not None and c < global_best_cost:
+                global_best_cost = c
+                global_best_sol = list(sol)
+
         if shared_progress is not None:
             gb = shared_progress.get('global_best')
             if gb and gb[0] < global_best_cost:
@@ -1536,7 +1551,7 @@ class AnalyticalSolver:
         if global_best_sol:
             polished = self.ls.gradient_squeeze(global_best_sol, max_passes=None, quick_mode=False, dyn_bonus=global_best_cost * 0.001)
             p_cost, p_p, _, _ = self.ctx.get_cached_stats(polished)
-            if p_p >= self.ctx.simulator.config.h_min and p_cost < global_best_cost:
+            if p_p >= self.ctx.h_min and p_cost < global_best_cost:
                 global_best_cost = p_cost
                 global_best_sol = polished
                 print(f"   > [POLISH] Improved! Final: {global_best_cost/1e6:.4f}M$")

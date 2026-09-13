@@ -49,7 +49,7 @@ class LocalSearch:
         passes = 0
 
         cost, p_min, _, _ = self.ctx.get_cached_stats(current_indices)
-        best_score = cost - ((p_min - self.ctx.simulator.config.h_min) * dyn_bonus) if p_min >= self.ctx.simulator.config.h_min else float('inf')
+        best_score = cost - ((p_min - self.ctx.h_min) * dyn_bonus) if p_min >= self.ctx.h_min else float('inf')
         
         milestone_cost = cost
         milestone_pass = 0
@@ -80,7 +80,7 @@ class LocalSearch:
             else:
                 unit_losses = None
                 
-            p_surplus = p_min - self.ctx.simulator.config.h_min
+            p_surplus = p_min - self.ctx.h_min
             is_critically_tight = p_surplus < 0.1
                 
             for idx in active_indices_pass:
@@ -101,18 +101,18 @@ class LocalSearch:
                 if curr_d > 0:
                     test_sol = list(current_indices)
                     test_sol[idx] -= 1
-                    c, p_val, feas, _ = self.ctx.get_cached_stats(test_sol)
-                    if feas and p_val >= self.ctx.simulator.config.h_min:
-                        score = c - ((p_val - self.ctx.simulator.config.h_min) * dyn_bonus)
+                    c, p_val, _, _ = self.ctx.get_cached_stats(test_sol)
+                    if p_val >= self.ctx.h_min:
+                        score = c - ((p_val - self.ctx.h_min) * dyn_bonus)
                         if score < best_local_score or (quick_mode and c < best_local_cost):
                             best_local_score, best_local_sol, best_local_cost, best_local_p = score, test_sol, c, p_val
                             
                 if curr_d < self.ctx.max_d_idx and not quick_mode:
                     test_sol = list(current_indices)
                     test_sol[idx] += 1
-                    c, p_val, feas, _ = self.ctx.get_cached_stats(test_sol)
-                    if feas and p_val >= self.ctx.simulator.config.h_min:
-                        score = c - ((p_val - self.ctx.simulator.config.h_min) * dyn_bonus)
+                    c, p_val, _, _ = self.ctx.get_cached_stats(test_sol)
+                    if p_val >= self.ctx.h_min:
+                        score = c - ((p_val - self.ctx.h_min) * dyn_bonus)
                         if score < best_local_score:
                             best_local_score, best_local_sol, best_local_cost, best_local_p = score, test_sol, c, p_val
                             
@@ -128,8 +128,8 @@ class LocalSearch:
         boosts = 0
         
         while True:
-            _, min_p, feas, crit_node = self.ctx.get_cached_stats(kicked)
-            if feas and min_p >= self.ctx.simulator.config.h_min:
+            _, min_p, _, crit_node = self.ctx.get_cached_stats(kicked)
+            if min_p >= self.ctx.h_min:
                 return kicked, True, boosts
                 
             if not crit_node or crit_node == "ERR":
@@ -179,7 +179,7 @@ class LocalSearch:
         if not crit_node or crit_node == "ERR":
             return indices_copy
             
-        p_surplus = best_p - self.ctx.simulator.config.h_min
+        p_surplus = best_p - self.ctx.h_min
         
         best_cost = raw_cost - (p_surplus * dyn_bonus) if p_surplus >= 0 else float('inf')
             
@@ -202,9 +202,9 @@ class LocalSearch:
                 if indices_copy[p] > 0 and unit_losses[p] < 0.05:
                     test_sol = list(indices_copy)
                     test_sol[p] -= 1
-                    c, p_val, feas, _ = self.ctx.get_cached_stats(test_sol)
-                    if feas and p_val >= self.ctx.simulator.config.h_min:
-                        score = c - ((p_val - self.ctx.simulator.config.h_min) * dyn_bonus)
+                    c, p_val, _, _ = self.ctx.get_cached_stats(test_sol)
+                    if p_val >= self.ctx.h_min:
+                        score = c - ((p_val - self.ctx.h_min) * dyn_bonus)
                         if score < best_cost:
                             best_cost, indices_copy = score, test_sol
                             
@@ -222,9 +222,9 @@ class LocalSearch:
                         test_sol[d1] -= 1
                         test_sol[d2] -= 1
                         
-                        c, p_val, feas, _ = self.ctx.get_cached_stats(test_sol)
-                        if feas and p_val >= self.ctx.simulator.config.h_min:
-                            score = c - ((p_val - self.ctx.simulator.config.h_min) * dyn_bonus)
+                        c, p_val, _, _ = self.ctx.get_cached_stats(test_sol)
+                        if p_val >= self.ctx.h_min:
+                            score = c - ((p_val - self.ctx.h_min) * dyn_bonus)
                             if score < best_cost:
                                 best_cost, indices_copy = score, test_sol
                                 
@@ -249,7 +249,7 @@ class LocalSearch:
         squeezed_sol = self.gradient_squeeze(test_sol, locked_pipes=locked, max_passes=3, quick_mode=True, dyn_bonus=dyn_bonus)
         cost, p_min, _, _ = self.ctx.get_cached_stats(squeezed_sol)
         
-        p_surplus = p_min - self.ctx.simulator.config.h_min
+        p_surplus = p_min - self.ctx.h_min
         if p_surplus < 0: return float('inf'), -float('inf'), None
         
         score = cost - (p_surplus * dyn_bonus)

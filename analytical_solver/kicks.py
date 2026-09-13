@@ -342,7 +342,7 @@ class KickStrategies:
             healed_sol, is_feasible, boosts = self.ls.heal_network(test_sol, locked)
             if is_feasible:
                 h_c, h_p, _, _ = self.ctx.get_cached_stats(healed_sol) 
-                h_score = h_c - ((h_p - self.ctx.simulator.config.h_min) * dyn_bonus)
+                h_score = h_c - ((h_p - self.ctx.h_min) * dyn_bonus)
                 candidates.append((h_score, healed_sol, locked, boosts))
                 
         if not candidates: 

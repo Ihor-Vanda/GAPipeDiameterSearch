@@ -5,7 +5,10 @@ import os
 
 from wntr.epanet.toolkit import ENepanet
 
+from sim_stats import SimStats
+
 warnings.filterwarnings("ignore")
+
 
 EN_NODECOUNT = 0
 EN_LINKCOUNT = 2
@@ -161,10 +164,10 @@ class WaterSimulator:
     def get_stats(self, individual):
         cost = self._apply_pattern(individual)
         ok = self._run_simulation_core()
-        
+
         if not ok:
-            return cost, -1.0, -1.0, "ERR"
-            
+            return SimStats(cost, -1.0, -1.0, "ERR")
+
         min_p = float('inf')
         max_p = float('-inf')
         crit_node_idx = -1
@@ -178,8 +181,8 @@ class WaterSimulator:
                 max_p = p
                 
         crit_node = self.c_idx_to_node_name.get(crit_node_idx, "ERR")
-            
-        return cost, min_p, max_p, crit_node
+
+        return SimStats(cost, min_p, max_p, crit_node)
 
     def get_hydraulic_state(self, individual_diameters):
         for i, pipe_name in enumerate(self.component_names):

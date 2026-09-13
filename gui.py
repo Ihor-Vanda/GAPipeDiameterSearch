@@ -227,12 +227,31 @@ class PipelineOptimizerApp(ctk.CTk):
         self.progress_queue = multiprocessing.Queue()
         self.manager = multiprocessing.Manager()
         self.shared_progress = self.manager.dict()
-        
+
         self.opt_process = None
-        
+
         self.history_sims = []
         self.history_costs = []
-        
+
+        # Стан прогону. Раніше ці поля з'являлися лише в start_thread /
+        # run_optimization, тому stop_thread і reset_ui читали їх через
+        # getattr або падали з AttributeError, якщо порядок натискань
+        # відрізнявся від очікуваного.
+        self.is_stopped = False
+        self.current_pool = None
+        self.last_run_dir = None
+        self.highest_sims = 0
+
+        # Кеш живої карти мережі.
+        self._last_drawn_cost_for_map = None
+        self._last_drawn_sol = None
+        self._live_inp_path = None
+        self.topo_cb = None
+
+        # Вікно результатів.
+        self.available_logs = {}
+
+
         self.setup_treeview_style() 
         self._setup_ui()
         
@@ -264,7 +283,7 @@ class PipelineOptimizerApp(ctk.CTk):
         self.btn_costs.pack(pady=10, fill="x")
 
         ctk.CTkLabel(tab_main, text="Режим запуску:", font=self.font_main).pack(anchor="w", pady=(10,0))
-        self.opt_mode = ctk.CTkOptionMenu(tab_main, values=["Швидкий Аналітичний", "Повний Аналітичний"], font=self.font_main, command=getattr(self, 'on_mode_change', None))
+        self.opt_mode = ctk.CTkOptionMenu(tab_main, values=["Швидкий Аналітичний", "Повний Аналітичний"], font=self.font_main, command=self.on_mode_change)
         self.opt_mode.set("Швидкий Аналітичний")
         self.opt_mode.pack(fill="x", pady=5)
 
@@ -626,7 +645,7 @@ class PipelineOptimizerApp(ctk.CTk):
             if best_sol is not None:
                 self._update_live_network_graph(best_sol, best_cost)
             
-        if sims < getattr(self, 'highest_sims', 0):
+        if sims < self.highest_sims:
             sims = self.highest_sims
         else:
             self.highest_sims = sims
@@ -679,7 +698,7 @@ class PipelineOptimizerApp(ctk.CTk):
     def _update_live_network_graph(self, best_sol, current_cost):
         if not self.selected_inp or not best_sol: return
         
-        if getattr(self, '_last_drawn_cost_for_map', None) == current_cost:
+        if self._last_drawn_cost_for_map == current_cost:
             return
 
         try:
@@ -696,7 +715,7 @@ class PipelineOptimizerApp(ctk.CTk):
             import networkx as nx
             import matplotlib.pyplot as plt
 
-            if getattr(self, '_live_inp_path', None) != self.selected_inp:
+            if self._live_inp_path != self.selected_inp:
                 self._live_wn = wntr.network.WaterNetworkModel(self.selected_inp)
                 self._live_G = self._live_wn.get_graph()
                 self._live_pos = self._live_wn.query_node_attribute('coordinates')
@@ -748,7 +767,7 @@ class PipelineOptimizerApp(ctk.CTk):
             sm.set_array([])
             units_str = self.opt_units.get() if hasattr(self, 'opt_units') else "mm"
             
-            if getattr(self, 'topo_cb', None) is None:
+            if self.topo_cb is None:
                 self.topo_cb = self.topo_fig.colorbar(sm, ax=self.topo_ax, label=f"Діаметр ({units_str})", shrink=0.7)
             
             self.topo_cb.update_normal(sm)
@@ -960,7 +979,7 @@ class PipelineOptimizerApp(ctk.CTk):
     def open_results_viewer(self, target_dir=None):
         if target_dir: self.last_run_dir = target_dir
 
-        if not getattr(self, 'last_run_dir', None) or not os.path.exists(self.last_run_dir):
+        if not self.last_run_dir or not os.path.exists(self.last_run_dir):
             messagebox.showerror("Помилка", "Результати не знайдено.")
             return
 
@@ -1110,7 +1129,7 @@ class PipelineOptimizerApp(ctk.CTk):
         ax_map.set_facecolor('#ffffff')
         ax_map.set_aspect('equal', adjustable='datalim')
         
-        target_inp = getattr(self, 'selected_inp', None)
+        target_inp = self.selected_inp
         saved_inp_path = os.path.join(tables_dir, "optimized_network.inp")
         
         if not target_inp or not os.path.exists(target_inp):

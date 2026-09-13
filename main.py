@@ -176,6 +176,10 @@ def main():
     
     parser.add_argument("--run_mode", type=str, choices=["fast_analytical", "analytical"], default="analytical", help="Mode: fast analytical or analytical")
     parser.add_argument("--v_opt", type=float, default=1.0, help="Optimal velocity (m/s) for analytical solver")
+    parser.add_argument("--seed", type=int, default=None,
+                        help="RNG seed of the main process. Makes a run reproducible; "
+                             "with --cores 1 the run is bit-exact reproducible. "
+                             "Omit for a non-deterministic run.")
 
     args, unknown = parser.parse_known_args()
     
@@ -189,6 +193,16 @@ def main():
 
     args.inp = os.path.abspath(args.inp)
     args.costs = os.path.abspath(args.costs)
+
+    # Сіється RNG головного процесу. Від нього залежать:
+    #  * `solve_fast` цілком (свіп швидкостей + gradient_squeeze виконуються тут);
+    #  * `seed_modifier` в `solve_standalone`, з якого воркери дістають власні seed.
+    # Без цього жоден прогін не відтворюваний — і `--seed` тут єдина точка входу.
+    if args.seed is not None:
+        import random as _random
+        import numpy as _np
+        _random.seed(args.seed)
+        _np.random.seed(args.seed)
 
     clean_all_temp()
     os.makedirs(get_temp_root(), exist_ok=True)
@@ -226,6 +240,7 @@ def main():
     print("==============================================")
     print(f"   ANALYTICAL OPTIMIZER: {os.path.basename(args.inp)}")
     print(f"   Mode: {args.run_mode.upper()} | Cores: {num_cores}")
+    print(f"   Seed: {args.seed if args.seed is not None else 'random (not reproducible)'}")
     print("==============================================")
     
     pool = None
