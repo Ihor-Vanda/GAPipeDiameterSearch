@@ -17,54 +17,8 @@ from datetime import datetime
 from PIL import Image
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
-from ga_config import GAConfig
-from water_sim import WaterSimulator
-from analytical_solver import AnalyticalSolver
-from analytical_solver.worker import get_temp_root, init_worker_process
-from ga_data import load_config
-from plot import plot_convergence, plot_network_map, export_solution
-
-# ==========================================
-# 0 Глобальні функції та Multiprocessing
-# ==========================================
-
-def clean_all_temp():
-    import shutil
-    import time
-    import os
-    
-    root = get_temp_root()
-    
-    try:
-        if os.path.abspath(os.getcwd()).startswith(os.path.abspath(root)):
-            os.chdir(os.path.dirname(os.path.abspath(root)))
-    except: pass
-
-    for ext in ['.bin', '.inp', '.rpt', '.out']:
-        for f in os.listdir(os.getcwd()):
-            if f.lower().startswith('temp') and f.lower().endswith(ext):
-                try: os.remove(os.path.join(os.getcwd(), f))
-                except: pass
-
-    if os.path.exists(root):
-        for dirpath, _, filenames in os.walk(root):
-            for f in filenames:
-                if f.lower().endswith(('.bin', '.inp', '.rpt', '.out')):
-                    try:
-                        os.remove(os.path.join(dirpath, f))
-                    except: pass 
-
-    if os.path.exists(root):
-        for attempt in range(10):
-            try:
-                shutil.rmtree(root, ignore_errors=False) 
-                break
-            except Exception:
-                time.sleep(0.5)
-                
-        if os.path.exists(root):
-            try: shutil.rmtree(root, ignore_errors=True)
-            except: pass
+from analytical_solver.worker import clean_temp_root, get_temp_root
+from runner import OptimizationRunner, RunRequest
 
 # ==========================================
 # 1 КЛАС GUI ТА ПЕРЕНАПРАВЛЕННЯ ЛОГІВ
@@ -129,7 +83,6 @@ class PipelineOptimizerApp(ctk.CTk):
         # getattr або падали з AttributeError, якщо порядок натискань
         # відрізнявся від очікуваного.
         self.is_stopped = False
-        self.current_pool = None
         self.last_run_dir = None
         self.highest_sims = 0
 
@@ -355,175 +308,98 @@ class PipelineOptimizerApp(ctk.CTk):
         worker.start()
 
     def run_optimization(self):
+        """Сценарій запуску тепер живе в `runner.OptimizationRunner`.
+
+        Тут лишається лише те, що справді специфічне для GUI: зчитати
+        поля вводу, підготувати каталог і лог, віддати прогрес у дашборд
+        і повідомити про завершення. До етапу 5 цей метод дублював 171
+        рядок сценарію з `main()`.
+        """
+        base_dir = None
         try:
-            clean_all_temp()
+            clean_temp_root()
             os.makedirs(get_temp_root(), exist_ok=True)
-            
-            mode_text = self.opt_mode.get()
-            run_mode = "fast_analytical" if mode_text == "Швидкий Аналітичний" else "analytical"
-            
-            runs = int(self.ent_runs.get())
-            hmin = float(self.ent_hmin.get())
-            units = self.opt_units.get()
-            v_opt = float(self.ent_vopt.get())
-            
-            try: max_sims = int(self.ent_sims.get())
-            except: max_sims = 0
-            
-            try: cores = int(self.ent_cores.get())
-            except: cores = 0
+
+            request = self._collect_request()
 
             timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             base_dir = os.path.abspath(os.path.join("OutputDataExperiments", timestamp))
-            self.last_run_dir = base_dir 
+            self.last_run_dir = base_dir
             os.makedirs(base_dir, exist_ok=True)
-            
+
             log_file_path = os.path.join(base_dir, "logs", f"run_{timestamp}.txt")
             os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
             if isinstance(sys.stdout, GUIStream):
                 sys.stdout.set_file(log_file_path)
-            
-            temp_dir = os.path.abspath(os.path.join(get_temp_root(), "main_process"))
-            os.makedirs(temp_dir, exist_ok=True)
 
             print(f"[System] Log file initiated: {log_file_path}")
             print("==============================================")
-            print(f"   ANALYTICAL OPTIMIZER: {os.path.basename(self.selected_inp)}")
-            print(f"   Режим: {run_mode.upper()} | Воркери: {cores if cores > 0 else 'Auto'}")
+            print(f"   ANALYTICAL OPTIMIZER: {os.path.basename(request.inp_file)}")
+            print(f"   Режим: {request.run_mode.upper()} | Воркери: {request.effective_cores}")
             print("==============================================\n")
 
-            config = GAConfig(
-                cost_file=self.selected_costs,
-                h_min=hmin, unit_system=units, run_mode=run_mode,
-                v_opt=v_opt
+            runner = OptimizationRunner(
+                request,
+                on_progress=self.sync_ui_state,
+                should_stop=lambda: self.is_stopped,
+                on_run_start=self._on_run_start,
             )
-            load_config(config)
+            runner.prepare()
 
-            sim = WaterSimulator(self.selected_inp, config, temp_dir=temp_dir)
-            num_cores = cores if cores > 0 else multiprocessing.cpu_count()
-            
-            self.current_pool = multiprocessing.Pool(
-                processes=num_cores,
-                initializer=init_worker_process,
-                initargs=(self.selected_inp, config)
-            )
-            
-            results = []
-
-            for i in range(runs):
-                if self.is_stopped: break
-                
-                self.after(0, self.clear_realtime_graph)
-                self.highest_sims = 0 
-                
-                current_log_dir = os.path.join(base_dir, f"run_{i+1}") if runs > 1 else base_dir
-                os.makedirs(current_log_dir, exist_ok=True)
-                
-                solver = AnalyticalSolver(
-                    sim, config.diameters_m, v_opt=v_opt, pool=self.current_pool, 
-                    log_dir=current_log_dir, n_workers=num_cores, max_sims=max_sims
-                )
-                
-                start_t = time.time()
-                try:
-                    if run_mode == 'fast_analytical':
-                        best_solution_meters = solver.solve_fast(ui_callback=self.sync_ui_state)
-                    else:
-                        best_solution_meters = solver.solve_standalone(ui_callback=self.sync_ui_state)
-                        
-                    duration = time.time() - start_t
-                    
-                    if best_solution_meters:
-                        best_indices = []
-                        for d in best_solution_meters:
-                            try: idx = config.diameters_m.index(d)
-                            except ValueError: idx = len(config.diameters_m) - 1
-                            best_indices.append(idx)
-                            
-                        final_cost, final_p, _, _ = sim.get_stats(best_indices)
-                        
-                        raw_hist = getattr(solver, 'history', [])
-                        if not raw_hist: raw_hist = [(sim.sim_count, final_cost)]
-                        hist = [{"evals": s, "min_cost": c} for s, c in raw_hist]
-                        
-                        total_evals = hist[-1].get('evals', len(hist)) if hist else 0
-                        
-                        results.append({
-                            "run_id": i+1, "cost": final_cost, "pressure": final_p,
-                            "feasible": (final_p >= hmin), "time": duration, 
-                            "individual": best_indices, "history": hist
-                        })
-                        
-                        if runs > 1:
-                            local_tables = os.path.join(current_log_dir, "tables")
-                            local_plots = os.path.join(current_log_dir, "plots")
-                            os.makedirs(local_tables, exist_ok=True)
-                            os.makedirs(local_plots, exist_ok=True)
-                            sol_path = os.path.join(local_tables, "solution")
-                            export_solution(best_indices, hist, self.selected_inp, sol_path, config, final_cost, duration, total_evals)
-                            plot_network_map(best_indices, self.selected_inp, os.path.join(local_plots, "network_map.png"), config, final_cost)
-                            
-                            if len(hist) > 1:
-                                plot_convergence(hist, os.path.join(local_plots, "convergence.png"))
-
-                except Exception as e:
-                    if not self.is_stopped: raise e
-
-            if results:
-                os.makedirs(os.path.join(base_dir, "tables"), exist_ok=True)
-                os.makedirs(os.path.join(base_dir, "plots"), exist_ok=True)
-
-                best_run = sorted(results, key=lambda x: (not x['feasible'], x['cost']))[0]
-                total_evals = best_run['history'][-1].get('evals', len(best_run['history'])) if best_run['history'] else 0
-                
-                solution_path = os.path.join(base_dir, "tables", "solution_champion")
-                export_solution(best_run['individual'], best_run['history'], self.selected_inp, solution_path, config, best_run['cost'], best_run['time'], total_evals)
-                plot_network_map(best_run['individual'], self.selected_inp, os.path.join(base_dir, "plots", "network_map.png"), config, best_run['cost'])
-                
-                if len(best_run['history']) > 1:
-                    plot_convergence(best_run['history'], os.path.join(base_dir, "plots", "convergence.png"))
-                
-                summary_data = [{"Run": r['run_id'], "Cost": r['cost'], "Pressure": r['pressure'], "Feasible": r['feasible'], "Time": r['time']} for r in results]
-                pd.DataFrame(summary_data).to_csv(os.path.join(base_dir, "tables", "runs_summary.csv"), index=False)
-                
+            results = runner.run(base_dir)
+            if runner.export(results, base_dir):
                 if self.is_stopped:
                     print("\n✅ ОПТИМІЗАЦІЮ ПЕРЕРВАНО. ДАНІ ЗБЕРЕЖЕНО.")
                 else:
                     print("\n✅ ОПТИМІЗАЦІЮ ЗАВЕРШЕНО! Результати збережено.")
             else:
                 print("\n[System] 🛑 Процес зупинено. Даних для збереження немає.")
-                
+
         except Exception as e:
             if self.is_stopped:
                 print("\n[System] 🛑 Процес примусово зупинено.")
             else:
-                print(f"\n❌ КРИТИЧНА ПОМИЛКА: {str(e)}")
+                print(f"\n❌ КРИТИЧНА ПОМИЛКА: {e}")
                 import traceback
                 print(traceback.format_exc())
         finally:
-            if self.current_pool:
-                try:
-                    self.current_pool.terminate()
-                    self.current_pool.join()
-                except: pass
-                self.current_pool = None
-                
             try:
-                if 'sim' in locals():
-                    del sim
                 import gc
                 gc.collect()
-            except: pass
-                
-            try:
                 time.sleep(1.0)
-                clean_all_temp()
-            except: pass
-            
+                clean_temp_root()
+            except Exception:
+                pass
+
             if isinstance(sys.stdout, GUIStream):
                 sys.stdout.close()
-            
+
             self.after(0, self.reset_ui)
+
+    def _collect_request(self):
+        """Зчитати поля вводу в `RunRequest`.
+
+        Розбір толерантний до порожніх і некоректних значень — це робить
+        `RunRequest.from_text_fields`, і саме тому його можна перевірити
+        тестами без запуску tkinter.
+        """
+        mode_text = self.opt_mode.get()
+        return RunRequest.from_text_fields(
+            inp_file=self.selected_inp,
+            cost_file=self.selected_costs,
+            hmin=self.ent_hmin.get(),
+            units=self.opt_units.get(),
+            v_opt=self.ent_vopt.get(),
+            runs=self.ent_runs.get(),
+            cores=self.ent_cores.get(),
+            max_sims=self.ent_sims.get(),
+            run_mode="fast_analytical" if mode_text == "Швидкий Аналітичний" else "analytical",
+        )
+
+    def _on_run_start(self, _run_id):
+        """Перед кожним прогоном: очистити графік збіжності."""
+        self.after(0, self.clear_realtime_graph)
+        self.highest_sims = 0
     
     # ==========================================
     # 5 Real-time Updates

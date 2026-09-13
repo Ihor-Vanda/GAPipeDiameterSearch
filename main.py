@@ -1,44 +1,15 @@
 import argparse
-import os
-import shutil
-import time
-import pandas as pd
-import multiprocessing
-import sys
-import traceback
 import json
-
-from ga_config import GAConfig
-from ga_utils import silence_warnings, format_time
-from ga_data import load_config
-from water_sim import WaterSimulator
-from analytical_solver import AnalyticalSolver
-from analytical_solver.worker import get_temp_root, init_worker_process, set_simulator
-from plot import plot_convergence, plot_network_map, export_solution
-from ga_utils import DualLogger
+import multiprocessing
+import os
+import sys
 from datetime import datetime
 
+from analytical_solver.worker import clean_temp_root, get_temp_root
+from ga_utils import DualLogger, silence_warnings
+from runner import OptimizationRunner, RunRequest, setup_run_directory
+
 silence_warnings()
-
-def clean_all_temp():
-    root = get_temp_root()
-    if os.path.exists(root):
-        try:
-            shutil.rmtree(root, ignore_errors=True)
-        except: 
-            time.sleep(0.5)
-            try: shutil.rmtree(root, ignore_errors=True)
-            except: pass
-
-def setup_run_directory(base_dir="OutputDataExperiments"):
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    
-    run_dir = os.path.join(base_dir, timestamp)
-    
-    os.makedirs(run_dir, exist_ok=True)
-    
-    print(f"[System] Created new output directory: {run_dir}")
-    return run_dir
 
 
 def main():
@@ -108,147 +79,41 @@ def main():
         _random.seed(args.seed)
         _np.random.seed(args.seed)
 
-    clean_all_temp()
+    clean_temp_root()
     os.makedirs(get_temp_root(), exist_ok=True)
-    main_proc_temp = os.path.join(get_temp_root(), "main_process")
-    os.makedirs(main_proc_temp, exist_ok=True)
-    
+
     base_dir = setup_run_directory()
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = f"{base_dir}/logs/run_{timestamp}.txt"
+    log_file = os.path.join(base_dir, "logs", f"run_{timestamp}.txt")
     os.makedirs(os.path.dirname(log_file), exist_ok=True)
-    
     sys.stdout = DualLogger(log_file)
     sys.stderr = sys.stdout
-    
-    config = GAConfig(
-        cost_file=args.costs,
-        h_min=args.hmin,
-        unit_system=args.units,
-        run_mode=args.run_mode,
-        v_opt=args.v_opt
-    )
-    load_config(config)
 
+    request = RunRequest(
+        inp_file=args.inp, cost_file=args.costs, h_min=args.hmin, units=args.units,
+        v_opt=args.v_opt, runs=args.runs, cores=args.cores, max_sims=args.max_sims,
+        run_mode=args.run_mode, time_limit=args.time_limit, sequential=args.sequential,
+    )
+
+    print("==============================================")
+    print(f"   ANALYTICAL OPTIMIZER: {os.path.basename(args.inp)}")
+    print(f"   Mode: {request.run_mode.upper()} | Cores: {request.effective_cores}")
+    print(f"   Seed: {args.seed if args.seed is not None else 'random (not reproducible)'}")
+    print("==============================================")
+
+    runner = OptimizationRunner(request)
     try:
-        sim = WaterSimulator(args.inp, config, temp_dir=main_proc_temp)
-        sim.evaluate([0] * sim.n_variables, penalty_factor=1000, epsilon=0.0)
+        runner.prepare()
     except Exception as e:
         print(f"[CRITICAL] PRE-FLIGHT CHECK FAILED: {e}")
         return
 
-    os.makedirs(os.path.join(base_dir, "plots"), exist_ok=True)
-    os.makedirs(os.path.join(base_dir, "tables"), exist_ok=True)
-    
-    num_cores = args.cores if args.cores > 0 else multiprocessing.cpu_count()
-    print("==============================================")
-    print(f"   ANALYTICAL OPTIMIZER: {os.path.basename(args.inp)}")
-    print(f"   Mode: {args.run_mode.upper()} | Cores: {num_cores}")
-    print(f"   Seed: {args.seed if args.seed is not None else 'random (not reproducible)'}")
-    print("==============================================")
-    
-    pool = None
-    results = []
     try:
-        if args.sequential:
-            # Один воркер у цьому ж процесі, без Pool і без Manager. Тільки так
-            # прогін справді відтворюваний: у паралельному режимі глобальний
-            # архів наповнює монітор із таймером, тому гілки, що залежать від
-            # розміру архіву (BASIN_ESCAPE, consensus locking), спрацьовують
-            # у різні моменти навіть при однаковому seed.
-            num_cores = 1
-            set_simulator(sim)
-            print("   [Sequential] Pool вимкнено — прогін детермінований\n")
-            if args.time_limit is None:
-                # Часовий бюджет за замовчуванням виводиться з калібрування
-                # швидкості симулятора, тому точка зупинки залежить від
-                # завантаження машини. Для детермінованого прогону зупиняємось
-                # виключно за лічильником симуляцій.
-                args.time_limit = 0
-        else:
-            pool = multiprocessing.Pool(processes=num_cores, initializer=init_worker_process,
-                                        initargs=(args.inp, config))
-
-        for i in range(args.runs):
-            current_log_dir = os.path.abspath(base_dir) if args.runs == 1 else os.path.abspath(os.path.join(base_dir, f"run_{i+1}"))
-            if args.runs > 1: os.makedirs(current_log_dir, exist_ok=True)
-
-            time_limit = None if args.time_limit is None else (
-                float('inf') if args.time_limit <= 0 else args.time_limit
-            )
-            solver = AnalyticalSolver(
-                sim, config.diameters_m, v_opt=config.v_opt, pool=pool,
-                log_dir=current_log_dir, n_workers=num_cores, max_sims=args.max_sims,
-                time_limit_sec=time_limit
-            )
-            
-            start_t = time.time()
-            if config.run_mode == 'fast_analytical':
-                best_solution_meters = solver.solve_fast()
-            else:
-                best_solution_meters = solver.solve_standalone()
-            duration = time.time() - start_t
-        
-            best_indices = []
-            for d in best_solution_meters:
-                try: idx = config.diameters_m.index(d)
-                except ValueError: idx = len(config.diameters_m) - 1
-                best_indices.append(idx)
-            
-            final_cost, final_p, _, _ = sim.get_stats(best_indices)
-            is_feasible = (final_p >= args.hmin)
-            status = "OK" if is_feasible else "FAIL"
-        
-            print("\n=== RESULTS ===")
-            print(f"Run {i+1}: {final_cost/1e6:.4f}M$ | P={final_p:.2f}m | {status} | Time: {format_time(duration)}")
-            
-            if args.runs > 1:
-                local_tables_dir = os.path.join(current_log_dir, "tables")
-                os.makedirs(local_tables_dir, exist_ok=True)
-                export_solution(best_indices, [], args.inp, os.path.join(local_tables_dir, "solution"), config)
-            
-            raw_hist = getattr(solver, 'history', [])
-            if not raw_hist: raw_hist = [(solver.ctx.sim_count, final_cost)]
-            formatted_hist = [{"evals": sc, "min_cost": bc} for sc, bc in raw_hist]
-            
-            results.append({
-                "run_id": i+1, "cost": final_cost, "pressure": final_p,
-                "feasible": is_feasible, "time": duration, "individual": best_indices, "history": formatted_hist
-            })
-
-    except KeyboardInterrupt:
-        print("\n[System] 🛑 User interrupted via Keyboard (Ctrl+C). Terminating...")
-    except Exception as e:
-        print(f"\n[Fatal Error] {e}"); traceback.print_exc()
+        results = runner.run(base_dir)
+        runner.export(results, base_dir)
     finally:
-        if pool: pool.terminate(); pool.join()
-        try: time.sleep(1.0); clean_all_temp()
-        except: pass
+        clean_temp_root()
 
-    if not results: return
-
-    best_run = sorted(results, key=lambda x: (not x['feasible'], x['cost']))[0]
-    
-    print("\n=== FINAL RESULTS ===")
-    for res in results:
-        status = "OK" if res['feasible'] else "FAIL"
-        print(f"Run {res['run_id']}: {res['cost']/1e6:.4f}M$ | P={res['pressure']:.2f}m | {status}")
-
-    total_evals = best_run['history'][-1].get('evals', len(best_run['history'])) if best_run['history'] else 0
-
-    solution_path = os.path.join(base_dir, "tables", "solution_champion")
-    export_solution(
-        individual=best_run['individual'], history=best_run['history'], inp_file=args.inp, 
-        filename_prefix=solution_path, config=config, cost=best_run['cost'], time_sec=best_run['time'], total_sims=total_evals          
-    )
-    
-    plot_network_map(best_run['individual'], args.inp, os.path.join(base_dir, "plots", "network_map.png"), config, best_run['cost'])
-    
-    if len(best_run['history']) > 1:
-        plot_convergence(best_run['history'], os.path.join(base_dir, "plots", "convergence.png"))
-    
-    summary_data = [{"Run": r['run_id'], "Cost": r['cost'], "Pressure": r['pressure'], "Feasible": r['feasible'], "Time": r['time']} for r in results]
-    pd.DataFrame(summary_data).to_csv(os.path.join(base_dir, "tables", "runs_summary.csv"), index=False)
 
 if __name__ == "__main__":
     main()

@@ -43,6 +43,54 @@ def get_temp_root():
     return os.path.abspath("_temp_sim_data")
 
 
+def clean_temp_root():
+    """Прибрати всі тимчасові каталоги воркерів.
+
+    Версія з `gui.py`: на Windows EPANET Toolkit тримає дескриптори
+    .rpt/.bin навіть після завершення воркера, тому `rmtree` іноді падає
+    з першого разу — звідси спроби з паузою. У `main.py` була спрощена
+    версія на 9 рядків, яка на Windows лишала сміття.
+    """
+    import time
+
+    root = get_temp_root()
+
+    # Якщо поточний каталог усередині кореня, вийти з нього, інакше
+    # Windows не дасть його видалити.
+    try:
+        if os.path.abspath(os.getcwd()).startswith(os.path.abspath(root)):
+            os.chdir(os.path.dirname(os.path.abspath(root)))
+    except OSError:
+        pass
+
+    for name in os.listdir(os.getcwd()):
+        low = name.lower()
+        if low.startswith('temp') and low.endswith(('.bin', '.inp', '.rpt', '.out')):
+            try:
+                os.remove(os.path.join(os.getcwd(), name))
+            except OSError:
+                pass
+
+    if not os.path.exists(root):
+        return
+
+    for dirpath, _, filenames in os.walk(root):
+        for name in filenames:
+            if name.lower().endswith(('.bin', '.inp', '.rpt', '.out')):
+                try:
+                    os.remove(os.path.join(dirpath, name))
+                except OSError:
+                    pass
+
+    for _ in range(10):
+        try:
+            shutil.rmtree(root, ignore_errors=False)
+            return
+        except OSError:
+            time.sleep(0.5)
+    shutil.rmtree(root, ignore_errors=True)
+
+
 def set_simulator(simulator):
     """Задати симулятор для запуску воркера в поточному процесі."""
     global _simulator
