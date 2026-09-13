@@ -54,17 +54,12 @@ class SolverContext:
         self.csr_edge_pipe = np.array(edge_pipe_map, dtype=np.int32)
 
         self.lengths = self.simulator.lengths
-        self.costs_array = self.simulator.costs 
+        self.costs_array = self.simulator.costs
 
-        diffs = [abs(c2-c1) for c1, c2 in zip(self.costs_array[:-1], self.costs_array[1:])]
-        avg_cost_diff = sum(diffs) / len(diffs) if len(diffs) > 0 else 50
-        avg_length = sum(self.lengths) / len(self.lengths) if len(self.lengths) > 0 else 100
-        self.baseline_bonus = avg_cost_diff * avg_length * 0.8
-        
         self.sim_speed = self._calibrate_simulator()
         print(f"[SolverContext] Hardware calibrated: ~{self.sim_speed:.0f} sims/sec")
         
-    def is_ghost_solution(self, indices, cost):
+    def is_ghost_solution(self, indices):
         sig = tuple(indices)
         cached = self.sim_cache.get(sig)
         if cached is not None:
@@ -149,8 +144,8 @@ class SolverContext:
             best_path_nodes = [self.id_to_node[pid] for pid in path_ids]
             path_pipes = [self.edge_to_pipe[(u, v)] for u, v in zip(best_path_nodes[:-1], best_path_nodes[1:])]
             return path_pipes, best_path_nodes
-            
-        except Exception as e:
+
+        except Exception:
             return [], []
 
     def get_lazy_periphery(self, indices):

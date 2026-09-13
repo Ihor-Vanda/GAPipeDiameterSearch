@@ -21,10 +21,8 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 from ga_config import GAConfig
 from water_sim import WaterSimulator
 from analytical_solver import AnalyticalSolver
-from Old.ga_optimizer import GeneticOptimizer
 from ga_data import load_config
 from plot import plot_convergence, plot_network_map, export_solution
-from ga_utils import format_time
 
 # ==========================================
 # 0 Глобальні функції та Multiprocessing
@@ -94,17 +92,6 @@ def worker_init(inp_file, config_obj):
         sys.stderr.write(f"!!! WORKER {os.getpid()} INIT CRASH: {e}\n")
         sys.exit(1)
 
-def worker_eval_task(args):
-    ind, gen, pf, epsilon = args
-    global worker_sim_instance
-    if worker_sim_instance is None:
-        return (float('inf'),)
-    try:
-        val = worker_sim_instance.evaluate(ind, penalty_factor=pf, epsilon=epsilon)
-        return val if isinstance(val, tuple) else (val,)
-    except Exception:
-        return (float('inf'),)
-    
 def analytical_worker_task(args):
     diams            = args[0]
     v_opt            = args[1]
@@ -421,7 +408,7 @@ class PipelineOptimizerApp(ctk.CTk):
             except Exception as e:
                 messagebox.showerror("Помилка", f"Не вдалося прочитати CSV: {e}")
                 
-    def on_mode_change(self, mode):
+    def on_mode_change(self, _selected_mode):
         self.lbl_cores.configure(text="Острови (cores, реком. >= 5):")
         if self.ent_cores.get() == "0":
             self.ent_cores.delete(0, "end")
@@ -436,10 +423,6 @@ class PipelineOptimizerApp(ctk.CTk):
         self.is_stopped = True
         self.btn_stop.configure(state="disabled")
         print("\n[System] 🛑 Команда на зупинку. Очікуємо збереження результатів...")
-        
-        if self.opt_mode.get() == "ga" and self.current_pool:
-            try: self.current_pool.terminate()
-            except: pass
 
     def start_thread(self):
         if not self.selected_inp or not self.selected_costs:
@@ -494,16 +477,15 @@ class PipelineOptimizerApp(ctk.CTk):
             os.makedirs(temp_dir, exist_ok=True)
 
             print(f"[System] Log file initiated: {log_file_path}")
-            print(f"==============================================")
-            print(f"   EVOLUTIONARY OPTIMIZER: {os.path.basename(self.selected_inp)}")
+            print("==============================================")
+            print(f"   ANALYTICAL OPTIMIZER: {os.path.basename(self.selected_inp)}")
             print(f"   Режим: {run_mode.upper()} | Воркери: {cores if cores > 0 else 'Auto'}")
-            print(f"==============================================\n")
+            print("==============================================\n")
 
             config = GAConfig(
-                inp_file=self.selected_inp, cost_file=self.selected_costs,
-                pop_size=200, n_gens=150, runs=runs, # Стандартні заглушки, щоб не ламався клас
+                cost_file=self.selected_costs,
                 h_min=hmin, unit_system=units, run_mode=run_mode,
-                init_method="analytical", v_opt=v_opt
+                v_opt=v_opt
             )
             load_config(config)
 
@@ -777,7 +759,7 @@ class PipelineOptimizerApp(ctk.CTk):
             self.topo_canvas.flush_events()
             self.tab_topology.update_idletasks()
                    
-        except Exception as e:
+        except Exception:
             import traceback
             err_msg = traceback.format_exc()
             if hasattr(self, 'txt_logs'):
@@ -941,7 +923,7 @@ class PipelineOptimizerApp(ctk.CTk):
             
             self.topo_canvas = FigureCanvasTkAgg(self.topo_fig, master=self.tab_topology)
             
-            def on_resize(event):
+            def on_resize(_event):
                 self.topo_ax.autoscale_view(tight=True)
                 self.topo_fig.canvas.draw_idle()
             self.topo_fig.canvas.mpl_connect('resize_event', on_resize)
@@ -1206,7 +1188,7 @@ class PipelineOptimizerApp(ctk.CTk):
                 
                 canvas_map = FigureCanvasTkAgg(fig_map, master=self.map_canvas_frame)
                 
-                def on_resize(event):
+                def on_resize(_event):
                     ax_map.autoscale_view(tight=True)
                     fig_map.canvas.draw_idle()
                 fig_map.canvas.mpl_connect('resize_event', on_resize)
@@ -1325,7 +1307,6 @@ class PipelineOptimizerApp(ctk.CTk):
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()
-    WaterSimulator.worker_eval_wrapper = staticmethod(worker_eval_task)
     AnalyticalSolver.worker_task = staticmethod(analytical_worker_task)
     app = PipelineOptimizerApp()
     app.mainloop()

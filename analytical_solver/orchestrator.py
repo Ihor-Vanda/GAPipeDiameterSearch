@@ -280,9 +280,7 @@ class IslandWorker:
         
         self.last_injected_peer = {}
         self.rescue_fired = False
-        self.corridor_pool_streak = 0
         self.loop_balance_failed_pipes = {}
-        self._last_global_improvement_sim = 0
         self.bottleneck_failed_pipes = {}
         self.zero_sum_tabu = {}
         
@@ -308,7 +306,6 @@ class IslandWorker:
         self.stag_limit = 4 
         round_idx = 0
         epoch_start_sims = self.ctx.sim_count 
-        self._last_global_improvement_sim = self.ctx.sim_count
         just_flushed = False
         
         self._last_ping_sims = self.ctx.sim_count
@@ -380,7 +377,7 @@ class IslandWorker:
             self._apply_swap(round_idx, shared_progress)
 
             if self.stagnation_counter >= 2:
-                self._apply_kick(round_idx, shared_progress, gb)
+                self._apply_kick(round_idx, shared_progress)
                 
             if getattr(self, '_force_flush_next', False):
                 just_flushed = True
@@ -453,7 +450,7 @@ class IslandWorker:
                                 self.pool.active_pool.insert(0, (c, c, hybrid_sol))
                                 self.stagnation_counter = 0
                             else:
-                                self.ctx.log(f" 🧬 [HYBRID FAILED] Hybrid was too expensive. Drift continues.")
+                                self.ctx.log(" 🧬 [HYBRID FAILED] Hybrid was too expensive. Drift continues.")
                                 
                         else:
                             self.ctx.log(f" 🛡️ [EXPLORATION SHIELD] Ignored global best. Deep Random Walk (T={T:.2f}).")
@@ -522,7 +519,6 @@ class IslandWorker:
         
         if gb and gb[0] < self.global_best_cost:
             self.global_best_cost = gb[0]
-            self._last_global_improvement_sim = self.ctx.sim_count
             self.ctx.log(f"   > [IPC] 📡 Received new Global Bound from peer: {self.global_best_cost/1e6:.4f}M$")
         
         for i in range(self.n_workers):
@@ -618,7 +614,7 @@ class IslandWorker:
                         self.stagnation_counter = 0
                         self.ctx.log(f"   [MINI-RESTART] Injected {actually_added} fresh seeds. Tabu cleared.")
                     else:
-                        self.ctx.log(f"   [MINI-RESTART] All seeds infeasible. Stagnation persists.")
+                        self.ctx.log("   [MINI-RESTART] All seeds infeasible. Stagnation persists.")
 
     def _apply_swap(self, round_idx, shared_progress):
         if round_idx > 0 and round_idx % 8 == 0:
@@ -627,7 +623,7 @@ class IslandWorker:
             if feas and p >= self.ctx.simulator.config.h_min and c < self.run_best_cost:
                 is_ghost = False
                 if (self.run_best_cost - c) > (self.run_best_cost * 0.02):
-                    is_ghost = self.ctx.is_ghost_solution(swapped, c)
+                    is_ghost = self.ctx.is_ghost_solution(swapped)
                     
                 if is_ghost:
                     self.ctx.log(f"   > [SHIELD] Swap illusion blocked ({c/1e6:.4f}M$)!")
@@ -644,8 +640,8 @@ class IslandWorker:
                     eff_bonus = self.base_dyn_bonus * 0.2 if p_surplus > 10.0 else self.base_dyn_bonus
                     self.pool.active_pool.insert(0, (c - (p_surplus * eff_bonus) - (self.run_best_cost * 0.1), c, swapped))
     
-    def _apply_kick(self, round_idx, shared_progress, gb):
-        ABLATION_MODE = True 
+    def _apply_kick(self, round_idx, shared_progress):
+        ABLATION_MODE = False 
  
         real_T = min(1.0, self.stagnation_counter / max(1, self.stag_limit * 3.0))
         T = 0.5 if ABLATION_MODE else real_T
@@ -811,7 +807,7 @@ class IslandWorker:
             heal_locks = set() if strategy in ["SPATIAL_PERTURB", "SMART_PERTURB", "RUIN_RECREATE"] else locked
             forced_sol, ok, boosts = self.ls.heal_network(forced_sol, heal_locks)
             if not ok: 
-                if boosts > 0: self.ctx.log(f"     -> Heal Aborted Early: Cost exceeded limit.")
+                if boosts > 0: self.ctx.log("     -> Heal Aborted Early: Cost exceeded limit.")
                 return
  
         if log_msg: self.ctx.log(f"     -> {log_msg}")
@@ -875,7 +871,7 @@ class IslandWorker:
         score = effective_cost - (max(0.0, p - base_h_min) * (self.base_dyn_bonus * 0.2 if max(0.0, p - base_h_min) > 10.0 else self.base_dyn_bonus)) if deficit == 0 else effective_cost
 
         if deficit == 0 and effective_cost < self.run_best_cost:
-            if (self.run_best_cost - effective_cost) > (self.run_best_cost * 0.02) and self.ctx.is_ghost_solution(final_sol, effective_cost): return
+            if (self.run_best_cost - effective_cost) > (self.run_best_cost * 0.02) and self.ctx.is_ghost_solution(final_sol): return
  
             diff = self.run_best_cost - effective_cost
             self.run_best_cost, self.run_best_sol = effective_cost, final_sol
@@ -906,7 +902,6 @@ class IslandWorker:
             self.pool.active_pool.clear()
             self.pool.active_pool.append((score, effective_cost, final_sol))
             self.stagnation_counter = 0
-            self.corridor_pool_streak = 0
             self.bottleneck_failed_pipes.clear()
             if hasattr(self, 'bottleneck_boosted_pipes'): self.bottleneck_boosted_pipes.clear()
             self.loop_balance_failed_pipes.clear()
@@ -937,9 +932,6 @@ class IslandWorker:
                 self.ctx.log(f"     -> Pool Filtered (gap {pool_gap:.1%}): {effective_cost/1e6:.4f}M$")
             else:
                 self.pool.active_pool.append((score * 1.05, effective_cost, final_sol))
-                if strategy in ["SMART_PERTURB", "RUIN_RECREATE", "ZERO_SUM", "LOOP_BALANCE"]: 
-                    self.corridor_pool_streak = 0
-                
                 if use_bandit:
                     hamming_dist = self.pool.hamming_distance(final_sol, self.run_best_sol)
                     diversity_ratio = hamming_dist / self.ctx.num_pipes
@@ -1111,7 +1103,7 @@ class IslandWorker:
                         if is_strictly_valid and real_cost < self.run_best_cost:
                             is_ghost = False
                             if (self.run_best_cost - real_cost) > (self.run_best_cost * 0.02):
-                                is_ghost = self.ctx.is_ghost_solution(refined_sol, real_cost)
+                                is_ghost = self.ctx.is_ghost_solution(refined_sol)
                                 
                             if is_ghost:
                                 self.ctx.log(f"   > [SHIELD] Beam illusion blocked ({real_cost/1e6:.4f}M$).")
@@ -1215,7 +1207,6 @@ class IslandWorker:
 
         if self.run_best_cost < self.global_best_cost:
             self.global_best_cost = self.run_best_cost
-            self._last_global_improvement_sim = self.ctx.sim_count
             if shared_progress is not None:
                 current_gb = shared_progress.get('global_best', (float('inf'), []))
                 if self.run_best_cost < current_gb[0]:
@@ -1239,7 +1230,6 @@ class AnalyticalSolver:
             max_sims         = args[10] if len(args) > 10 else float('inf')
             n_workers        = args[11] if len(args) > 11 else (len(shared_progress) if shared_progress else 1)
             
-            import sys
             import __main__
             sim = getattr(__main__, 'worker_sim_instance', None)
             if sim is None: return (float('inf'), None, None, 0, set())
@@ -1289,7 +1279,6 @@ class AnalyticalSolver:
         self.pool = SolutionPool(self.ctx) 
         
         self.BASE_SIM_BUDGET = {"SMALL": 1000000, "MEDIUM": 3000000, "LARGE": 1500000, "XLARGE": 30000000}[self.network_class]
-        self.EPOCHS = {"SMALL": 4, "MEDIUM": 4, "LARGE": 4, "XLARGE": 5}[self.network_class]
             
         if max_sims is not None:
             self.max_sims = max_sims
@@ -1302,38 +1291,6 @@ class AnalyticalSolver:
             cluster_speed = max(self.ctx.sim_speed, 1.0) * self.n_workers
             self.time_limit_sec = (self.max_sims / cluster_speed) * 5
             
-    def _build_diverse_archive(self, pool_results, target_size=6, elite_count=2):
-        if not pool_results: 
-            return []
-            
-        num_pipes = len(pool_results[0][1])
-        
-        unique_results = {}
-        for cost, sol in pool_results:
-            sig = tuple(sol)
-            if sig not in unique_results or cost < unique_results[sig]:
-                unique_results[sig] = cost
-                
-        sorted_results = sorted([(c, list(s)) for s, c in unique_results.items()], key=lambda x: x[0])
-        
-        archive = sorted_results[:elite_count]
-        
-        if num_pipes < 100:
-            min_diff_pipes = max(2, int(num_pipes * 0.08))
-        else:
-            min_diff_pipes = max(15, min(45, int(num_pipes * 0.08)))
-        
-        for cost, sol in sorted_results[elite_count:]:
-            if len(archive) >= target_size: 
-                break
-                
-            min_hamming = min(sum(1 for a, b in zip(sol, arch_sol[1]) if a != b) for arch_sol in archive)
-            
-            if min_hamming >= min_diff_pipes:
-                archive.append((cost, sol))
-                
-        return archive
-
     def solve_fast(self, ui_callback=None):
         print("\n[AnalyticalSolver] ⚡ Initiating FAST Analytical Search (Velocity Sweep)...\n")
         start_time = time.time()
@@ -1398,7 +1355,7 @@ class AnalyticalSolver:
         real_diams = [self.ctx.diameters[i] for i in global_best_sol]
         return real_diams
 
-    def solve_standalone(self, max_sims=None, time_limit_sec=None, ui_callback=None):
+    def solve_standalone(self, ui_callback=None):
         print("\n[AnalyticalSolver] ⚡ Initiating Continuous Island Model Search...\n")
         start_time = time.time()
         global_best_cost = float('inf')
@@ -1598,7 +1555,10 @@ class AnalyticalSolver:
         if global_best_cost != float('inf'):
             print(f"\n[AnalyticalSolver] FINAL RESULT: {global_best_cost/1e6:.4f}M$ (Total Time: {total_time/60:.1f}m | Total Sims: {total_cluster_sims:,})")
         else:
-            print(f"\n[AnalyticalSolver] EXECUTION ABORTED. No valid solutions.")
+            print("\n[AnalyticalSolver] EXECUTION ABORTED. No valid solutions.")
         
-        real_diams = [self.ctx.diameters[i] for i in global_best_sol] if global_best_sol else []
+        if global_best_sol:
+            real_diams = [self.ctx.diameters[max(0, min(i, self.ctx.max_d_idx))] for i in global_best_sol]
+        else:
+            real_diams = []
         return real_diams

@@ -2,11 +2,11 @@ import matplotlib
 matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
 import pandas as pd
-import numpy as np
 import warnings
 import wntr
 import networkx as nx
 import os
+from matplotlib.ticker import FuncFormatter
 
 def export_solution(individual, history, inp_file, filename_prefix, config, cost=None, time_sec=None, total_sims=None):
     print("[Output] Генерація інженерних звітів та INP-файлу...")
@@ -113,56 +113,110 @@ def export_solution(individual, history, inp_file, filename_prefix, config, cost
     except Exception as e:
         print(f"   > [Помилка] Не вдалося згенерувати INP/Звіт: {e}")
 
-def plot_convergence(history, filename="convergence.png"):
-    if not history: 
+def plot_convergence(
+    history,
+    filename="convergence.png",
+    title="Крива збіжності",
+    x_label="Кількість викликів гідравлічного симулятора",
+    y_label="Вартість",
+    scale_cost=True
+):
+    if not history:
         print("   > [WARNING] Історія порожня, графік збіжності не згенеровано.")
         return
-    
+
     x_vals = []
-    y_costs = []
-    
-    for x in history:
-        x_val = x.get('evals', x.get('gen', None))
-        
-        y_val = x.get('cost', x.get('min_cost', None))
-        
-        if x_val is not None and y_val is not None and y_val != float('inf') and y_val > 0:
-            x_vals.append(x_val)
-            y_costs.append(y_val / 1e6)
-            
+    y_vals = []
+
+    for point in history:
+        x = point.get("evals", point.get("gen"))
+        y = point.get("cost", point.get("min_cost"))
+
+        if (x is not None and y is not None and y != float("inf") and y > 0):
+            x_vals.append(x)
+            y_vals.append(y)
+
     if not x_vals:
         print("   > [WARNING] Не знайдено валідних точок для графіка.")
         return
-        
-    sorted_pairs = sorted(zip(x_vals, y_costs), key=lambda pair: pair[0])
-    x_vals, y_costs = zip(*sorted_pairs)
+
+    sorted_pairs = sorted(zip(x_vals, y_vals), key=lambda pair: pair[0])
+    x_vals, y_vals = zip(*sorted_pairs)
+
+    if scale_cost:
+        y_plot = [v / 1e6 for v in y_vals]
+        y_axis_label = f"{y_label} (×10⁶)"
+    else:
+        y_plot = y_vals
+        y_axis_label = y_label
+
+    fig, ax = plt.subplots(figsize=(10, 6), dpi=300)
+    fig.patch.set_facecolor('#ffffff')
+    ax.set_facecolor('#ffffff')
     
-    plt.figure(figsize=(10, 6))
+    ax.tick_params(colors='black')
+    ax.xaxis.label.set_color('black')
+    ax.yaxis.label.set_color('black')
     
-    plt.step(x_vals, y_costs, label='Найкраща вартість (M$)', color='blue', linewidth=2, where='post')
-        
-    x_label = 'Кількість симуляцій (Evaluations)' if 'evals' in history[0] else 'Ітерації / Покоління'
-    
-    plt.xlabel(x_label)
-    plt.ylabel('Вартість (Мільйони $)')
-    plt.title('Історія оптимізації (Convergence)')
-    plt.grid(True, linestyle='--', alpha=0.7)
-    plt.legend()
+    ax.grid(True, color='gray', linestyle='--', alpha=0.5)
+
+    ax.step(
+        x_vals,
+        y_plot,
+        where="post",
+        color="#00ffcc", 
+        linewidth=2.5,
+        label="Найкраще знайдене значення"
+    )
+
+    max_eval = max(x_vals)
+
+    if max_eval >= 1e6:
+        divisor = 1e6
+        suffix = "млн"
+    elif max_eval >= 1e3:
+        divisor = 1e3
+        suffix = "тис."
+    else:
+        divisor = 1
+        suffix = None
+
+    ax.xaxis.set_major_formatter(
+        FuncFormatter(lambda value, _pos: f"{value / divisor:g}")
+    )
+
+    if suffix:
+        ax.set_xlabel(f"{x_label}, {suffix}")
+    else:
+        ax.set_xlabel(x_label)
+
+    ax.set_ylabel(y_axis_label)
+    ax.set_title(title, color='black', pad=15)
+
+    ax.legend()
     plt.tight_layout()
-    
+
     os.makedirs(os.path.dirname(filename), exist_ok=True)
-    plt.savefig(filename, dpi=300)
+    plt.savefig(filename, dpi=300, facecolor=fig.get_facecolor(), edgecolor='none')
     plt.close()
+
     print(f"   > ✅ Збережено графік збіжності: {filename}")
-    
+
     base_dir = os.path.dirname(os.path.dirname(filename))
     tables_dir = os.path.join(base_dir, "tables")
     os.makedirs(tables_dir, exist_ok=True)
-    
-    rounded_costs = [round(c * 1e6, 2) for c in y_costs]
-    pd.DataFrame({x_label: x_vals, "Cost": rounded_costs}).to_csv(
-        os.path.join(tables_dir, "convergence_history.csv"), index=False
+
+    csv_x_name = "Evaluations" if "evals" in history[0] else "Generation"
+    csv_y_name = "Cost" if history[0].get("cost") is not None else "Objective"
+
+    pd.DataFrame({
+        csv_x_name: x_vals,
+        csv_y_name: y_vals
+    }).to_csv(
+        os.path.join(tables_dir, "convergence_history.csv"),
+        index=False
     )
+
 
 def plot_network_map(individual, inp_file, filename="solution_map.png", config=None, cost=None):
     try:
@@ -183,6 +237,7 @@ def plot_network_map(individual, inp_file, filename="solution_map.png", config=N
             
         edges = []
         real_diams_m = []
+        
         for i, pipe_name in enumerate(wn.pipe_name_list):
             idx = int(individual[i])
             pipe = wn.get_link(pipe_name)
@@ -191,52 +246,63 @@ def plot_network_map(individual, inp_file, filename="solution_map.png", config=N
             d_val_m = config.diameters_m[idx] if hasattr(config, 'diameters_m') else config.diameters_raw[idx] / 1000.0
             real_diams_m.append(d_val_m)
             
-        max_d = max(real_diams_m)
-        min_d = min(real_diams_m)
-        line_widths = [1 + 4 * ((d - min_d) / (max_d - min_d + 1e-6)) for d in real_diams_m]
+        valid_ds = [d for d in real_diams_m if d > 0]
+        min_rd = min(valid_ds) if valid_ds else 1
+        max_rd = max(valid_ds) if valid_ds else 1
         
-        fig, ax = plt.subplots(figsize=(14, 14))
+        unique_diams = sorted(list(set(valid_ds)))
+        if not unique_diams: unique_diams = [1.0]
+
+        cmap = plt.get_cmap('turbo', len(unique_diams))
+        diam_to_color_idx = {d: i for i, d in enumerate(unique_diams)}
+        
+        color_indices = [diam_to_color_idx.get(d, 0) if d > 0 else 0 for d in real_diams_m]
+        widths = [1.0 + 4.0 * (d - min_rd) / (max_rd - min_rd + 1e-6) if d > 0 else 1.0 for d in real_diams_m]
+        
+        fig, ax = plt.subplots(figsize=(14, 14), dpi=300)
+        fig.patch.set_facecolor('#ffffff')
+        ax.set_facecolor('#ffffff')
+        ax.set_aspect('equal', adjustable='datalim')
         
         junctions = wn.junction_name_list
         reservoirs = wn.reservoir_name_list
         tanks = wn.tank_name_list
         
-        nx.draw_networkx_nodes(G, pos, nodelist=junctions, node_size=15, node_color='black', alpha=0.6, label="Вузли")
-        
+        if junctions:
+            nx.draw_networkx_nodes(G, pos, nodelist=junctions, ax=ax, node_size=15, node_color='#95a5a6')
+            
         if reservoirs:
-            nx.draw_networkx_nodes(G, pos, nodelist=reservoirs, node_size=150, node_color='blue', node_shape='s', label="Джерело (Reservoir)")
+            nx.draw_networkx_nodes(G, pos, nodelist=reservoirs, ax=ax, node_size=150, node_color='#3498db', node_shape='s', label="Джерело")
             
         if tanks:
-            nx.draw_networkx_nodes(G, pos, nodelist=tanks, node_size=150, node_color='red', node_shape='^', label="Бак (Tank)")
-            
-        edges_draw = nx.draw_networkx_edges(
-            G, pos, ax=ax, edgelist=edges, edge_color=real_diams_m, 
-            edge_cmap=plt.cm.viridis, width=line_widths, arrows=False
+            nx.draw_networkx_nodes(G, pos, nodelist=tanks, ax=ax, node_size=150, node_color='#2ecc71', node_shape='^', label="Бак")
+        
+        nx.draw_networkx_edges(
+            G, pos, ax=ax, edgelist=edges, edge_color=color_indices, 
+            edge_cmap=cmap, width=widths, arrows=False
         )
         
-        if isinstance(edges_draw, list):
-            import matplotlib.cm as cm
-            import matplotlib.colors as mcolors
-            sm = cm.ScalarMappable(cmap=plt.cm.viridis, norm=mcolors.Normalize(vmin=min_d, vmax=max_d))
-            sm.set_array([])
-            cbar = fig.colorbar(sm, ax=ax, shrink=0.5, pad=0.02)
-        else:
-            cbar = fig.colorbar(edges_draw, ax=ax, shrink=0.5, pad=0.02)
-            
-        cbar.set_label('Діаметр труби (м)')
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=-0.5, vmax=len(unique_diams)-0.5))
+        sm.set_array([])
+        units_str = config.unit_system if hasattr(config, 'unit_system') else "м"
         
-        ax.legend(scatterpoints=1, loc='upper right', fontsize=12)
+        cbar = fig.colorbar(sm, ax=ax, shrink=0.7, pad=0.02, label=f"Діаметр ({units_str})")
+        cbar.set_ticks(range(len(unique_diams)))
+        cbar.ax.set_yticklabels([f"{d:g}" for d in unique_diams])
+        
+        if reservoirs or tanks:
+            ax.legend(scatterpoints=1, loc='upper right', fontsize=12)
         
         title_str = "Оптимізована конфігурація мережі"
         if cost is not None:
             title_str += f" | Вартість: {cost/1e6:.4f} M$"
-        ax.set_title(title_str, fontsize=16)
+        ax.set_title(title_str, fontsize=16, color="black", pad=15)
         
         ax.axis('off')
         plt.tight_layout()
         
         os.makedirs(os.path.dirname(filename), exist_ok=True)
-        plt.savefig(filename, dpi=300)
+        plt.savefig(filename, dpi=300, facecolor=fig.get_facecolor(), edgecolor='none')
         plt.close(fig)
         print(f"   > ✅ Збережено графік топології: {filename}")
         

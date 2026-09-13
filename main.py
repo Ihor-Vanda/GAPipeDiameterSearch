@@ -204,13 +204,10 @@ def main():
     sys.stderr = sys.stdout
     
     config = GAConfig(
-        inp_file=args.inp,
         cost_file=args.costs,
-        pop_size=200, n_gens=150, runs=args.runs,
         h_min=args.hmin,
         unit_system=args.units,
         run_mode=args.run_mode,
-        init_method="analytical",
         v_opt=args.v_opt
     )
     load_config(config)
@@ -226,10 +223,10 @@ def main():
     os.makedirs(os.path.join(base_dir, "tables"), exist_ok=True)
     
     num_cores = args.cores if args.cores > 0 else multiprocessing.cpu_count()
-    print(f"==============================================")
-    print(f"   EVOLUTIONARY OPTIMIZER: {os.path.basename(args.inp)}")
+    print("==============================================")
+    print(f"   ANALYTICAL OPTIMIZER: {os.path.basename(args.inp)}")
     print(f"   Mode: {args.run_mode.upper()} | Cores: {num_cores}")
-    print(f"==============================================")
+    print("==============================================")
     
     pool = None
     results = []

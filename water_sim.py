@@ -70,8 +70,7 @@ class WaterSimulator:
         self.diams_m = []
         self.costs = []
         self.n_options = 0
-        self.death_penalty = 1e16
-        
+
         self._refresh_config()
 
     def _refresh_config(self):

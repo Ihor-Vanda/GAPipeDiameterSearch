@@ -1,6 +1,5 @@
 import itertools
 import random
-import numpy as np
 import math
 
 class LocalSearch:
@@ -24,16 +23,31 @@ class LocalSearch:
         impact_scores.sort(key=lambda x: x[1], reverse=True)
         return [i for i, _ in impact_scores[:top_k]]
 
-    def gradient_squeeze(self, indices, locked_pipes=None, max_passes=None, quick_mode=False, dyn_bonus=None, min_rel_improvement=0.0003):
+    def gradient_squeeze(self, indices, locked_pipes=None, max_passes=None, quick_mode=False,
+                         dyn_bonus=None, min_rel_improvement=0.0003, classical_descent=False):
+        """Градієнтний спуск по індексах діаметрів.
+
+        `classical_descent=True` — базовий режим для ablation-порівнянь:
+        класичний жадібний спуск без гідравлічних евристик, без обмеження
+        кількості проходів, без дострокового переривання та без блокувань.
+        (Раніше цей режим вмикався правкою вихідника.)
+        """
         if dyn_bonus is None:
             c_start, _, _, _ = self.ctx.get_cached_stats(indices)
             dyn_bonus = c_start * 0.001
-            
+
         locked_pipes = locked_pipes or set()
+
+        if classical_descent:
+            quick_mode = False
+            max_passes = None
+            min_rel_improvement = 0.0
+            locked_pipes = set()
+
         current_indices = list(indices)
         improved = True
         passes = 0
-        
+
         cost, p_min, _, _ = self.ctx.get_cached_stats(current_indices)
         best_score = cost - ((p_min - self.ctx.simulator.config.h_min) * dyn_bonus) if p_min >= self.ctx.simulator.config.h_min else float('inf')
         
@@ -176,7 +190,6 @@ class LocalSearch:
         if not path_pipes or not lazy_pipes:
             return indices_copy
 
-        up_limit = max(10, self.ctx.num_pipes // 5)
         down_limit = max(10, self.ctx.num_pipes // 3)
         
         if self.ctx.num_pipes > 200:
@@ -203,7 +216,7 @@ class LocalSearch:
                 if indices_copy[up_pipe] >= self.ctx.max_d_idx: continue
                 
                 for d1, d2 in itertools.combinations(lazy_pipes[:safe_down_limit], 2):
-                    if indices_copy[d1] > 0 and indices_copy[d2] > 0:
+                    if indices_copy[d1] > 0 and indices_copy[d2] > 0 and indices_copy[up_pipe] < self.ctx.max_d_idx:
                         test_sol = list(indices_copy)
                         test_sol[up_pipe] += 1
                         test_sol[d1] -= 1

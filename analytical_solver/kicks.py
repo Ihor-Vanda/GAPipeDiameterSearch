@@ -1,7 +1,6 @@
 import random
 import networkx as nx
 import numpy as np
-import itertools
 
 class KickStrategies:
     def __init__(self, ctx, local_search):
@@ -450,7 +449,7 @@ class KickStrategies:
                 target_sol = arch_sol
                 
         if target_sol is None:
-            return None, None, f"Archive degenerated. No distinct basins found."
+            return None, None, "Archive degenerated. No distinct basins found."
 
         diff_pipes = [i for i in range(num_pipes) if indices[i] != target_sol[i]]
         
@@ -462,7 +461,6 @@ class KickStrategies:
         kicked = list(indices)
         for p in replace_pipes: kicked[p] = target_sol[p]
 
-        cost_limit = kwargs.get('cost_limit', float('inf'))
         healed, ok, boosts = self.ls.heal_network(kicked, set())
         if not ok: 
             return None, None, "Heal failed after transplant"
