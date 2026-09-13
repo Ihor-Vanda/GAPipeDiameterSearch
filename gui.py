@@ -17,6 +17,7 @@ from datetime import datetime
 from PIL import Image
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
+import netdraw
 from analytical_solver.worker import clean_temp_root, get_temp_root
 from runner import OptimizationRunner, RunRequest
 
@@ -478,69 +479,23 @@ class PipelineOptimizerApp(ctk.CTk):
             self._last_drawn_cost_for_map = current_cost
             self._last_drawn_sol = list(best_sol)
 
-            import wntr
-            import networkx as nx
-            import matplotlib.pyplot as plt
-
+            # Геометрія мережі кешується, поки не змінився .inp: перечитувати
+            # її на кожне оновлення прогресу було б дорожче за саме малювання.
             if self._live_inp_path != self.selected_inp:
-                self._live_wn = wntr.network.WaterNetworkModel(self.selected_inp)
-                self._live_G = self._live_wn.get_graph()
-                self._live_pos = self._live_wn.query_node_attribute('coordinates')
-                self._live_sources = self._live_wn.reservoir_name_list + self._live_wn.tank_name_list
-                self._live_regular_nodes = [n for n in self._live_G.nodes() if n not in self._live_sources]
-                
-                self._live_pipe_names = self._live_wn.pipe_name_list
-                self._live_pipe_map = {name: i for i, name in enumerate(self._live_pipe_names)}
+                self._live_geometry = netdraw.NetworkGeometry.load(self.selected_inp)
                 self._live_inp_path = self.selected_inp
 
-            actual_diams = self._get_actual_diams()
-
-            real_ds = []
-            for u, v, k in self._live_G.edges(keys=True):
-                sol_idx = self._live_pipe_map.get(k)
-                if sol_idx is not None and sol_idx < len(best_sol):
-                    pipe_idx = int(best_sol[sol_idx])
-                    if actual_diams and 0 <= pipe_idx < len(actual_diams):
-                        real_ds.append(float(actual_diams[pipe_idx]))
-                    else:
-                        real_ds.append(float(pipe_idx + 1))
-                else:
-                    real_ds.append(-1.0)
-
-            valid_ds = [d for d in real_ds if d > 0]
-            min_rd = min(valid_ds) if valid_ds else 1
-            max_rd = max(valid_ds) if valid_ds else 1
-            unique_diams = sorted(list(set(valid_ds)))
-            if not unique_diams: unique_diams = [1.0]
-
-            cmap = plt.get_cmap('turbo', len(unique_diams))
-            diam_to_color_idx = {d: i for i, d in enumerate(unique_diams)}
-
-            color_indices = [diam_to_color_idx.get(d, 0) if d > 0 else 0 for d in real_ds]
-            widths = [1.0 + 4.0 * (rd - min_rd) / (max_rd - min_rd + 1e-6) if rd > 0 else 1.0 for rd in real_ds]
+            diameters = netdraw.diameters_from_solution(
+                self._live_geometry, best_sol, self._get_actual_diams())
 
             self.topo_ax.clear()
-            self.topo_ax.set_aspect('equal', adjustable='datalim')
+            scale = netdraw.draw(self.topo_ax, self._live_geometry, diameters)
 
-            nx.draw_networkx_edges(self._live_G, self._live_pos, ax=self.topo_ax, edge_color=color_indices, edge_cmap=cmap, width=widths, arrows=False)
-            nx.draw_networkx_nodes(self._live_G, self._live_pos, nodelist=self._live_regular_nodes, ax=self.topo_ax, node_size=15, node_color='#95a5a6')
-            
-            if self._live_sources:
-                nx.draw_networkx_nodes(self._live_G, self._live_pos, nodelist=self._live_sources, ax=self.topo_ax, node_size=100, node_color='#3498db', node_shape='s')
-                
-            self.topo_ax.axis('off')
-            
-            sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=-0.5, vmax=len(unique_diams)-0.5))
-            sm.set_array([])
-            units_str = self.opt_units.get() if hasattr(self, 'opt_units') else "mm"
-            
-            if self.topo_cb is None:
-                self.topo_cb = self.topo_fig.colorbar(sm, ax=self.topo_ax, label=f"Діаметр ({units_str})", shrink=0.7)
-            
-            self.topo_cb.update_normal(sm)
-            self.topo_cb.set_ticks(range(len(unique_diams)))
-            self.topo_cb.ax.set_yticklabels([f"{d:g}" for d in unique_diams])
-            
+            self.topo_cb = scale.attach_colorbar(
+                self.topo_fig, self.topo_ax, f"Діаметр ({self.opt_units.get()})",
+                existing=self.topo_cb,
+            )
+
             self.topo_canvas.draw()
             self.topo_canvas.flush_events()
             self.tab_topology.update_idletasks()
@@ -649,64 +604,21 @@ class PipelineOptimizerApp(ctk.CTk):
             plt.close(self.topo_fig) 
             
         try:
-            import wntr
-            import networkx as nx
-            
-            wn = wntr.network.WaterNetworkModel(inp_path)
-            G = wn.get_graph()
-            pos = wn.query_node_attribute('coordinates')
-            
+            geometry = netdraw.NetworkGeometry.load(inp_path)
+
             self.topo_fig, self.topo_ax = plt.subplots(figsize=(6, 4), dpi=100)
             self.topo_fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
-            
-            bg_color = '#ffffff' 
+
+            bg_color = '#ffffff'
             self.topo_fig.patch.set_facecolor(bg_color)
             self.topo_ax.set_facecolor(bg_color)
-            self.topo_ax.set_aspect('equal', adjustable='datalim')
-            
-            reservoirs = wn.reservoir_name_list
-            tanks = wn.tank_name_list
-            sources = reservoirs + tanks
-            regular_nodes = [n for n in G.nodes() if n not in sources]
-            
-            initial_diams = []
-            for u, v, k in G.edges(keys=True):
-                try:
-                    pipe = wn.get_link(k)
-                    val = pipe.diameter * 1000 if pipe.diameter < 5 else pipe.diameter
-                    initial_diams.append(val)
-                except:
-                    initial_diams.append(0.0)
-                    
-            valid_ds = [d for d in initial_diams if d > 0]
-            
-            if valid_ds:
-                min_rd, max_rd = min(valid_ds), max(valid_ds)
-                unique_diams = sorted(list(set(valid_ds)))
-                cmap = plt.get_cmap('turbo', len(unique_diams))
-                diam_to_color_idx = {d: i for i, d in enumerate(unique_diams)}
-                
-                color_indices = [diam_to_color_idx.get(d, 0) if d > 0 else 0 for d in initial_diams]
-                widths = [1.0 + 4.0 * (d - min_rd) / (max_rd - min_rd + 1e-6) if d > 0 else 1.0 for d in initial_diams]
-                
-                nx.draw_networkx_edges(G, pos, ax=self.topo_ax, edge_color=color_indices, edge_cmap=cmap, width=widths, arrows=False)
-                
-                sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=-0.5, vmax=len(unique_diams)-0.5))
-                sm.set_array([])
-                units_str = self.opt_units.get() if hasattr(self, 'opt_units') else "mm"
-                
-                self.topo_cb = self.topo_fig.colorbar(sm, ax=self.topo_ax, label=f"Початковий Діаметр ({units_str})", shrink=0.7, ticks=range(len(unique_diams)))
-                self.topo_cb.ax.set_yticklabels([f"{d:g}" for d in unique_diams])
-            else:
-                nx.draw_networkx_edges(G, pos, ax=self.topo_ax, edge_color='#cccccc', alpha=0.8, arrows=False)
-                self.topo_cb = None
-            
-            nx.draw_networkx_nodes(G, pos, nodelist=regular_nodes, ax=self.topo_ax, node_size=15, node_color='#95a5a6')
-            if sources:
-                nx.draw_networkx_nodes(G, pos, nodelist=sources, ax=self.topo_ax, node_size=100, node_color='#3498db', node_shape='s')
-                
-            self.topo_ax.axis('off')
-            
+
+            scale = netdraw.draw(self.topo_ax, geometry, netdraw.diameters_from_inp(geometry))
+            self.topo_cb = scale.attach_colorbar(
+                self.topo_fig, self.topo_ax,
+                f"Початковий Діаметр ({self.opt_units.get()})",
+            )
+
             self.topo_canvas = FigureCanvasTkAgg(self.topo_fig, master=self.tab_topology)
             
             def on_resize(_event):
@@ -906,70 +818,14 @@ class PipelineOptimizerApp(ctk.CTk):
         drawn_native = False
         if os.path.exists(sol_path) and target_inp and os.path.exists(target_inp):
             try:
-                import networkx as nx
-                import wntr
-                wn = wntr.network.WaterNetworkModel(target_inp)
-                G = wn.get_graph()
-                pos = wn.query_node_attribute('coordinates')
-                
-                df_sol = pd.read_csv(sol_path)
-                diam_col_plot = df_sol.columns[-1]
-                for col in df_sol.columns:
-                    if 'diam' in col.lower() or 'діаметр' in col.lower() or 'd_' in col.lower():
-                        diam_col_plot = col
-                        break
-                        
-                diam_dict = dict(zip(df_sol.iloc[:, 0].astype(str), df_sol[diam_col_plot]))
-                
-                real_ds = []
-                for u, v, k in G.edges(keys=True):
-                    val = diam_dict.get(str(k))
-                    if val is not None:
-                        val_num = float(val)
-                        if actual_diams and val_num.is_integer() and 0 <= int(val_num) < len(actual_diams):
-                            real_ds.append(actual_diams[int(val_num)])
-                        else:
-                            real_ds.append(val_num)
-                    else:
-                        real_ds.append(-1.0)
-                        
-                valid_ds = [d for d in real_ds if d > 0]
-                min_rd = min(valid_ds) if valid_ds else 1
-                max_rd = max(valid_ds) if valid_ds else 1
-                
-                widths = []
-                for rd in real_ds:
-                    if rd <= 0: widths.append(1.0)
-                    else: widths.append(1.0 + 4.0 * (rd - min_rd) / (max_rd - min_rd + 1e-6))
-                
-                unique_diams = sorted(list(set(valid_ds)))
-                if not unique_diams: unique_diams = [0]
-                
-                cmap = plt.get_cmap('turbo', len(unique_diams))
-                diam_to_color_idx = {d: i for i, d in enumerate(unique_diams)}
-                color_indices = [diam_to_color_idx.get(d, 0) if d > 0 else 0 for d in real_ds]
+                geometry = netdraw.NetworkGeometry.load(target_inp)
+                diameters = netdraw.diameters_from_table(
+                    geometry, pd.read_csv(sol_path), actual_diams)
 
-                juncs = [n for n in wn.junction_name_list if n in G.nodes]
-                resvs = [n for n in wn.reservoir_name_list if n in G.nodes]
-                tanks = [n for n in wn.tank_name_list if n in G.nodes]
-                
-                if juncs:
-                    nx.draw_networkx_nodes(G, pos, nodelist=juncs, ax=ax_map, node_size=15, node_color='#95a5a6')
-                if resvs:
-                    nx.draw_networkx_nodes(G, pos, nodelist=resvs, ax=ax_map, node_size=100, node_color='#3498db', node_shape='s')
-                if tanks:
-                    nx.draw_networkx_nodes(G, pos, nodelist=tanks, ax=ax_map, node_size=100, node_color='#2ecc71', node_shape='^')
-                
-                nx.draw_networkx_edges(G, pos, ax=ax_map, edge_color=color_indices, edge_cmap=cmap, width=widths, arrows=False)
-                
-                sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=-0.5, vmax=len(unique_diams)-0.5))
-                sm.set_array([])
-                
-                units_str = self.opt_units.get() if hasattr(self, 'opt_units') else "mm"
-                cb = fig_map.colorbar(sm, ax=ax_map, label=f"Діаметр ({units_str})", shrink=0.7, ticks=range(len(unique_diams)))
-                cb.ax.set_yticklabels([f"{d:g}" for d in unique_diams])
-                
-                ax_map.axis('off')
+                scale = netdraw.draw(ax_map, geometry, diameters)
+                scale.attach_colorbar(fig_map, ax_map,
+                                      f"Діаметр ({self.opt_units.get()})")
+
                 ax_map.set_title(f"Оптимізована топологія ({selected_run})", color="black", pad=10)
                 
                 canvas_map = FigureCanvasTkAgg(fig_map, master=self.map_canvas_frame)

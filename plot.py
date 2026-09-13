@@ -4,8 +4,9 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import warnings
 import wntr
-import networkx as nx
 import os
+
+import netdraw
 from matplotlib.ticker import FuncFormatter
 
 def export_solution(individual, history, inp_file, filename_prefix, config, cost=None, time_sec=None, total_sims=None):
@@ -219,93 +220,51 @@ def plot_convergence(
 
 
 def plot_network_map(individual, inp_file, filename="solution_map.png", config=None, cost=None):
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            wn = wntr.network.WaterNetworkModel(inp_file)
-            
-        G = wn.get_graph()
-        
-        pos = {}
-        for node_name in wn.node_name_list:
-            node = wn.get_node(node_name)
-            if hasattr(node, 'coordinates') and node.coordinates is not None:
-                pos[node_name] = node.coordinates
-                
-        if not pos:
-            pos = nx.kamada_kawai_layout(G)
-            
-        edges = []
-        real_diams_m = []
-        
-        for i, pipe_name in enumerate(wn.pipe_name_list):
-            idx = int(individual[i])
-            pipe = wn.get_link(pipe_name)
-            edges.append((pipe.start_node_name, pipe.end_node_name))
-            
-            d_val_m = config.diameters_m[idx] if hasattr(config, 'diameters_m') else config.diameters_raw[idx] / 1000.0
-            real_diams_m.append(d_val_m)
-            
-        valid_ds = [d for d in real_diams_m if d > 0]
-        min_rd = min(valid_ds) if valid_ds else 1
-        max_rd = max(valid_ds) if valid_ds else 1
-        
-        unique_diams = sorted(list(set(valid_ds)))
-        if not unique_diams: unique_diams = [1.0]
+    """PNG-карта оптимізованої мережі.
 
-        cmap = plt.get_cmap('turbo', len(unique_diams))
-        diam_to_color_idx = {d: i for i, d in enumerate(unique_diams)}
-        
-        color_indices = [diam_to_color_idx.get(d, 0) if d > 0 else 0 for d in real_diams_m]
-        widths = [1.0 + 4.0 * (d - min_rd) / (max_rd - min_rd + 1e-6) if d > 0 else 1.0 for d in real_diams_m]
-        
-        fig, ax = plt.subplots(figsize=(14, 14), dpi=300)
-        fig.patch.set_facecolor('#ffffff')
-        ax.set_facecolor('#ffffff')
-        ax.set_aspect('equal', adjustable='datalim')
-        
-        junctions = wn.junction_name_list
-        reservoirs = wn.reservoir_name_list
-        tanks = wn.tank_name_list
-        
-        if junctions:
-            nx.draw_networkx_nodes(G, pos, nodelist=junctions, ax=ax, node_size=15, node_color='#95a5a6')
-            
-        if reservoirs:
-            nx.draw_networkx_nodes(G, pos, nodelist=reservoirs, ax=ax, node_size=150, node_color='#3498db', node_shape='s', label="Джерело")
-            
-        if tanks:
-            nx.draw_networkx_nodes(G, pos, nodelist=tanks, ax=ax, node_size=150, node_color='#2ecc71', node_shape='^', label="Бак")
-        
-        nx.draw_networkx_edges(
-            G, pos, ax=ax, edgelist=edges, edge_color=color_indices, 
-            edge_cmap=cmap, width=widths, arrows=False
+    Геометрія, шкала діаметрів і вузли — спільні з GUI (`netdraw`); тут
+    лишається лише те, що специфічне для звіту: розмір полотна, заголовок
+    із вартістю і запис файлу.
+    """
+    try:
+        geometry = netdraw.NetworkGeometry.load(inp_file)
+
+        diameters = netdraw.diameters_from_indices(
+            geometry, individual,
+            diameters_m=getattr(config, "diameters_m", None),
+            diameters_raw=getattr(config, "diameters_raw", None),
         )
-        
-        sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=-0.5, vmax=len(unique_diams)-0.5))
-        sm.set_array([])
-        units_str = config.unit_system if hasattr(config, 'unit_system') else "м"
-        
-        cbar = fig.colorbar(sm, ax=ax, shrink=0.7, pad=0.02, label=f"Діаметр ({units_str})")
-        cbar.set_ticks(range(len(unique_diams)))
-        cbar.ax.set_yticklabels([f"{d:g}" for d in unique_diams])
-        
-        if reservoirs or tanks:
-            ax.legend(scatterpoints=1, loc='upper right', fontsize=12)
-        
+
+        fig, ax = plt.subplots(figsize=(14, 14), dpi=300)
+        fig.patch.set_facecolor("#ffffff")
+        ax.set_facecolor("#ffffff")
+
+        # Звіт малює труби в порядку `pipe_name_list` — у тому ж порядку,
+        # в якому індексується вектор рішення.
+        scale = netdraw.draw(
+            ax, geometry, diameters,
+            source_size=netdraw.SOURCE_SIZE_REPORT,
+            legend_labels=True, nodes_on_top=False,
+        )
+
+        units_str = getattr(config, "unit_system", "м")
+        scale.attach_colorbar(fig, ax, f"Діаметр ({units_str})", pad=0.02)
+
+        if geometry.sources:
+            ax.legend(scatterpoints=1, loc="upper right", fontsize=12)
+
         title_str = "Оптимізована конфігурація мережі"
         if cost is not None:
             title_str += f" | Вартість: {cost/1e6:.4f} M$"
         ax.set_title(title_str, fontsize=16, color="black", pad=15)
-        
-        ax.axis('off')
+
         plt.tight_layout()
-        
+
         os.makedirs(os.path.dirname(filename), exist_ok=True)
-        plt.savefig(filename, dpi=300, facecolor=fig.get_facecolor(), edgecolor='none')
+        plt.savefig(filename, dpi=300, facecolor=fig.get_facecolor(), edgecolor="none")
         plt.close(fig)
         print(f"   > ✅ Збережено графік топології: {filename}")
-        
+
     except Exception as e:
         print(f"\n[PLOT ERROR] Не вдалося згенерувати карту: {e}")
         import traceback
