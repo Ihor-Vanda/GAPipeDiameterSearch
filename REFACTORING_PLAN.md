@@ -750,44 +750,51 @@ GAPipeDiameterSearch/
 
 ## 9. Команди, які треба виконати вручну (етап 1)
 
-Робочий простір Claude не має доступу до файлової системи ПК через оновлення Windows від 8 вересня — правки вмісту файлів записані, але видалення файлів, `git mv` і `git rm` доступні лише вам. У `cmd` з кореня проєкту:
+Робочий простір Claude не має доступу до файлової системи ПК через оновлення Windows від 8 вересня — правки вмісту файлів записані, але видалення файлів, `git mv` і `git rm` доступні лише вам.
 
-```bat
-cd /d E:\Projects\Python\GAPipeDiameterSearch
+Команди нижче — для **Git Bash (MINGW64)**, це робоча оболонка проєкту. Увага: `rmdir` у Git Bash — POSIX-утиліта, вона видаляє лише порожні каталоги і не розуміє прапорців `cmd` (`/s /q`); у PowerShell `rmdir` — це псевдонім `Remove-Item`, де аргументи розділяються комами. Тому нижче `rm -rf`.
 
-:: 0. зафіксувати стан ДО (включно з уже записаними правками етапу 1)
+```bash
+cd /e/Projects/Python/GAPipeDiameterSearch
+
+# 0. зафіксувати стан ДО (включно з уже записаними правками етапу 1)
+#    за потреби спершу окрема гілка: git switch -c refactor/stage-1
 git add -A
 git commit -m "baseline before refactoring + stage 1 cleanup"
 
-:: 1. головне: недосяжний моноліт
+# 1. головне: недосяжний моноліт
 git rm analytical_solver.py
 
-:: 2. звільнити ім'я tests/ і прибрати Old/ з кореня
-mkdir experiments
-git mv tests experiments\archive
+# 2. звільнити ім'я tests/ і прибрати Old/ з кореня
+mkdir -p experiments
+git mv tests experiments/archive
 git mv Old attic
 
-:: 3. конфіги запусків
-mkdir configs
-git mv Hanoi_1M.json configs\Hanoi_1M.json
-git mv balerma_15M.json configs\balerma_15M.json
+# 3. конфіги запусків
+mkdir -p configs
+git mv Hanoi_1M.json configs/Hanoi_1M.json
+git mv balerma_15M.json configs/balerma_15M.json
 
-:: 4. сміття (не відстежується git, тому просто видалити)
-rmdir /s /q build dist _temp_sim_data
-del temp.bin temp.inp temp.rpt text.txt
+# 4. сміття (git його не відстежує)
+rm -rf build dist _temp_sim_data
+rm -f temp.bin temp.inp temp.rpt text.txt
 
 git add -A
 git commit -m "stage 1: drop unreachable analytical_solver.py, rename tests/, archive Old/"
 ```
 
-Якщо `git rm` або `git mv` скаржиться `did not match any files`, шлях не відстежується git — тоді для нього просто `del` / `move` замість git-команди.
+Якщо `git rm` або `git mv` скаржиться `did not match any files`, шлях не відстежується git — тоді для нього просто `rm` / `mv` замість git-команди.
+
+`rm -rf build dist` видалить і скомпільований `gui.exe`; відновлюється через `pyinstaller gui.spec` (файл спеки лишається).
 
 **Перевірка після цього:**
 
-```bat
-python main.py --inp InputData\Hanoi\Hanoi.inp --costs InputData\Hanoi\costs.csv --run_mode fast_analytical --units in
+```bash
+python main.py --inp InputData/Hanoi/Hanoi.inp --costs InputData/Hanoi/costs.csv --run_mode fast_analytical --units in
 ```
 
 Має вивести `FINAL RESULT: ~6.7M$` і `OK`. Якщо після видалення `analytical_solver.py` щось падає з `ImportError` — значить десь лишилося посилання на моноліт; надішліть traceback.
 
 Після видалення `tests/` перевірте також `.vscode/settings.json` (105 байт) — якщо там прописано `python.testing` з шляхом `tests`, його треба поправити.
+
+Побічно: перейменування каталогу `tests/` знімає неоднозначність із гілкою `tests` — зараз `git checkout tests` може означати і гілку, і шлях.
