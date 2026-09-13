@@ -105,6 +105,7 @@ def analytical_worker_task(args):
     epoch            = args[9]
     max_sims         = args[10] if len(args) > 10 else float('inf')
     n_workers        = args[11] if len(args) > 11 else (len(shared_progress) if shared_progress else 1)
+    feasibility_kw   = args[12] if len(args) > 12 else {}
 
     global worker_sim_instance
     if worker_sim_instance is None:
@@ -154,6 +155,7 @@ def analytical_worker_task(args):
         LocalSearch = solver_module.LocalSearch
         KickStrategies = solver_module.KickStrategies
         IslandWorker = solver_module.IslandWorker
+        FeasibilityPolicy = solver_module.FeasibilityPolicy
 
         ctx = SolverContext(worker_sim_instance, diams, v_opt=v_opt)
         ctx.log_file = log_file_path 
@@ -165,7 +167,8 @@ def analytical_worker_task(args):
         network_class = "SMALL" if n < 50 else ("MEDIUM" if n < 200 else ("LARGE" if n < 1000 else "XLARGE"))
         beam_width = 8 if network_class in ["LARGE", "XLARGE"] else 5
         
-        worker = IslandWorker(ctx, kicker, ls, worker_id, n_workers, max_sims, beam_width, network_class, global_archive, epoch)
+        worker = IslandWorker(ctx, kicker, ls, worker_id, n_workers, max_sims, beam_width, network_class, global_archive, epoch,
+                              feasibility=FeasibilityPolicy(**feasibility_kw))
         c_best, sol_best = worker.run(time_budget, global_best_cost, shared_progress)
         
         return c_best, sol_best, None, ctx.sim_count, worker.pool.basin_tabu

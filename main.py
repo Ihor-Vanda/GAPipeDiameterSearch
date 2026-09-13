@@ -89,6 +89,7 @@ def analytical_worker_task(args):
     epoch            = args[9]
     max_sims         = args[10] if len(args) > 10 else float('inf')
     n_workers        = args[11] if len(args) > 11 else (len(shared_progress) if shared_progress else 1)
+    feasibility_kw   = args[12] if len(args) > 12 else {}
 
     global worker_sim_instance
     if worker_sim_instance is None:
@@ -138,6 +139,7 @@ def analytical_worker_task(args):
         LocalSearch = solver_module.LocalSearch
         KickStrategies = solver_module.KickStrategies
         IslandWorker = solver_module.IslandWorker
+        FeasibilityPolicy = solver_module.FeasibilityPolicy
 
         ctx = SolverContext(worker_sim_instance, diams, v_opt=v_opt)
         ctx.log_file = log_file_path 
@@ -149,7 +151,8 @@ def analytical_worker_task(args):
         network_class = "SMALL" if n < 50 else ("MEDIUM" if n < 200 else ("LARGE" if n < 1000 else "XLARGE"))
         beam_width = 8 if network_class in ["LARGE", "XLARGE"] else 5
         
-        worker = IslandWorker(ctx, kicker, ls, worker_id, n_workers, max_sims, beam_width, network_class, global_archive, epoch)
+        worker = IslandWorker(ctx, kicker, ls, worker_id, n_workers, max_sims, beam_width, network_class, global_archive, epoch,
+                              feasibility=FeasibilityPolicy(**feasibility_kw))
         c_best, sol_best = worker.run(time_budget, global_best_cost, shared_progress)
         
         return c_best, sol_best, None, ctx.sim_count, worker.pool.basin_tabu
@@ -184,6 +187,22 @@ def main():
                              "and stop strictly on the simulation budget. Slower, but the only "
                              "mode that is bit-exact reproducible for a given --seed. "
                              "Use it for baselines and A/B comparisons.")
+    parser.add_argument("--dive", type=str, choices=["off", "relax", "dive"], default="off",
+                        help="SUBMARINE — стратегічна осциляція навколо межі допустимості. "
+                             "off: без додаткової поступки (поведінка за замовчуванням). "
+                             "relax: стала поступка --dive_depth без фази випливання. "
+                             "dive: повний цикл із примусовим випливанням і відкатом.")
+    parser.add_argument("--dive_depth", type=float, default=0.5,
+                        help="Глибина занурення в метрах нижче hmin (для --dive relax|dive).")
+    parser.add_argument("--dive_rounds", type=int, default=8,
+                        help="Скільки раундів триває одне занурення (для --dive dive).")
+    parser.add_argument("--dive_surface", type=str, choices=["cheapest", "farthest"], default="cheapest",
+                        help="Звідки випливати: cheapest — найдешевше рішення пулу; "
+                             "farthest — найвіддаленіше за Хеммінгом від точки занурення.")
+    parser.add_argument("--dive_cooldown", type=int, default=12,
+                        help="Пауза в раундах між зануреннями.")
+    parser.add_argument("--dive_attempts", type=int, default=1,
+                        help="Скільки кандидатів пробувати підняти за одне випливання.")
     parser.add_argument("--time_limit", type=float, default=None,
                         help="Wall-clock limit per run in seconds; 0 = unlimited (stop only on "
                              "--max_sims). Default: derived from the calibrated simulator speed, "
@@ -263,6 +282,9 @@ def main():
     print(f"   ANALYTICAL OPTIMIZER: {os.path.basename(args.inp)}")
     print(f"   Mode: {args.run_mode.upper()} | Cores: {num_cores}")
     print(f"   Seed: {args.seed if args.seed is not None else 'random (not reproducible)'}")
+    if args.dive != "off":
+        print(f"   SUBMARINE: {args.dive} | depth={args.dive_depth} м | rounds={args.dive_rounds} "
+              f"| surface={args.dive_surface} x{args.dive_attempts}")
     print("==============================================")
     
     pool = None
@@ -295,10 +317,18 @@ def main():
             time_limit = None if args.time_limit is None else (
                 float('inf') if args.time_limit <= 0 else args.time_limit
             )
+            feasibility_kwargs = {
+                "mode": args.dive,
+                "depth": args.dive_depth,
+                "max_rounds": args.dive_rounds,
+                "surface_from": args.dive_surface,
+                "surface_attempts": args.dive_attempts,
+                "cooldown_rounds": args.dive_cooldown,
+            }
             solver = AnalyticalSolver(
                 sim, config.diameters_m, v_opt=config.v_opt, pool=pool,
                 log_dir=current_log_dir, n_workers=num_cores, max_sims=args.max_sims,
-                time_limit_sec=time_limit
+                time_limit_sec=time_limit, feasibility_kwargs=feasibility_kwargs
             )
             
             start_t = time.time()

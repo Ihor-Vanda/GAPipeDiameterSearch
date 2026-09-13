@@ -12,6 +12,10 @@ SURPLUS_BONUS_POLICIES = ("damped", "undamped", "none")
 SURPLUS_KNEE = 10.0
 SURPLUS_DAMPING = 0.2
 
+#: Штраф за дефіцит тиску в межах дозволеної поступки (див. SUBMARINE).
+#: Значення 50 успадковане з epsilon-вікна beam search.
+DEFICIT_PENALTY = 50.0
+
 
 class SolverContext:
     def __init__(self, simulator, available_diameters, v_opt=1.0,
@@ -79,18 +83,18 @@ class SolverContext:
         self.sim_speed = self._calibrate_simulator()
         print(f"[SolverContext] Hardware calibrated: ~{self.sim_speed:.0f} sims/sec")
         
-    def is_ghost_solution(self, indices):
+    def is_ghost_solution(self, indices, tolerance=0.0):
         sig = tuple(indices)
         cached = self.sim_cache.get(sig)
         if cached is not None:
             _, real_p_min, _, _ = cached
-            return real_p_min < self.h_min - 0.01
+            return real_p_min < self.h_min - 0.01 - tolerance
             
         try:
             result = self.simulator.get_stats(indices)
             self.sim_cache.set(sig, result)
             self.sim_count += 1
-            return result[1] < self.h_min - 0.01
+            return result[1] < self.h_min - 0.01 - tolerance
         except Exception as e:
             self.log(f"     [CRITICAL ERROR in Ghost Check]: {e}")
             return True
@@ -111,7 +115,7 @@ class SolverContext:
         elapsed = time.time() - start
         return 10.0 / elapsed if elapsed > 0 else 1000.0
     
-    def score(self, cost, p_min, dyn_bonus):
+    def score(self, cost, p_min, dyn_bonus, tolerance=0.0):
         """Penalized score: вартість мінус премія за запас тиску.
 
         Премія працює як тай-брейкер — за приблизно рівної вартості
@@ -126,8 +130,12 @@ class SolverContext:
         тай-брейкер, а демпфування страхує від рідкісних викидів.
         """
         surplus = p_min - self.h_min
-        if surplus < 0:
+        if surplus < -tolerance:
             return float('inf')
+        if surplus < 0:
+            # Дефіцит у межах поступки не заборонений, але дорогий —
+            # інакше занурення було б безкоштовним і пошук не спливав би.
+            return cost + abs(surplus) * dyn_bonus * DEFICIT_PENALTY
         if self.surplus_bonus_policy == "none":
             return cost
         if self.surplus_bonus_policy == "damped" and surplus > SURPLUS_KNEE:
