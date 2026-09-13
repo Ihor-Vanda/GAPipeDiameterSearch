@@ -24,8 +24,7 @@ class LocalSearch:
         return [i for i, _ in impact_scores[:top_k]]
 
     def gradient_squeeze(self, indices, locked_pipes=None, max_passes=None, quick_mode=False,
-                         dyn_bonus=None, min_rel_improvement=0.0003, classical_descent=False,
-                         tolerance=0.0):
+                         dyn_bonus=None, min_rel_improvement=0.0003, classical_descent=False):
         """Градієнтний спуск по індексах діаметрів.
 
         `classical_descent=True` — базовий режим для ablation-порівнянь:
@@ -50,7 +49,7 @@ class LocalSearch:
         passes = 0
 
         cost, p_min, _, _ = self.ctx.get_cached_stats(current_indices)
-        best_score = self.ctx.score(cost, p_min, dyn_bonus, tolerance)
+        best_score = self.ctx.score(cost, p_min, dyn_bonus)
         
         milestone_cost = cost
         milestone_pass = 0
@@ -103,8 +102,8 @@ class LocalSearch:
                     test_sol = list(current_indices)
                     test_sol[idx] -= 1
                     c, p_val, _, _ = self.ctx.get_cached_stats(test_sol)
-                    if p_val >= self.ctx.h_min - tolerance:
-                        score = self.ctx.score(c, p_val, dyn_bonus, tolerance)
+                    if p_val >= self.ctx.h_min:
+                        score = self.ctx.score(c, p_val, dyn_bonus)
                         if score < best_local_score or (quick_mode and c < best_local_cost):
                             best_local_score, best_local_sol, best_local_cost, best_local_p = score, test_sol, c, p_val
                             
@@ -112,8 +111,8 @@ class LocalSearch:
                     test_sol = list(current_indices)
                     test_sol[idx] += 1
                     c, p_val, _, _ = self.ctx.get_cached_stats(test_sol)
-                    if p_val >= self.ctx.h_min - tolerance:
-                        score = self.ctx.score(c, p_val, dyn_bonus, tolerance)
+                    if p_val >= self.ctx.h_min:
+                        score = self.ctx.score(c, p_val, dyn_bonus)
                         if score < best_local_score:
                             best_local_score, best_local_sol, best_local_cost, best_local_p = score, test_sol, c, p_val
                             
@@ -124,13 +123,13 @@ class LocalSearch:
 
         return current_indices
 
-    def heal_network(self, kicked, locked_pipes, tolerance=0.0):
+    def heal_network(self, kicked, locked_pipes):
         locked_pipes_local = set(locked_pipes) 
         boosts = 0
         
         while True:
             _, min_p, _, crit_node = self.ctx.get_cached_stats(kicked)
-            if min_p >= self.ctx.h_min - tolerance:
+            if min_p >= self.ctx.h_min:
                 return kicked, True, boosts
                 
             if not crit_node or crit_node == "ERR":

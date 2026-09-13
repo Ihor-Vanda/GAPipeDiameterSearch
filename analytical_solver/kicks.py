@@ -2,8 +2,6 @@ import random
 import networkx as nx
 import numpy as np
 
-from .kick_registry import KickResult
-
 class KickStrategies:
     def __init__(self, ctx, local_search):
         self.ctx = ctx
@@ -11,10 +9,10 @@ class KickStrategies:
 
     def forcing_hand_kick(self, indices, T, **kwargs):
         _, _, _, crit_node = self.ctx.get_cached_stats(indices)
-        if not crit_node or crit_node == "ERR": return KickResult(indices, set())
+        if not crit_node or crit_node == "ERR": return indices, set(), ""
 
         path_pipes, _ = self.ctx.get_dominant_path(indices, crit_node)
-        if not path_pipes: return KickResult(indices, set())
+        if not path_pipes: return indices, set(), ""
             
         kicked, locked = list(indices), set()
         
@@ -29,8 +27,8 @@ class KickStrategies:
                 kicked[idx] += 1
                 locked.add(idx) 
         
-        if not locked: return KickResult(indices, set())
-        return KickResult(kicked, locked, f"SHOCK: Upgraded {len(locked)} worst pipes on Critical Path (T={T:.2f})")
+        if not locked: return indices, set(), ""
+        return kicked, locked, f"SHOCK: Upgraded {len(locked)} worst pipes on Critical Path (T={T:.2f})"
 
     def upstream_bottleneck_kick(self, indices, T, **kwargs):
         failed_pipes = kwargs.get('failed_pipes', {})
@@ -39,10 +37,10 @@ class KickStrategies:
         tenure = 5
         
         _, _, _, crit_node = self.ctx.get_cached_stats(indices)
-        if not crit_node or crit_node == "ERR": return KickResult(indices, set())
+        if not crit_node or crit_node == "ERR": return indices, set(), "", -1
         
         path_pipes, _ = self.ctx.get_dominant_path(indices, crit_node)
-        if not path_pipes: return KickResult(indices, set())
+        if not path_pipes: return indices, set(), "", -1
         
         kicked, locked = list(indices), set()
         
@@ -69,7 +67,7 @@ class KickStrategies:
 
             kicked[target_pipe] += 1
             locked.add(target_pipe)
-            return KickResult(kicked, locked, f"BOTTLENECK: Boosted Pipe {target_pipe} (Taper Violation)", failed_pipe=target_pipe)
+            return kicked, locked, f"BOTTLENECK: Boosted Pipe {target_pipe} (Taper Violation)", target_pipe
                     
         unit_losses = self.ctx.get_cached_heuristics(indices)
         search_depth = max(1, int(len(path_pipes) * (0.3 + 0.4 * T)))
@@ -78,7 +76,7 @@ class KickStrategies:
                            if indices[idx] < self.ctx.max_d_idx 
                            and not (idx in failed_pipes and (current_round - failed_pipes[idx]) < 10)]
         
-        if not base_candidates: return KickResult(indices, set())
+        if not base_candidates: return indices, set(), "", -1
 
         candidates = [c for c in base_candidates 
                       if c[0] not in boosted_pipes or (current_round - boosted_pipes[c[0]]) >= tenure]
@@ -96,15 +94,15 @@ class KickStrategies:
             kicked[p] += 1
             locked.add(p)
             
-        return KickResult(kicked, locked, f"BOTTLENECK: Boosted {len(best_pipes)} Max-Loss Pipes.", failed_pipe=best_pipes[0])
+        return kicked, locked, f"BOTTLENECK: Boosted {len(best_pipes)} Max-Loss Pipes.", best_pipes[0]
 
     def topological_inversion_kick(self, indices, T, **kwargs):
         tabu_set = kwargs.get('tabu_set', set())
         _, _, _, crit_node = self.ctx.get_cached_stats(indices)
-        if not crit_node or crit_node == "ERR": return KickResult.failure()
+        if not crit_node or crit_node == "ERR": return None, None, "", None
         
         dom_pipes, dom_nodes = self.ctx.get_dominant_path(indices, crit_node)
-        if not dom_nodes: return KickResult.failure()
+        if not dom_nodes: return None, None, "", None
         
         source = dom_nodes[0]
         dom_edges = set(tuple(sorted((u, v))) for u, v in zip(dom_nodes[:-1], dom_nodes[1:]))
@@ -138,7 +136,7 @@ class KickStrategies:
             scored_paths.append({'indices': p_indices, 'overlap': overlap / length, 'signature': signature})
 
         scored_paths.sort(key=lambda x: x['overlap'])
-        if not scored_paths: return KickResult.failure("All paths tabu")
+        if not scored_paths: return None, None, "All paths tabu", None
 
         best_alt = scored_paths[0]
         kicked, locked = list(indices), set()
@@ -159,7 +157,7 @@ class KickStrategies:
             elif kicked[idx] == force_idx: 
                 locked.add(idx)
 
-        return KickResult(kicked, locked, f"TOPO-INV: Boosted Alt Path (Overlap {best_alt['overlap']:.2f}, T={T:.2f})", path_signature=best_alt['signature'])
+        return kicked, locked, f"TOPO-INV: Boosted Alt Path (Overlap {best_alt['overlap']:.2f}, T={T:.2f})", best_alt['signature']
 
     def loop_balancing_kick(self, indices, T, **kwargs):
         failed_pipes = kwargs.get('failed_pipes', {})
@@ -168,14 +166,14 @@ class KickStrategies:
         
         LOOP_BALANCE_PIPE_TENURE = min(80, max(3, self.ctx.num_pipes // 5))
         _, _, _, crit_node = self.ctx.get_cached_stats(indices)
-        if not crit_node or crit_node == "ERR": return KickResult.failure()
+        if not crit_node or crit_node == "ERR": return None, None, "", -1
 
         if not hasattr(self, '_cached_cycles'):
             try: self._cached_cycles = nx.cycle_basis(self.ctx.base_G_flow)
             except: self._cached_cycles = []
         cycles = self._cached_cycles
         
-        if not cycles: return KickResult.failure("No cycles found")
+        if not cycles: return None, None, "No cycles found", -1
 
         max_allowed_drop = 1 + int(2 * T) 
 
@@ -228,14 +226,14 @@ class KickStrategies:
             
             if len(candidates) >= 5: break
 
-        if not candidates: return KickResult.failure("FLOW STEER: Exhaustive search found no valid bypass.")
+        if not candidates: return None, None, "FLOW STEER: Exhaustive search found no valid bypass.", -1
         candidates.sort(key=lambda x: x[0])
         chosen = random.choice(candidates[:3])
-        return KickResult(chosen[1], chosen[2], chosen[3], failed_pipe=chosen[4])
+        return chosen[1], chosen[2], chosen[3], chosen[4]
 
     def zero_sum_shift_kick(self, indices, T, **kwargs):
         _, _, _, crit_node = self.ctx.get_cached_stats(indices)
-        if not crit_node or crit_node == "ERR": return KickResult.failure()
+        if not crit_node or crit_node == "ERR": return None, None, ""
 
         zs_tabu = kwargs.get('zero_sum_tabu', {})
         curr_round = kwargs.get('current_round', 0)
@@ -304,14 +302,14 @@ class KickStrategies:
 
         if best_sol:
             mode_str = "1-to-1" if len(best_locked) == 2 else f"1-to-{len(best_locked)-1}"
-            return KickResult(best_sol, best_locked, f"ZERO-SUM ({mode_str}): P{best_up} upgraded. Cost: {best_cost/1e6:.4f}M$")
+            return best_sol, best_locked, f"ZERO-SUM ({mode_str}): P{best_up} upgraded. Cost: {best_cost/1e6:.4f}M$"
             
-        return KickResult.failure()
+        return None, None, ""
     
     def peripheral_trim_kick(self, indices, T, **kwargs):
         indices_copy, periphery_pipes = self.ctx.get_lazy_periphery(indices)
         if not periphery_pipes: 
-            return KickResult.failure("No targets")
+            return None, None, "No targets"
         
         trim_pct = 0.02 + (0.13 * T)
         pipes_to_cut = max(1, int(len(periphery_pipes) * trim_pct))
@@ -344,16 +342,16 @@ class KickStrategies:
             healed_sol, is_feasible, boosts = self.ls.heal_network(test_sol, locked)
             if is_feasible:
                 h_c, h_p, _, _ = self.ctx.get_cached_stats(healed_sol) 
-                h_score = self.ctx.score(h_c, h_p, dyn_bonus)
+                h_score = h_c - ((h_p - self.ctx.h_min) * dyn_bonus)
                 candidates.append((h_score, healed_sol, locked, boosts))
                 
         if not candidates: 
-            return KickResult.failure("No valid trim candidates found or heal failed")
+            return None, None, "No valid trim candidates found or heal failed"
         
         candidates.sort(key=lambda x: x[0])
         chosen = random.choice(candidates[:3])
         
-        return KickResult(chosen[1], chosen[2], f"TRIM: Shrunk {len(chosen[2])} peripheral pipes. Healed {chosen[3]}x.")
+        return chosen[1], chosen[2], f"TRIM: Shrunk {len(chosen[2])} peripheral pipes. Healed {chosen[3]}x."
 
     def smart_perturbation_kick(self, indices, T, **kwargs):        
         base_mu = kwargs.get('mu_perturb_pct', 0.10)
@@ -382,12 +380,12 @@ class KickStrategies:
             if delta > 0: locked.add(p_idx) 
                 
         healed, ok, boosts = self.ls.heal_network(kicked, locked)
-        if not ok: return KickResult.failure()
-        return KickResult(healed, locked, f"SMART-PERTURB: Shifted {len(chosen)} pipes (Size: {target_pct:.1%}). Healed {boosts}x.", used_pct=target_pct)
+        if not ok: return None, None, ""
+        return healed, locked, f"SMART-PERTURB: Shifted {len(chosen)} pipes (Size: {target_pct:.1%}). Healed {boosts}x.", target_pct
 
     def ruin_and_recreate_kick(self, indices, T, **kwargs):
         _, _, _, crit_node = self.ctx.get_cached_stats(indices)
-        if not crit_node or crit_node == "ERR": return KickResult.failure()
+        if not crit_node or crit_node == "ERR": return None, None, ""
 
         ruin_center = crit_node if T < 0.8 else random.choice(list(self.ctx.base_G_flow.nodes()))
         
@@ -411,7 +409,7 @@ class KickStrategies:
                         pipe_with_dist.append((dist, p))
         except: pass
 
-        if not pipe_with_dist: return KickResult.failure()
+        if not pipe_with_dist: return None, None, ""
         pipe_with_dist.sort(key=lambda x: x[0])
         cluster_pipes = set(p for _, p in pipe_with_dist[:target_pipes])
 
@@ -425,17 +423,17 @@ class KickStrategies:
                 kicked[p] = max(0, kicked[p] - random.randint(1, max_drop))
                 ruined_count += 1
 
-        if ruined_count == 0: return KickResult.failure()
+        if ruined_count == 0: return None, None, ""
 
         healed_sol, is_feas, boosts = self.ls.heal_network(kicked, set())
-        if not is_feas: return KickResult.failure()
+        if not is_feas: return None, None, ""
         
-        return KickResult(healed_sol, set(), f"R&R: Downgraded {ruined_count} pipes (Size: {target_pct:.1%}). Healed {boosts}x.", used_pct=target_pct)
+        return healed_sol, set(), f"R&R: Downgraded {ruined_count} pipes (Size: {target_pct:.1%}). Healed {boosts}x.", target_pct
     
     def basin_escape(self, indices, T, **kwargs):
         global_archive = kwargs.get('global_archive', [])
         if not global_archive or len(global_archive) < 2:
-            return KickResult.failure("Archive too small")
+            return None, None, "Archive too small"
 
         num_pipes = len(indices)
         min_dist_threshold = max(5, int(num_pipes * 0.05))
@@ -451,7 +449,7 @@ class KickStrategies:
                 target_sol = arch_sol
                 
         if target_sol is None:
-            return KickResult.failure("Archive degenerated. No distinct basins found.")
+            return None, None, "Archive degenerated. No distinct basins found."
 
         diff_pipes = [i for i in range(num_pipes) if indices[i] != target_sol[i]]
         
@@ -465,10 +463,10 @@ class KickStrategies:
 
         healed, ok, boosts = self.ls.heal_network(kicked, set())
         if not ok: 
-            return KickResult.failure("Heal failed after transplant")
+            return None, None, "Heal failed after transplant"
             
         log_msg = f"BASIN-ESCAPE: Transplanted {n_replace} pipes (Size: {target_pct:.1%}). Healed {boosts}x."
-        return KickResult(healed, set(), log_msg, used_pct=target_pct)
+        return healed, set(), log_msg, target_pct
     
     def spatial_perturb_kick(self, indices, **kwargs):
         T = kwargs.get('T', 0.5)
@@ -522,8 +520,8 @@ class KickStrategies:
 
         healed, ok, boosts = self.ls.heal_network(kicked, set())
         if not ok:
-            return KickResult.failure("Heal failed after spatial perturb")
+            return None, None, "Heal failed after spatial perturb"
 
         log_msg = f"SPATIAL-PERTURB: Shifted {len(local_pipes)} pipes (Size: {target_pct:.1%}). Healed {boosts}x."
         
-        return KickResult(healed, set(), log_msg, used_pct=target_pct)
+        return healed, set(), log_msg, target_pct
