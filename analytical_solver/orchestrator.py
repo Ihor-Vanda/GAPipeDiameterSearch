@@ -301,6 +301,21 @@ class IslandWorker:
         self.mu_spatial_pct = 0.20 
         self.mu_escape_pct = 0.20 
 
+        # Ці поля читалися дев'ятьма методами (`base_dyn_bonus`), п'ятьма
+        # (`stag_limit`) і одним (`reserve_pool`), але присвоювалися лише в
+        # `run()` — тобто до її виклику об'єкт був у невалідному стані, і
+        # будь-яке звернення до методу давало AttributeError у глибині кіка.
+        # `run()` перераховує їх перед першим кіком і далі щороунду, тому ці
+        # значення ніколи не доходять до пошуку: вони існують, щоб об'єкт був
+        # валідним з моменту створення (і щоб методи можна було тестувати).
+        self.base_dyn_bonus = 0.0
+        self.stag_limit = 4
+        self.reserve_pool = []
+        self._last_ping_sims = 0
+        self._last_ping_time = 0.0
+        self._migration_interval_sims = 15000
+        self._last_migration_sims = 0
+
     def run(self, time_budget, global_best_cost, shared_progress):
         self.global_best_cost = global_best_cost
         start_time = time.time()
@@ -651,6 +666,24 @@ class IslandWorker:
                     swap_score = self.ctx.score(c, p, self.base_dyn_bonus) - (self.run_best_cost * 0.1)
                     self.pool.active_pool.insert(0, (swap_score, c, swapped))
     
+    #: Частка рекорду, більше за яку виграш вважається суттєвим і повністю
+    #: скидає застій. Менший виграш лише зменшує лічильник на 2.
+    RECORD_RESET_FRACTION = 0.005
+
+    @staticmethod
+    def _stagnation_after_record(diff, new_best_cost, current_counter):
+        """Новий лічильник застою після оновлення рекорду.
+
+        Порог рахується від **нового** рекорду, а не від старого — так було
+        в обох місцях, де це правило застосовується, і так лишається.
+        Різниця між двома варіантами — 0.5 %, тому прогоном вона невидима;
+        зафіксована тестом `test_stagnation_threshold_is_measured_against_
+        the_new_best_not_the_old`.
+        """
+        if diff > new_best_cost * IslandWorker.RECORD_RESET_FRACTION:
+            return 0
+        return max(0, current_counter - 2)
+
     def _apply_kick(self, round_idx, shared_progress):
         ABLATION_MODE = False 
  
@@ -855,7 +888,8 @@ class IslandWorker:
             self.run_best_cost, self.run_best_sol = effective_cost, final_sol
             self.pool.active_pool.insert(0, (score, effective_cost, final_sol))
  
-            self.stagnation_counter = 0 if diff > (self.run_best_cost * 0.005) else max(0, self.stagnation_counter - 2)
+            self.stagnation_counter = self._stagnation_after_record(
+                diff, self.run_best_cost, self.stagnation_counter)
  
             if use_bandit:
                 improvement_pct = diff / max(self.run_best_cost, 1.0)
@@ -938,7 +972,8 @@ class IslandWorker:
                 diff = self.run_best_cost - q_c
                 self.run_best_cost, self.run_best_sol = q_c, quick
                 self.pool.active_pool.insert(0, (q_c, q_c, quick))
-                self.stagnation_counter = 0 if diff > (self.run_best_cost * 0.005) else max(0, self.stagnation_counter - 2)
+                self.stagnation_counter = self._stagnation_after_record(
+                    diff, self.run_best_cost, self.stagnation_counter)
                 
                 if use_bandit:
                     reward = 1.0 + ((diff / max(self.run_best_cost, 1.0)) * 100.0)
