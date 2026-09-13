@@ -9,8 +9,27 @@ from .fast_math import fast_dijkstra
 #: "undamped" — премія лінійна без обмежень;
 #: "none"     — премії немає, впорядкування за чистою вартістю.
 SURPLUS_BONUS_POLICIES = ("damped", "undamped", "none")
+
 SURPLUS_KNEE = 10.0
 SURPLUS_DAMPING = 0.2
+
+#: Межі класів мережі за кількістю труб і відповідна ширина beam.
+#: Ці ж числа були продубльовані в чотирьох місцях: worker_task,
+#: AnalyticalSolver.__init__ і по копії в main.py та gui.py.
+NETWORK_CLASS_BOUNDS = ((50, "SMALL"), (200, "MEDIUM"), (1000, "LARGE"))
+XLARGE_CLASS = "XLARGE"
+WIDE_BEAM_CLASSES = ("LARGE", XLARGE_CLASS)
+
+
+def classify_network(num_pipes):
+    for bound, name in NETWORK_CLASS_BOUNDS:
+        if num_pipes < bound:
+            return name
+    return XLARGE_CLASS
+
+
+def beam_width_for(network_class):
+    return 8 if network_class in WIDE_BEAM_CLASSES else 5
 
 
 class SolverContext:

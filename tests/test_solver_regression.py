@@ -5,20 +5,18 @@
 детермінізм і якість результату. Виконується за секунди, тому може стояти в
 CI і запускатись після кожного етапу.
 
-Примітка про `__main__.worker_sim_instance`: послідовна гілка
-`solve_standalone` викликає `AnalyticalSolver.worker_task`, який дістає
-симулятор із простору імен `__main__`. Тест мусить це імітувати — і саме це
-незручність, яку прибирає етап 4 (винесення запуску воркера в
-`analytical_solver/worker.py` з явною передачею симулятора).
+Симулятор процесу задається явно через `analytical_solver.worker.set_simulator`.
+До етапу 4 тест мусив підсовувати його в `__main__.worker_sim_instance`, бо
+саме звідти його діставав `AnalyticalSolver.worker_task`.
 """
 
-import __main__
 import random
 
 import numpy as np
 import pytest
 
 from analytical_solver import AnalyticalSolver
+from analytical_solver.worker import set_simulator
 
 pytestmark = pytest.mark.slow
 
@@ -28,7 +26,7 @@ def solver_factory(sim):
     def make(seed, max_sims=2500, time_limit_sec=4):
         random.seed(seed)
         np.random.seed(seed)
-        __main__.worker_sim_instance = sim
+        set_simulator(sim)
         return AnalyticalSolver(
             sim, sim.config.diameters_m, v_opt=1.0,
             max_sims=max_sims, time_limit_sec=time_limit_sec,
@@ -36,8 +34,7 @@ def solver_factory(sim):
         )
 
     yield make
-    if hasattr(__main__, "worker_sim_instance"):
-        del __main__.worker_sim_instance
+    set_simulator(None)
 
 
 def _cost_of(sim, real_diameters):

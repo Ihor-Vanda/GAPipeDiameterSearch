@@ -13,10 +13,10 @@ try:
 except ImportError:
     HAS_FAST_MATH = False
 
-from .context import SolverContext
+from .context import SolverContext, beam_width_for, classify_network
 from .pool import SolutionPool
 from .local_search import LocalSearch
-from .kicks import KickStrategies
+from .worker import WorkerTask, run_island_worker
 from .kick_registry import (
     FALLBACK_KICK,
     KICK_REGISTRY,
@@ -1191,53 +1191,6 @@ class IslandWorker:
 
 
 class AnalyticalSolver:
-    @classmethod
-    def worker_task(cls, args):
-        try:
-            diams            = args[0]
-            v_opt            = args[1]
-            time_budget      = args[2]
-            global_best_cost = args[3]
-            global_archive   = args[4]
-            seed_mod         = args[5]
-            worker_id        = args[6]
-            shared_progress  = args[7]
-            log_dir          = args[8]
-            epoch            = args[9]
-            max_sims         = args[10] if len(args) > 10 else float('inf')
-            n_workers        = args[11] if len(args) > 11 else (len(shared_progress) if shared_progress else 1)
-            
-            import __main__
-            sim = getattr(__main__, 'worker_sim_instance', None)
-            if sim is None: return (float('inf'), None, None, 0, set())
-
-            ctx = SolverContext(sim, diams, v_opt=v_opt)
-            
-            import os
-            if log_dir:
-                os.makedirs(log_dir, exist_ok=True)
-                ctx.log_file = os.path.join(log_dir, f"epoch_{epoch+1}_worker_{worker_id+1:02d}.txt")
-            else:
-                ctx.log_file = None 
-                
-            ls = LocalSearch(ctx)
-            kicker = KickStrategies(ctx, ls)
-            
-            random.seed(seed_mod)
-            np.random.seed(seed_mod)
-            
-            n = ctx.num_pipes
-            network_class = "SMALL" if n < 50 else ("MEDIUM" if n < 200 else ("LARGE" if n < 1000 else "XLARGE"))
-            beam_width = 8 if network_class in ["LARGE", "XLARGE"] else 5
-            
-            worker = IslandWorker(ctx, kicker, ls, worker_id, n_workers, max_sims, beam_width, network_class, global_archive, epoch)
-            c_best, sol_best = worker.run(time_budget, global_best_cost, shared_progress)
-            
-            return c_best, sol_best, None, ctx.sim_count, worker.pool.basin_tabu
-        except Exception as e:
-            print(f"     [CRITICAL WORKER ERROR] Worker {args[6] + 1} failed: {e}")
-            return float('inf'), None, None, 0, set()
-
     def __init__(self, simulator_instance, available_diameters, v_opt=1.0, max_sims=None, time_limit_sec=None, pool=None, log_dir=None, n_workers=1):
         self.ctx = SolverContext(simulator_instance, available_diameters, v_opt)
         self.ls = LocalSearch(self.ctx)
@@ -1245,13 +1198,8 @@ class AnalyticalSolver:
         self.log_dir = log_dir
         self.n_workers = n_workers
         
-        n = self.ctx.num_pipes
-        if n < 50: self.network_class = "SMALL"
-        elif n < 200: self.network_class = "MEDIUM"
-        elif n < 1000: self.network_class = "LARGE"
-        else: self.network_class = "XLARGE"
-        
-        self.BEAM_WIDTH = 8 if self.network_class in ["LARGE", "XLARGE"] else 5
+        self.network_class = classify_network(self.ctx.num_pipes)
+        self.BEAM_WIDTH = beam_width_for(self.network_class)
         self.seeder = SeedFactory(self.ctx, self.ls, self.n_workers, self.BEAM_WIDTH)
         self.pool = SolutionPool(self.ctx) 
         
@@ -1369,22 +1317,24 @@ class AnalyticalSolver:
                 print("="*46)
                 
                 seed_modifier = random.randint(1, 10000)
-                tasks = []
-                for i in range(self.n_workers):
-                    tasks.append((
-                        self.ctx.diameters, self.ctx.v_opt, time_per_epoch, 
-                        global_best_cost, global_archive, 
-                        seed_modifier + i, i, shared_progress, self.log_dir, epoch, 
-                        worker_epoch_sims, self.n_workers
-                    ))
+                tasks = [
+                    WorkerTask(
+                        diameters=self.ctx.diameters, v_opt=self.ctx.v_opt,
+                        time_budget=time_per_epoch, global_best_cost=global_best_cost,
+                        seed=seed_modifier + i, worker_id=i, n_workers=self.n_workers,
+                        max_sims=worker_epoch_sims, shared_progress=shared_progress,
+                        log_dir=self.log_dir, global_archive=global_archive, epoch=epoch,
+                    )
+                    for i in range(self.n_workers)
+                ]
 
                 epoch_results = []
                 
                 if self.mp_pool:
-                    async_results = []
-                    for t in tasks:
-                        res = self.mp_pool.apply_async(self.worker_task, (t,))
-                        async_results.append((t[6], res))
+                    async_results = [
+                        (t.worker_id, self.mp_pool.apply_async(run_island_worker, (t,)))
+                        for t in tasks
+                    ]
 
                     last_print_time = 0
                     print_interval = {"SMALL": 1.0, "MEDIUM": 15.0, "LARGE": 30.0, "XLARGE": 60.0}[self.network_class]
@@ -1471,8 +1421,9 @@ class AnalyticalSolver:
 
                     for wid, res in async_results:
                         try:
-                            c, sol, _, sims_done, worker_basins = res.get()
-                            if sol is not None: epoch_results.append((c, sol))
+                            result = res.get()
+                            if result.best_solution is not None:
+                                epoch_results.append((result.best_cost, result.best_solution))
                         except Exception as e:
                             print(f"     [Error] Worker {wid+1} crashed: {e}")
 
@@ -1485,13 +1436,14 @@ class AnalyticalSolver:
                 else:
                     for t in tasks:
                         try:
-                            c, sol, _, sims_done, worker_basins = self.worker_task(t)
-                            if sol is not None: epoch_results.append((c, sol))
-                            global_failed_basins.update(worker_basins)
-                            cumulative_epoch_sims += sims_done 
-                            print(f"   > Worker {t[6]+1} Finished. Best: {c/1e6:.4f}M$")
+                            result = run_island_worker(t)
+                            if result.best_solution is not None:
+                                epoch_results.append((result.best_cost, result.best_solution))
+                            global_failed_basins.update(result.basin_tabu)
+                            cumulative_epoch_sims += result.sim_count
+                            print(f"   > Worker {t.worker_id+1} Finished. Best: {result.best_cost/1e6:.4f}M$")
                         except Exception as e:
-                            print(f"     [Error] Sequential Worker {t[6]+1} crashed: {e}")
+                            print(f"     [Error] Sequential Worker {t.worker_id+1} crashed: {e}")
 
         except KeyboardInterrupt:
             print("\n\n[AnalyticalSolver] 🛑 Отримано сигнал переривання (Ctrl+C)!")

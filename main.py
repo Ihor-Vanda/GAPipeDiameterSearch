@@ -4,7 +4,6 @@ import shutil
 import time
 import pandas as pd
 import multiprocessing
-import signal
 import sys
 import traceback
 import json
@@ -14,47 +13,12 @@ from ga_utils import silence_warnings, format_time
 from ga_data import load_config
 from water_sim import WaterSimulator
 from analytical_solver import AnalyticalSolver
+from analytical_solver.worker import get_temp_root, init_worker_process, set_simulator
 from plot import plot_convergence, plot_network_map, export_solution
 from ga_utils import DualLogger
 from datetime import datetime
 
 silence_warnings()
-
-worker_sim_instance = None
-worker_temp_dir = None
-
-def log_err(msg):
-    sys.stderr.write(f"{msg}\n")
-    sys.stderr.flush()
-
-def get_temp_root():
-    return os.path.abspath("_temp_sim_data")
-
-def worker_init(inp_file, config_obj):
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
-    
-    global worker_sim_instance, worker_temp_dir
-    
-    try:
-        pid = os.getpid()
-        root = get_temp_root()
-        worker_temp_dir = os.path.join(root, f"worker_{pid}")
-        os.makedirs(worker_temp_dir, exist_ok=True)
-
-        os.chdir(worker_temp_dir)
-
-        import shutil
-        base_name = os.path.splitext(os.path.basename(inp_file))[0]
-        local_inp = f"{base_name}_worker_{pid}.inp"
-        local_inp = os.path.abspath(local_inp)
-        
-        shutil.copy2(inp_file, local_inp)
-        
-        worker_sim_instance = WaterSimulator(local_inp, config_obj, temp_dir=worker_temp_dir)
-        
-    except Exception as e:
-        log_err(f"!!! WORKER {os.getpid()} INIT CRASH: {e}")
-        sys.exit(1)
 
 def clean_all_temp():
     root = get_temp_root()
@@ -76,88 +40,6 @@ def setup_run_directory(base_dir="OutputDataExperiments"):
     print(f"[System] Created new output directory: {run_dir}")
     return run_dir
 
-def analytical_worker_task(args):
-    diams            = args[0]
-    v_opt            = args[1]
-    time_budget      = args[2]
-    global_best_cost = args[3]
-    global_archive   = args[4]
-    seed_mod         = args[5]
-    worker_id        = args[6]
-    shared_progress  = args[7]
-    log_dir          = args[8]
-    epoch            = args[9]
-    max_sims         = args[10] if len(args) > 10 else float('inf')
-    n_workers        = args[11] if len(args) > 11 else (len(shared_progress) if shared_progress else 1)
-
-    global worker_sim_instance
-    if worker_sim_instance is None:
-        raise RuntimeError("Worker simulator not initialized!")
-
-    import random
-    import numpy as np
-    import os
-    import sys
-    
-    random.seed(seed_mod)
-    np.random.seed(seed_mod)
-
-    original_stdout = sys.stdout
-    log_file_path = None
-    log_file_handle = None
-
-    if log_dir:
-        logs_folder = os.path.join(log_dir, "logs") if "logs" not in log_dir else log_dir
-        os.makedirs(logs_folder, exist_ok=True)
-        log_file_path = os.path.join(logs_folder, f"worker_{worker_id+1:02d}.txt")
-        
-        log_file_handle = open(log_file_path, "a", encoding="utf-8")
-        log_file_handle.write(f"\n\n{'='*50}\n 🚀 STARTING EPOCH {epoch+1} | WORKER {worker_id+1:02d}\n{'='*50}\n")
-        log_file_handle.flush()
-        
-        class WorkerLogger:
-            def __init__(self, file_handle):
-                self.file_handle = file_handle
-            def write(self, message):
-                self.file_handle.write(message)
-                self.file_handle.flush()
-            def writelines(self, lines):
-                self.file_handle.writelines(lines)
-                self.file_handle.flush()
-            def flush(self):
-                self.file_handle.flush()
-
-    try:
-        if log_file_handle:
-            sys.stdout = WorkerLogger(log_file_handle)
-        
-        from analytical_solver import AnalyticalSolver
-        solver_module = sys.modules[AnalyticalSolver.__module__]
-        
-        SolverContext = solver_module.SolverContext
-        LocalSearch = solver_module.LocalSearch
-        KickStrategies = solver_module.KickStrategies
-        IslandWorker = solver_module.IslandWorker
-
-        ctx = SolverContext(worker_sim_instance, diams, v_opt=v_opt)
-        ctx.log_file = log_file_path 
-        
-        ls = LocalSearch(ctx)
-        kicker = KickStrategies(ctx, ls)
-        
-        n = ctx.num_pipes
-        network_class = "SMALL" if n < 50 else ("MEDIUM" if n < 200 else ("LARGE" if n < 1000 else "XLARGE"))
-        beam_width = 8 if network_class in ["LARGE", "XLARGE"] else 5
-        
-        worker = IslandWorker(ctx, kicker, ls, worker_id, n_workers, max_sims, beam_width, network_class, global_archive, epoch)
-        c_best, sol_best = worker.run(time_budget, global_best_cost, shared_progress)
-        
-        return c_best, sol_best, None, ctx.sim_count, worker.pool.basin_tabu
-        
-    finally:
-        sys.stdout = original_stdout
-        if log_file_handle:
-            log_file_handle.close()
 
 def main():
     multiprocessing.freeze_support()
@@ -268,7 +150,6 @@ def main():
     pool = None
     results = []
     try:
-        global worker_sim_instance
         if args.sequential:
             # Один воркер у цьому ж процесі, без Pool і без Manager. Тільки так
             # прогін справді відтворюваний: у паралельному режимі глобальний
@@ -276,7 +157,7 @@ def main():
             # розміру архіву (BASIN_ESCAPE, consensus locking), спрацьовують
             # у різні моменти навіть при однаковому seed.
             num_cores = 1
-            worker_sim_instance = sim
+            set_simulator(sim)
             print("   [Sequential] Pool вимкнено — прогін детермінований\n")
             if args.time_limit is None:
                 # Часовий бюджет за замовчуванням виводиться з калібрування
@@ -285,8 +166,8 @@ def main():
                 # виключно за лічильником симуляцій.
                 args.time_limit = 0
         else:
-            pool = multiprocessing.Pool(processes=num_cores, initializer=worker_init, initargs=(args.inp, config))
-        AnalyticalSolver.worker_task = staticmethod(analytical_worker_task)
+            pool = multiprocessing.Pool(processes=num_cores, initializer=init_worker_process,
+                                        initargs=(args.inp, config))
 
         for i in range(args.runs):
             current_log_dir = os.path.abspath(base_dir) if args.runs == 1 else os.path.abspath(os.path.join(base_dir, f"run_{i+1}"))
