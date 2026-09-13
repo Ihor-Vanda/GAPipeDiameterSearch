@@ -17,6 +17,12 @@ from .context import SolverContext
 from .pool import SolutionPool
 from .local_search import LocalSearch
 from .kicks import KickStrategies
+from .kick_registry import (
+    FALLBACK_KICK,
+    KICK_REGISTRY,
+    TRACKED_STRATEGIES,
+    pool_for,
+)
 
 class SeedFactory:
     def __init__(self, ctx, local_search, n_workers, beam_width):
@@ -247,14 +253,15 @@ class IslandWorker:
         self.pool = SolutionPool(self.ctx)
         self.seeder = SeedFactory(self.ctx, self.ls, self.n_workers, self.BEAM_WIDTH)
         
-        self.strategies = ["SHOCK", "BOTTLENECK", "TOPO_INV", "LOOP_BALANCE", "ZERO_SUM", "TRIM"]
-        
-        if nx.is_tree(self.ctx.base_G_flow) and "LOOP_BALANCE" in self.strategies:
-            self.strategies.remove("LOOP_BALANCE")
-            
-        all_tracked = self.strategies + [
-            "SMART_PERTURB", "RUIN_RECREATE", "BASIN_ESCAPE", "SUBMARINE", "SPATIAL_PERTURB"
-        ]
+        # Деревоподібність мережі не змінюється, тому обчислюється один раз,
+        # а не на кожному застосуванні кіка.
+        self._is_tree = nx.is_tree(self.ctx.base_G_flow)
+
+        # Раніше цей перелік існував у трьох місцях (self.strategies,
+        # all_tracked і три пули в _apply_kick) і містив стратегію
+        # "SUBMARINE", якої немає в диспетчері — тобто їй марно велася
+        # статистика UCB1. Тепер джерело одне — реєстр.
+        all_tracked = TRACKED_STRATEGIES
         
         self.strat_wins_cold = {s: 1.0 for s in all_tracked}
         self.strat_wins_hot = {s: 1.0 for s in all_tracked} 
@@ -279,7 +286,12 @@ class IslandWorker:
         self.is_late_game = False
         
         self.last_injected_peer = {}
+        self._last_strategy = None
+        self._strategy_burst_count = 0
+        self.bottleneck_boosted_pipes = {}
         self.rescue_fired = False
+        self._force_flush_next = False
+        self.ipc_immunity = 30
         self.loop_balance_failed_pipes = {}
         self.bottleneck_failed_pipes = {}
         self.zero_sum_tabu = {}
@@ -373,13 +385,13 @@ class IslandWorker:
             
             self._check_mini_restart(gb)
             if round_idx > 0 and round_idx % 6 == 0: self.pool.kick_tabu_set.clear()
-            
+
             self._apply_swap(round_idx, shared_progress)
 
             if self.stagnation_counter >= 2:
                 self._apply_kick(round_idx, shared_progress)
                 
-            if getattr(self, '_force_flush_next', False):
+            if self._force_flush_next:
                 just_flushed = True
                 self._force_flush_next = False
 
@@ -487,8 +499,7 @@ class IslandWorker:
         valid_sols = []
         for s in seeds:
             c, p, _, _ = self.ctx.get_cached_stats(s)
-            p_surplus = p - self.ctx.h_min
-            score = c - (p_surplus * self.base_dyn_bonus)
+            score = self.ctx.score(c, p, self.base_dyn_bonus)
             
             self.pool.active_pool.append((score, c, s))
             self.pool.add_to_tabu(s, c)
@@ -516,7 +527,7 @@ class IslandWorker:
         self.ctx.log(f"   > Seeds initialized. Baseline Target: {self.run_best_cost/1e6:.4f}M$")
 
     def _process_ipc(self, shared_progress, gb):
-        if getattr(self, 'ipc_immunity', 0) > 0:
+        if self.ipc_immunity > 0:
             self.ipc_immunity -= 1
             return
         
@@ -541,15 +552,14 @@ class IslandWorker:
                 peer_sol = list(peer[1])
                 c_p, p_p, _, _ = self.ctx.get_cached_stats(peer_sol)
                 if p_p >= self.ctx.h_min and not self.pool.is_basin_tabu(peer_sol):
-                    p_surplus = p_p - self.ctx.h_min
-                    score = c_p - (p_surplus * self.base_dyn_bonus)
+                    score = self.ctx.score(c_p, p_p, self.base_dyn_bonus)
                     self.pool.active_pool.append((score, c_p, peer_sol))
                     self.ctx.log(f"     [IPC] 💉 Passively injected peer W{i+1} solution ({c_p/1e6:.4f}M$)")
                     self.last_injected_peer[i] = peer[0]
 
     def _check_rescue(self, gb):
         
-        if getattr(self, 'ipc_immunity', 0) > 0:
+        if self.ipc_immunity > 0:
             return
         
         global_lag = (self.run_best_cost - self.global_best_cost) / max(self.global_best_cost, 1.0)
@@ -565,8 +575,7 @@ class IslandWorker:
                     self.run_best_cost = c_gb
                     self.run_best_sol = gb_sol
                     
-                    p_surplus = p_gb - self.ctx.h_min
-                    score = c_gb - (p_surplus * self.base_dyn_bonus)
+                    score = self.ctx.score(c_gb, p_gb, self.base_dyn_bonus)
                     
                     self.pool.active_pool.insert(0, (score - 1e6, c_gb, gb_sol))
                     self.stagnation_counter = 0
@@ -609,7 +618,7 @@ class IslandWorker:
                     for seed in new_seeds:
                         c, p, _, _ = self.ctx.get_cached_stats(seed)
                         if p >= self.ctx.h_min:
-                            score = c - ((p - self.ctx.h_min) * self.base_dyn_bonus)
+                            score = self.ctx.score(c, p, self.base_dyn_bonus)
                             self.pool.active_pool.append((score, c, seed))
                             actually_added += 1
                             
@@ -639,9 +648,8 @@ class IslandWorker:
                     self.stagnation_counter = max(0, self.stagnation_counter - 1)
                     self.pool.kick_tabu_set.clear()
                     
-                    p_surplus = p - self.ctx.h_min
-                    eff_bonus = self.base_dyn_bonus * 0.2 if p_surplus > 10.0 else self.base_dyn_bonus
-                    self.pool.active_pool.insert(0, (c - (p_surplus * eff_bonus) - (self.run_best_cost * 0.1), c, swapped))
+                    swap_score = self.ctx.score(c, p, self.base_dyn_bonus) - (self.run_best_cost * 0.1)
+                    self.pool.active_pool.insert(0, (swap_score, c, swapped))
     
     def _apply_kick(self, round_idx, shared_progress):
         ABLATION_MODE = False 
@@ -654,23 +662,8 @@ class IslandWorker:
         active_tries = self.strat_tries_hot if is_late_game else self.strat_tries_cold
         n_total = sum(active_tries.values())
 
-        if not hasattr(self, '_last_strategy'): self._last_strategy = None
-        if not hasattr(self, '_strategy_burst_count'): self._strategy_burst_count = 0
- 
-        if real_T >= 0.90:
-            if len(self.global_archive) >= 2:
-                pool_strats = ["BASIN_ESCAPE"] 
-            else:
-                pool_strats = ["RUIN_RECREATE", "SPATIAL_PERTURB", "TOPO_INV"]
-        elif real_T >= 0.40:
-            pool_strats = ["SHOCK", "BOTTLENECK", "LOOP_BALANCE", "ZERO_SUM", "TRIM",
-                           "SPATIAL_PERTURB", "SMART_PERTURB", "RUIN_RECREATE", "TOPO_INV"]
-        else:
-            pool_strats = ["SHOCK", "BOTTLENECK", "LOOP_BALANCE", "ZERO_SUM", "TRIM"]
- 
-        if nx.is_tree(self.ctx.base_G_flow) and "LOOP_BALANCE" in pool_strats:
-            pool_strats.remove("LOOP_BALANCE")
- 
+        pool_strats = pool_for(real_T, len(self.global_archive), self._is_tree)
+
         max_fails = 3 if T < 0.5 else 5
         valid_strats = [s for s in pool_strats if s in active_wins and self.strat_consecutive_fails.get(s, 0) < max_fails]
         if not valid_strats:
@@ -683,7 +676,7 @@ class IslandWorker:
         if untried_strats:
             strategy = random.choice(untried_strats)
         elif not use_bandit:
-            last_s = getattr(self, '_last_strategy', None)
+            last_s = self._last_strategy
             vnd_pool = [s for s in valid_strats if s != last_s] if valid_strats else [s for s in pool_strats if s != last_s]
             
             if not vnd_pool:
@@ -698,15 +691,15 @@ class IslandWorker:
                 explore_bonus = exploration_C * math.sqrt(math.log(max(1, n_total)) / max(1, active_tries.get(s, 1)))
                 
                 burst_penalty = 1.0
-                if s == getattr(self, '_last_strategy', None):
-                    burst = getattr(self, '_strategy_burst_count', 0)
+                if s == self._last_strategy:
+                    burst = self._strategy_burst_count
                     burst_penalty = 0.5 ** burst
                 
                 return (base_score + explore_bonus) * burst_penalty
 
             strategy = max(valid_strats, key=get_ucb_score)
             
-        if strategy == getattr(self, '_last_strategy', None):
+        if strategy == self._last_strategy:
             self._strategy_burst_count += 1
         else:
             self._last_strategy = strategy
@@ -729,60 +722,39 @@ class IslandWorker:
             elif kick_mode == 1 and self.pool.active_pool: kick_target = self.pool.active_pool[0][2]
             else: kick_target = random.choice([x[2] for x in self.pool.active_pool]) if self.pool.active_pool else self.run_best_sol
  
-        forced_sol, locked, path_sig, failed_pipe_id = None, None, None, -1
-        used_pct, log_msg = None, ""
- 
-        if not hasattr(self, 'bottleneck_failed_pipes'): self.bottleneck_failed_pipes = {}
-        if not hasattr(self, 'loop_balance_failed_pipes'): self.loop_balance_failed_pipes = {}
-        if not hasattr(self, 'zero_sum_tabu'): self.zero_sum_tabu = {}
-        if not hasattr(self, 'bottleneck_boosted_pipes'): self.bottleneck_boosted_pipes = {}
- 
+        spec = KICK_REGISTRY.get(strategy) or KICK_REGISTRY[FALLBACK_KICK]
+
         kick_args = {
             'T': T,
             'failed_pipes': self.bottleneck_failed_pipes if strategy == "BOTTLENECK" else self.loop_balance_failed_pipes,
-            'boosted_pipes': getattr(self, 'bottleneck_boosted_pipes', {}),
+            'boosted_pipes': self.bottleneck_boosted_pipes,
             'current_round': round_idx,
             'tabu_set': self.pool.kick_tabu_set,
             'dyn_bonus': self.base_dyn_bonus,
             'global_archive': self.global_archive,
             'max_perturb': int(self.ctx.num_pipes * 0.50),
             'zero_sum_tabu': self.zero_sum_tabu,
-            'mu_ruin_pct':    getattr(self, 'mu_ruin_pct',    0.05),
-            'mu_perturb_pct': getattr(self, 'mu_perturb_pct', 0.10),
-            'mu_spatial_pct': getattr(self, 'mu_spatial_pct', 0.20),
-            'mu_escape_pct':  getattr(self, 'mu_escape_pct',  0.20),
+            'mu_ruin_pct':    self.mu_ruin_pct,
+            'mu_perturb_pct': self.mu_perturb_pct,
+            'mu_spatial_pct': self.mu_spatial_pct,
+            'mu_escape_pct':  self.mu_escape_pct,
         }
 
         try:
-            if   strategy == "SHOCK":          res = self.kicker.forcing_hand_kick(kick_target, **kick_args)
-            elif strategy == "BOTTLENECK":     res = self.kicker.upstream_bottleneck_kick(kick_target, **kick_args)
-            elif strategy == "TOPO_INV":       res = self.kicker.topological_inversion_kick(kick_target, **kick_args)
-            elif strategy == "LOOP_BALANCE":   res = self.kicker.loop_balancing_kick(kick_target, **kick_args)
-            elif strategy == "ZERO_SUM":       res = self.kicker.zero_sum_shift_kick(kick_target, **kick_args)
-            elif strategy == "SPATIAL_PERTURB":res = self.kicker.spatial_perturb_kick(kick_target, **kick_args)
-            elif strategy == "TRIM":           res = self.kicker.peripheral_trim_kick(kick_target, **kick_args)
-            elif strategy == "SMART_PERTURB":  res = self.kicker.smart_perturbation_kick(kick_target, **kick_args)
-            elif strategy == "RUIN_RECREATE":  res = self.kicker.ruin_and_recreate_kick(kick_target, **kick_args)
-            elif strategy == "BASIN_ESCAPE":   res = self.kicker.basin_escape(kick_target, **kick_args)
-            else:                              res = self.kicker.forcing_hand_kick(kick_target, **kick_args)
- 
-            if not isinstance(res, tuple) or len(res) < 3: return
-            forced_sol, locked, log_msg = res[0], res[1], res[2]
- 
-            if len(res) >= 4:
-                if strategy in ["BOTTLENECK", "LOOP_BALANCE"]: failed_pipe_id = res[3]
-                elif strategy == "TOPO_INV": path_sig = res[3]
-                elif strategy in ["RUIN_RECREATE", "SMART_PERTURB", "SPATIAL_PERTURB", "BASIN_ESCAPE"]: used_pct = res[3]
+            res = getattr(self.kicker, spec.method)(kick_target, **kick_args)
         except Exception as e:
             self.ctx.log(f"      -> Error in {strategy}: {e}")
             return
 
-        if forced_sol is None or locked is None:
+        forced_sol, locked, log_msg = res.solution, res.locked, res.message
+        path_sig, used_pct = res.path_signature, res.used_pct
+
+        if res.failed:
             self.strat_consecutive_fails[strategy] = self.strat_consecutive_fails.get(strategy, 0) + 1
-            if failed_pipe_id != -1:
-                if strategy == "BOTTLENECK": self.bottleneck_failed_pipes[failed_pipe_id] = round_idx
-                elif strategy == "LOOP_BALANCE": self.loop_balance_failed_pipes[failed_pipe_id] = round_idx
-            
+            if res.failed_pipe is not None:
+                if strategy == "BOTTLENECK": self.bottleneck_failed_pipes[res.failed_pipe] = round_idx
+                elif strategy == "LOOP_BALANCE": self.loop_balance_failed_pipes[res.failed_pipe] = round_idx
+
             reason = log_msg if log_msg else "No targets"
             self.ctx.log(f"      -> Kick '{strategy}' failed. Reason: {reason}")
             
@@ -836,7 +808,7 @@ class IslandWorker:
                 else: deep_passes = 2 if gap <= 0.05 else 1
  
                 consensus_locked = set()
-                if len(self.global_archive) >= 3 and is_late_game and T < 0.2 and not getattr(self, '_force_flush_next', False):
+                if len(self.global_archive) >= 3 and is_late_game and T < 0.2 and not self._force_flush_next:
                     arch_sols = [x[1] for x in self.global_archive]
                     raw_consensus = {i for i in range(self.ctx.num_pipes) if all(sol[i] == arch_sols[0][i] for sol in arch_sols)}
                     max_frozen = 0 if self.progress_ratio > 0.88 else max(5, int(self.ctx.num_pipes * (0.25 if self.progress_ratio > 0.6 else 0.10)))
@@ -874,7 +846,7 @@ class IslandWorker:
         else: 
             return
  
-        score = effective_cost - (max(0.0, p - base_h_min) * (self.base_dyn_bonus * 0.2 if max(0.0, p - base_h_min) > 10.0 else self.base_dyn_bonus)) if deficit == 0 else effective_cost
+        score = self.ctx.score(effective_cost, p, self.base_dyn_bonus) if deficit == 0 else effective_cost
 
         if deficit == 0 and effective_cost < self.run_best_cost:
             if (self.run_best_cost - effective_cost) > (self.run_best_cost * 0.02) and self.ctx.is_ghost_solution(final_sol): return
@@ -909,7 +881,7 @@ class IslandWorker:
             self.pool.active_pool.append((score, effective_cost, final_sol))
             self.stagnation_counter = 0
             self.bottleneck_failed_pipes.clear()
-            if hasattr(self, 'bottleneck_boosted_pipes'): self.bottleneck_boosted_pipes.clear()
+            self.bottleneck_boosted_pipes.clear()
             self.loop_balance_failed_pipes.clear()
             self.zero_sum_tabu.clear()
             self._force_flush_next = True
@@ -953,8 +925,8 @@ class IslandWorker:
                         elif strategy == "SMART_PERTURB": self.mu_perturb_pct = (1 - alpha_weak) * self.mu_perturb_pct + alpha_weak * used_pct
                         elif strategy == "SPATIAL_PERTURB": self.mu_spatial_pct = (1 - alpha_weak) * self.mu_spatial_pct + alpha_weak * used_pct
 
-                if strategy == "BOTTLENECK" and failed_pipe_id != -1:
-                    self.bottleneck_boosted_pipes[failed_pipe_id] = round_idx
+                if strategy == "BOTTLENECK" and res.failed_pipe is not None:
+                    self.bottleneck_boosted_pipes[res.failed_pipe] = round_idx
 
                 self.ctx.log(f"      -> Added to Pool (Water Level Accept): {effective_cost/1e6:.4f}M$")
  
@@ -984,11 +956,11 @@ class IslandWorker:
             if used_pct is not None and not ABLATION_MODE:
                 shrink = 0.95
                 if strategy == "RUIN_RECREATE": 
-                    self.mu_ruin_pct = max(0.02, getattr(self, 'mu_ruin_pct', 0.05) * shrink)
+                    self.mu_ruin_pct = max(0.02, self.mu_ruin_pct * shrink)
                 elif strategy == "SMART_PERTURB": 
-                    self.mu_perturb_pct = max(0.03, getattr(self, 'mu_perturb_pct', 0.10) * shrink)
+                    self.mu_perturb_pct = max(0.03, self.mu_perturb_pct * shrink)
                 elif strategy == "SPATIAL_PERTURB": 
-                    self.mu_spatial_pct = max(0.05, getattr(self, 'mu_spatial_pct', 0.20) * shrink)
+                    self.mu_spatial_pct = max(0.05, self.mu_spatial_pct * shrink)
  
         if path_sig: self.pool.kick_tabu_set.add(path_sig)
         if strategy == "ZERO_SUM" and locked: self.zero_sum_tabu[list(locked)[0]] = round_idx
@@ -1102,8 +1074,7 @@ class IslandWorker:
                     
                     if is_strictly_valid or is_epsilon_valid:
                         if is_strictly_valid:
-                            eff_bonus = self.base_dyn_bonus * 0.2 if real_p_surplus > 10.0 else self.base_dyn_bonus
-                            score = real_cost - (real_p_surplus * eff_bonus)
+                            score = self.ctx.score(real_cost, st.p_min, self.base_dyn_bonus)
                         else:
                             score = real_cost + (abs(real_p_surplus) * self.base_dyn_bonus * 50.0)
                         
@@ -1167,7 +1138,7 @@ class IslandWorker:
                 fresh = self.reserve_pool.pop(0) 
                 st = self.ctx.get_cached_stats(fresh)
                 if st.simulation_ok:
-                    score = st.cost - (st.surplus(self.ctx.h_min) * self.base_dyn_bonus)
+                    score = self.ctx.score(st.cost, st.p_min, self.base_dyn_bonus)
                     self.pool.active_pool[-1] = (score, st.cost, fresh)
 
     def _emergency_respawn(self):
