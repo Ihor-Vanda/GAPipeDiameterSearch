@@ -4,7 +4,6 @@ warnings.filterwarnings("ignore", message="Ignoring fixed .* limits")
 
 import customtkinter as ctk
 from tkinter import filedialog, messagebox, ttk
-import tkinter as tk
 import threading
 import sys
 import os
@@ -14,40 +13,19 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-from PIL import Image
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+import ga_data
 import netdraw
+import gui_widgets as widgets
 from analytical_solver.worker import clean_temp_root, get_temp_root
+from gui_results import ResultsViewer
+from gui_widgets import GUIStream
 from runner import OptimizationRunner, RunRequest
 
 # ==========================================
 # 1 КЛАС GUI ТА ПЕРЕНАПРАВЛЕННЯ ЛОГІВ
 # ==========================================
-class GUIStream:
-    def __init__(self, text_widget):
-        self.text_widget = text_widget
-        self.log_file = None
-
-    def set_file(self, file_path):
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        self.log_file = open(file_path, "a", encoding="utf-8")
-
-    def write(self, text):
-        self.text_widget.insert("end", text)
-        self.text_widget.see("end")
-        if self.log_file:
-            self.log_file.write(text)
-            self.log_file.flush()
-
-    def flush(self):
-        if self.log_file:
-            self.log_file.flush()
-            
-    def close(self):
-        if self.log_file:
-            self.log_file.close()
-            self.log_file = None
 
 class PipelineOptimizerApp(ctk.CTk):
     
@@ -97,7 +75,7 @@ class PipelineOptimizerApp(ctk.CTk):
         self.available_logs = {}
 
 
-        self.setup_treeview_style() 
+        widgets.setup_treeview_style(self) 
         self._setup_ui()
         
     def _setup_ui(self):
@@ -226,18 +204,12 @@ class PipelineOptimizerApp(ctk.CTk):
 
         self.txt_logs = ctk.CTkTextbox(self.log_frame, font=self.font_mono)
         self.txt_logs.grid(row=1, column=0, sticky="nsew")
-        self.txt_logs.bind("<Key>", self.prevent_typing)
+        self.txt_logs.bind("<Key>", widgets.prevent_typing)
 
         self.progress = ctk.CTkProgressBar(self.log_frame)
         self.progress.grid(row=2, column=0, pady=10, sticky="ew")
         self.progress.set(0)
         
-    def prevent_typing(self, event):
-        if event.state & 4 or event.state & 8: 
-            if event.keysym.lower() == "c": return None 
-        if event.keysym in ("Up", "Down", "Left", "Right", "Prior", "Next", "Shift_L", "Shift_R"):
-            return None
-        return "break"
 
     def change_font_size(self, delta):
         self.base_font_size += delta
@@ -268,7 +240,7 @@ class PipelineOptimizerApp(ctk.CTk):
             self.main_tabs.set("Таблиця Цін (CSV)")
             try:
                 df = pd.read_csv(file_path)
-                self.load_df_to_treeview(self.tree_costs_preview, df)
+                widgets.load_dataframe(self.tree_costs_preview, df)
             except Exception as e:
                 messagebox.showerror("Помилка", f"Не вдалося прочитати CSV: {e}")
                 
@@ -486,7 +458,7 @@ class PipelineOptimizerApp(ctk.CTk):
                 self._live_inp_path = self.selected_inp
 
             diameters = netdraw.diameters_from_solution(
-                self._live_geometry, best_sol, self._get_actual_diams())
+                self._live_geometry, best_sol, ga_data.diameter_table(self.selected_costs))
 
             self.topo_ax.clear()
             scale = netdraw.draw(self.topo_ax, self._live_geometry, diameters)
@@ -511,91 +483,10 @@ class PipelineOptimizerApp(ctk.CTk):
     # 6 Utilities
     # ==========================================
     
-    def setup_treeview_style(self):
-        style = ttk.Style(self)
-        
-        try:
-            style.theme_use("default")
-        except AttributeError:
-            pass
-        
-        bg_color = "#2b2b2b"    
-        fg_color = "#ffffff"    
-        selected_bg = "#1f538d"
-        heading_bg = "#333333"  
-        
-        style.configure("Treeview",
-                        background=bg_color,
-                        foreground=fg_color,
-                        rowheight=25,
-                        fieldbackground=bg_color,
-                        borderwidth=0)
-        
-        style.map('Treeview', background=[('selected', selected_bg)])
-        
-        style.configure("Treeview.Heading",
-                        background=heading_bg,
-                        foreground=fg_color,
-                        relief="flat",
-                        font=("Arial", 11, "bold"))
-        
-        style.map("Treeview.Heading", background=[('active', '#444444')])
 
-    def load_df_to_treeview(self, tree, df):
-        tree.delete(*tree.get_children())
-        tree["columns"] = list(df.columns)
-        tree["show"] = "headings"
-        
-        for col in tree["columns"]:
-            tree.heading(col, text=col, command=lambda c=col: self.treeview_sort_column(tree, c, False))
-            tree.column(col, width=100, anchor="center")
             
-        for _, row in df.iterrows():
-            tree.insert("", "end", values=list(row))
-            
-    def treeview_sort_column(self, tv, col, reverse):
-        l = [(tv.set(k, col), k) for k in tv.get_children('')]
-        try:
-            l.sort(key=lambda t: float(t[0]) if t[0] and t[0] != 'nan' else -float('inf'), reverse=reverse)
-        except ValueError:
-            l.sort(key=lambda t: str(t[0]).lower(), reverse=reverse)
 
-        for index, (val, k) in enumerate(l):
-            tv.move(k, '', index)
-
-        tv.heading(col, command=lambda: self.treeview_sort_column(tv, col, not reverse))
-
-    def enable_mouse_navigation(self, fig, ax, canvas):
-        parent_frame = canvas.get_tk_widget().master
         
-        toolbar = NavigationToolbar2Tk(canvas, parent_frame, pack_toolbar=False)
-        toolbar.update()
-        
-        toolbar.pan()
-
-        def zoom(event):
-            if event.inaxes != ax: return
-            scale = 1.2 if event.button == 'up' else 1 / 1.2
-            x, y = event.xdata, event.ydata
-            xlim, ylim = ax.get_xlim(), ax.get_ylim()
-
-            ax.set_xlim([x - (x - xlim[0]) / scale, x + (xlim[1] - x) / scale])
-            ax.set_ylim([y - (y - ylim[0]) / scale, y + (ylim[1] - y) / scale])
-            canvas.draw_idle()
-
-        fig.canvas.mpl_connect('scroll_event', zoom)
-        
-    def _get_actual_diams(self):
-        if not self.selected_costs or not os.path.exists(self.selected_costs):
-            return None
-        try:
-            df = pd.read_csv(self.selected_costs)
-            for col in df.columns:
-                if 'diam' in col.lower() or 'діаметр' in col.lower():
-                    return df[col].astype(float).tolist()
-        except:
-            pass
-        return None
     
     def _draw_basic_topology(self, inp_path):
         for widget in self.tab_topology.winfo_children(): widget.destroy()
@@ -628,7 +519,7 @@ class PipelineOptimizerApp(ctk.CTk):
             
             self.topo_canvas.get_tk_widget().pack(fill="both", expand=True)
             self.topo_canvas.draw()
-            self.enable_mouse_navigation(self.topo_fig, self.topo_ax, self.topo_canvas) 
+            widgets.enable_mouse_navigation(self.topo_fig, self.topo_ax, self.topo_canvas) 
             
         except Exception as e:
             import traceback
@@ -639,6 +530,24 @@ class PipelineOptimizerApp(ctk.CTk):
     # ==========================================
     # 7 Results Viewer
     # ==========================================
+
+    def open_results_viewer(self, target_dir=None):
+        """Відкрити вікно детальних результатів.
+
+        Раніше цей метод сам будував вікно (88 рядків) і разом із
+        `load_viewer_data` та `_on_log_select` читав 30 полів застосунку.
+        Тепер вікно — окремий клас, який отримує п'ять значень (§27).
+        """
+        if target_dir:
+            self.last_run_dir = target_dir
+
+        if not self.last_run_dir or not os.path.exists(self.last_run_dir):
+            messagebox.showerror("Помилка", "Результати не знайдено.")
+            return
+
+        ResultsViewer(self, run_dir=self.last_run_dir, inp_file=self.selected_inp,
+                      cost_file=self.selected_costs, units=self.opt_units.get(),
+                      font_main=self.font_main, font_mono=self.font_mono)
 
     def open_past_run(self):
         directory = filedialog.askdirectory(title="Оберіть папку експерименту (напр. 2026-04-06_15-36-30)")
@@ -655,297 +564,8 @@ class PipelineOptimizerApp(ctk.CTk):
                     "У цій папці не знайдено результатів оптимізації.\nОберіть папку, яка містить 'tables' або 'run_1'."
                 )
                 
-    def open_results_viewer(self, target_dir=None):
-        if target_dir: self.last_run_dir = target_dir
 
-        if not self.last_run_dir or not os.path.exists(self.last_run_dir):
-            messagebox.showerror("Помилка", "Результати не знайдено.")
-            return
-
-        self.setup_treeview_style()
-        self.viewer = ctk.CTkToplevel(self)
-        self.viewer.title(f"Детальні результати | {os.path.basename(self.last_run_dir)}")
-        self.viewer.geometry("1150x800")
-        self.viewer.grab_set() 
-
-        runs = ["Чемпіон"]
-        for d in sorted(os.listdir(self.last_run_dir)):
-            if d.startswith("run_") and os.path.isdir(os.path.join(self.last_run_dir, d)):
-                runs.append(f"Запуск {d.split('_')[1]}")
-
-        top_panel = ctk.CTkFrame(self.viewer)
-        top_panel.pack(fill="x", padx=10, pady=10)
-        ctk.CTkLabel(top_panel, text="Оберіть результат для перегляду:", font=self.font_main).pack(side="left", padx=10)
-        
-        self.run_selector = ctk.CTkOptionMenu(top_panel, values=runs, font=self.font_main, command=self.load_viewer_data)
-        self.run_selector.set("Чемпіон")
-        self.run_selector.pack(side="left", padx=10)
-
-        tabs = ctk.CTkTabview(self.viewer)
-        tabs.pack(fill="both", expand=True, padx=10, pady=10)
-        
-        self.tab_map = tabs.add("Карта та Рішення")
-        self.tab_conv = tabs.add("Збіжність")
-        self.tab_summary = tabs.add("Зведені дані")
-        self.tab_inp = tabs.add("INP файл")
-        self.tab_logs = tabs.add("Логи")
-
-        self.paned_window = tk.PanedWindow(
-            self.tab_map, 
-            orient=tk.HORIZONTAL, 
-            bg="#2b2b2b",            
-            sashwidth=6,          
-            sashrelief=tk.FLAT,        
-            bd=0,                     
-            cursor="sb_h_double_arrow" 
-        )
-        self.paned_window.pack(fill="both", expand=True, padx=5, pady=5)
-        
-        self.map_canvas_frame = ctk.CTkFrame(self.paned_window)
-        table_frame = ctk.CTkFrame(self.paned_window)
-
-        self.paned_window.add(self.map_canvas_frame, stretch="always", minsize=400)
-        self.paned_window.add(table_frame, stretch="never", minsize=500)
-        
-        self.viewer.update_idletasks()
-        start_sash_pos = int(self.viewer.winfo_width() * 0.72)
-        if start_sash_pos > 0:
-            self.paned_window.paneconfigure(self.map_canvas_frame, width=start_sash_pos)
-        
-        scroll_y = ttk.Scrollbar(table_frame)
-        scroll_y.pack(side="right", fill="y")
-        self.tree_solution = ttk.Treeview(table_frame, yscrollcommand=scroll_y.set)
-        scroll_y.config(command=self.tree_solution.yview)
-        self.tree_solution.pack(fill="both", expand=True)
-
-        self.conv_canvas_frame = ctk.CTkFrame(self.tab_conv)
-        self.conv_canvas_frame.pack(fill="both", expand=True, padx=5, pady=5)
-
-        summary_frame = ctk.CTkFrame(self.tab_summary)
-        summary_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        self.tree_summary = ttk.Treeview(summary_frame)
-        self.tree_summary.pack(fill="both", expand=True)
-
-        self.txt_inp = ctk.CTkTextbox(self.tab_inp, font=self.font_mono, wrap="none")
-        self.txt_inp.pack(fill="both", expand=True, padx=10, pady=10)
-        self.txt_inp.bind("<Key>", self.prevent_typing) # Фікс тексту
-        
-        self.log_controls_frame = ctk.CTkFrame(self.tab_logs, fg_color="transparent")
-        self.log_controls_frame.pack(fill="x", padx=10, pady=(10, 0))
-        
-        ctk.CTkLabel(self.log_controls_frame, text="Оберіть лог-файл:", font=self.font_main).pack(side="left", padx=(0, 10))
-        self.log_selector = ctk.CTkOptionMenu(self.log_controls_frame, values=["---"], font=self.font_main, command=self._on_log_select)
-        self.log_selector.pack(side="left")
-        
-        self.viewer_txt_logs = ctk.CTkTextbox(self.tab_logs, font=self.font_mono, wrap="word")
-        self.viewer_txt_logs.pack(side="top", fill="both", expand=True, padx=10, pady=10)
-        self.viewer_txt_logs.bind("<Key>", self.prevent_typing) # Фікс тексту
-        
-        self.available_logs = {}
-        self.load_viewer_data("Чемпіон")
-
-    def load_viewer_data(self, selected_run):
-        for widget in self.map_canvas_frame.winfo_children(): widget.destroy()
-        for widget in self.conv_canvas_frame.winfo_children(): widget.destroy()
-        
-        if selected_run == "Чемпіон":
-            plots_dir = os.path.join(self.last_run_dir, "plots")
-            tables_dir = os.path.join(self.last_run_dir, "tables")
-            logs_dir = os.path.join(self.last_run_dir, "logs") 
-            sol_name = "solution_champion.csv"
-        else:
-            run_id = selected_run.split(" ")[1]
-            run_dir = os.path.join(self.last_run_dir, f"run_{run_id}")
-            plots_dir = os.path.join(run_dir, "plots")
-            tables_dir = os.path.join(run_dir, "tables")
-            logs_dir = os.path.join(run_dir, "logs") 
-            sol_name = "solution.csv"
-
-        hist_name = "convergence_history.csv"
-        sol_path = os.path.join(tables_dir, sol_name)
-        
-        actual_diams = self._get_actual_diams()
-
-        diam_col_name = None
-        if os.path.exists(sol_path):
-            df_display = pd.read_csv(sol_path)
-            diam_col_name = df_display.columns[-1] 
-            for col in df_display.columns:
-                if 'diam' in col.lower() or 'діаметр' in col.lower() or 'd_' in col.lower():
-                    diam_col_name = col
-                    break
-                    
-            if actual_diams:
-                df_display[diam_col_name] = df_display[diam_col_name].apply(
-                    lambda x: actual_diams[int(x)] if (pd.notnull(x) and float(x).is_integer() and 0 <= int(float(x)) < len(actual_diams)) else x
-                )
-            for col in df_display.columns:
-                col_lower = str(col).lower()
                 
-                if 'id' in col_lower or 'node' in col_lower or 'вузол' in col_lower:
-                    df_display[col] = df_display[col].apply(
-                        lambda x: str(x)[:-2] if str(x).endswith('.0') else str(x)
-                    )
-                else:
-                    def format_value(val):
-                        if pd.isnull(val): return ""
-                        try:
-                            f_val = float(val)
-                            if f_val.is_integer():
-                                return str(int(f_val))
-                            else:
-                                return f"{f_val:.2f}"
-                        except (ValueError, TypeError):
-                            return str(val)
-                            
-                    df_display[col] = df_display[col].apply(format_value)
-
-            self.load_df_to_treeview(self.tree_solution, df_display)
-
-        fig_map, ax_map = plt.subplots(figsize=(6, 5), dpi=100)
-        fig_map.subplots_adjust(left=0, right=1, bottom=0, top=1)
-        fig_map.patch.set_facecolor('#ffffff')
-        ax_map.set_facecolor('#ffffff')
-        ax_map.set_aspect('equal', adjustable='datalim')
-        
-        target_inp = self.selected_inp
-        saved_inp_path = os.path.join(tables_dir, "optimized_network.inp")
-        
-        if not target_inp or not os.path.exists(target_inp):
-            if os.path.exists(saved_inp_path):
-                target_inp = saved_inp_path
-
-        drawn_native = False
-        if os.path.exists(sol_path) and target_inp and os.path.exists(target_inp):
-            try:
-                geometry = netdraw.NetworkGeometry.load(target_inp)
-                diameters = netdraw.diameters_from_table(
-                    geometry, pd.read_csv(sol_path), actual_diams)
-
-                scale = netdraw.draw(ax_map, geometry, diameters)
-                scale.attach_colorbar(fig_map, ax_map,
-                                      f"Діаметр ({self.opt_units.get()})")
-
-                ax_map.set_title(f"Оптимізована топологія ({selected_run})", color="black", pad=10)
-                
-                canvas_map = FigureCanvasTkAgg(fig_map, master=self.map_canvas_frame)
-                
-                def on_resize(_event):
-                    ax_map.autoscale_view(tight=True)
-                    fig_map.canvas.draw_idle()
-                fig_map.canvas.mpl_connect('resize_event', on_resize)
-                
-                canvas_map.get_tk_widget().pack(fill="both", expand=True)
-                canvas_map.draw()
-                self.enable_mouse_navigation(fig_map, ax_map, canvas_map)
-                drawn_native = True
-            except Exception as e:
-                print(f"Native drawing failed: {e}")
-
-        if not drawn_native:
-            map_png = os.path.join(plots_dir, "network_map.png")
-            if os.path.exists(map_png):
-                img_map = Image.open(map_png)
-                ctk_img = ctk.CTkImage(light_image=img_map, dark_image=img_map, size=(650, 600))
-                ctk.CTkLabel(self.map_canvas_frame, image=ctk_img, text="").pack(expand=True)
-            else:
-                ctk.CTkLabel(self.map_canvas_frame, text="Дані карти не знайдено").pack(pady=20)
-        plt.close(fig_map)
-
-        fig_conv, ax_conv = plt.subplots(figsize=(8, 5), dpi=100)
-        fig_conv.patch.set_facecolor('#2b2b2b')
-        ax_conv.set_facecolor('#2b2b2b')
-        ax_conv.tick_params(colors='white')
-        ax_conv.xaxis.label.set_color('white')
-        ax_conv.yaxis.label.set_color('white')
-        ax_conv.set_xlabel("Симуляції")
-        ax_conv.set_ylabel("Вартість (М$)")
-        ax_conv.grid(True, color='gray', linestyle='--', alpha=0.5)
-
-        hist_path = os.path.join(tables_dir, hist_name)
-        if not os.path.exists(hist_path): 
-            hist_path = os.path.join(plots_dir, hist_name) 
-            
-        if os.path.exists(hist_path):
-            try:
-                df_hist = pd.read_csv(hist_path)
-                x_col = df_hist.columns[0]
-                y_col = df_hist.columns[1]
-                ax_conv.step(df_hist[x_col], df_hist[y_col] / 1e6, color='#00ffcc', linewidth=2, where='post')
-                ax_conv.set_title(f"Збіжність: {selected_run}", color="white")
-                
-                canvas_conv = FigureCanvasTkAgg(fig_conv, master=self.conv_canvas_frame)
-                canvas_conv.get_tk_widget().pack(side="top", fill="both", expand=True)
-                canvas_conv.draw()
-                self.enable_mouse_navigation(fig_conv, ax_conv, canvas_conv)
-            except Exception as e: 
-                ctk.CTkLabel(self.conv_canvas_frame, text=f"Помилка завантаження графіка: {e}").pack(pady=20)
-        else:
-            ctk.CTkLabel(self.conv_canvas_frame, text="Файл convergence_history.csv не знайдено").pack(pady=20)
-        plt.close(fig_conv)
-
-        sum_path = os.path.join(self.last_run_dir, "tables", "runs_summary.csv")
-        if os.path.exists(sum_path):
-            try:
-                df_sum = pd.read_csv(sum_path)
-                self.load_df_to_treeview(self.tree_summary, df_sum)
-            except: pass
-
-        inp_path = os.path.join(tables_dir, "optimized_network.inp")
-        self.txt_inp.delete("1.0", "end")
-        if os.path.exists(inp_path):
-            try:
-                with open(inp_path, "r", encoding="utf-8") as f: self.txt_inp.insert("end", f.read())
-            except Exception as e: self.txt_inp.insert("end", f"Помилка: {e}")
-        else:
-            self.txt_inp.insert("end", "Файл INP не знайдено.")
-
-        if hasattr(self, 'viewer_txt_logs'):
-            self.viewer_txt_logs.delete("1.0", "end")
-            
-            target_logs_dir = None
-            if os.path.exists(logs_dir): target_logs_dir = logs_dir
-            elif os.path.exists(os.path.join(self.last_run_dir, "logs")):
-                target_logs_dir = os.path.join(self.last_run_dir, "logs")
-            
-            self.available_logs.clear()
-            display_names = []
-            
-            if target_logs_dir:
-                log_files = [f for f in os.listdir(target_logs_dir) if f.endswith(".txt")]
-                if log_files:
-                    log_files.sort(key=lambda x: (not x.startswith('run_'), x))
-                    
-                    for lf in log_files:
-                        path = os.path.join(target_logs_dir, lf)
-                        if lf.startswith('run_'): disp_name = f"📄 Головний лог ({lf})"
-                        else: disp_name = f"⚙️ {lf}"
-                        self.available_logs[disp_name] = path
-                        display_names.append(disp_name)
-            
-            if display_names:
-                self.log_selector.configure(values=display_names)
-                self.log_selector.set(display_names[0])
-                self._on_log_select(display_names[0])
-            else:
-                self.log_selector.configure(values=["Немає логів"])
-                self.log_selector.set("Немає логів")
-                self.viewer_txt_logs.insert("end", "Файли логів (.txt) не знайдені.")
-                
-    def _on_log_select(self, selected_name):
-        if not hasattr(self, 'viewer_txt_logs') or selected_name not in self.available_logs:
-            return
-        log_path = self.available_logs[selected_name]
-        
-        self.viewer_txt_logs.delete("1.0", "end")
-        self.viewer_txt_logs.insert("end", f"Завантаження {selected_name}...\n")
-        self.viewer_txt_logs.update() 
-        try:
-            self.viewer_txt_logs.delete("1.0", "end")
-            with open(log_path, "r", encoding="utf-8") as f:
-                self.viewer_txt_logs.insert("end", f.read())
-        except Exception as e:
-            self.viewer_txt_logs.insert("end", f"❌ Помилка читання файлу: {e}\n")
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()

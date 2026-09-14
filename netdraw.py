@@ -29,6 +29,8 @@ from dataclasses import dataclass
 import matplotlib.pyplot as plt
 import networkx as nx
 
+import solution_table
+
 #: Труби без відомого діаметра позначаються від'ємним значенням і малюються
 #: тонкою лінією базового кольору.
 UNKNOWN_DIAMETER = -1.0
@@ -301,23 +303,14 @@ def diameters_from_inp(geometry):
     return diameters
 
 
-#: Назви стовпців, у яких шукається діаметр у `solution.csv`.
-DIAMETER_COLUMN_HINTS = ("diam", "діаметр", "d_")
-
-
 def diameters_from_table(geometry, frame, table=None):
     """Рішення, відновлене з `solution.csv` (перегляд архіву прогону).
 
-    Стовпець шукається за назвою; у файлі може стояти або сам діаметр, або
-    індекс у таблиці типорозмірів — тоді це ціле число.
+    Стовпець і правило «індекс чи діаметр» беруться з `solution_table`:
+    те саме рішення потрібне і таблиці в перегляді результатів, і раніше
+    було написане двічі (§27.5).
     """
-    column = frame.columns[-1]
-    for col in frame.columns:
-        low = str(col).lower()
-        if any(hint in low for hint in DIAMETER_COLUMN_HINTS):
-            column = col
-            break
-
+    column = solution_table.diameter_column(frame)
     by_pipe = dict(zip(frame.iloc[:, 0].astype(str), frame[column]))
 
     diameters = []
@@ -326,9 +319,5 @@ def diameters_from_table(geometry, frame, table=None):
         if raw is None:
             diameters.append(UNKNOWN_DIAMETER)
             continue
-        value = float(raw)
-        if table and value.is_integer() and 0 <= int(value) < len(table):
-            diameters.append(float(table[int(value)]))
-        else:
-            diameters.append(value)
+        diameters.append(float(solution_table.real_diameter(raw, table)))
     return diameters
