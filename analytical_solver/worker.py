@@ -108,7 +108,17 @@ def clean_temp_root():
             return
         except OSError:
             time.sleep(0.5)
+
     shutil.rmtree(root, ignore_errors=True)
+    if os.path.exists(root):
+        # Раніше невдача була безмовною: `ignore_errors=True` ковтав її, і
+        # каталог лишався роками, бо ніхто не бачив причини. Тепер видно
+        # хто саме не віддає — на Windows це процес, чий поточний каталог
+        # усередині кореня, або незакритий дескриптор (§31.6).
+        leftovers = sum(len(names) for _, _, names in os.walk(root))
+        print(f"   [Cleanup] Не вдалось видалити {root}: "
+              f"лишилось файлів — {leftovers}. Причина зазвичай у процесі, "
+              f"який тримає каталог відкритим.")
 
 
 def set_simulator(simulator):

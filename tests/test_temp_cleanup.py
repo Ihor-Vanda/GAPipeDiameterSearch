@@ -139,3 +139,33 @@ def test_temp_files_in_the_current_directory_are_no_longer_hunted(tmp_path,
     clean_temp_root()
 
     assert mine.exists()
+
+
+# --- невдача прибирання ------------------------------------------------
+
+def test_a_failure_to_remove_the_root_is_reported(temp_root, monkeypatch, capsys):
+    """`ignore_errors=True` ковтав невдачу, і корінь лишався непоміченим:
+    саме так `_temp_sim_data/main_process` жив від прогону до прогону.
+    Тепер прибирання каже, що не змогло (§31.6)."""
+    import shutil
+
+    def refuse(_path, ignore_errors=False):
+        if not ignore_errors:
+            raise OSError("зайнято іншим процесом")
+
+    monkeypatch.setattr(shutil, "rmtree", refuse)
+    monkeypatch.setattr("time.sleep", lambda _s: None)
+
+    clean_temp_root()
+
+    output = capsys.readouterr().out
+    assert "Не вдалось видалити" in output
+    assert str(temp_root) in output
+
+
+def test_a_successful_cleanup_says_nothing(temp_root, capsys):
+    """Успіх мусить бути тихим — інакше кожен прогін друкував би рядок
+    ні про що."""
+    assert temp_root.exists()
+    clean_temp_root()
+    assert capsys.readouterr().out == ""
