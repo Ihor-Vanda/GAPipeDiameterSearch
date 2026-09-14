@@ -20,10 +20,13 @@ EN_HEADLOSS = 10
 EN_PRESSURE = 11
 
 class WaterSimulator:
-    def __init__(self, inp_file, config, temp_dir=None):
+    def __init__(self, inp_file, config, temp_dir):
+        """`temp_dir` обов'язковий: з `None` робочі файли EPANET писались у
+        поточний каталог, тобто в корінь проєкту. Усі шість місць виклику й
+        так його передають, тому замовчування було лише пасткою (§29.2)."""
         self.inp_file = inp_file
         self.config = config
-        self.temp_dir = temp_dir 
+        self.temp_dir = temp_dir
         
         self.wn = wntr.network.WaterNetworkModel(self.inp_file)
         self.graph = self.wn.get_graph()
@@ -32,8 +35,8 @@ class WaterSimulator:
         
         self.lengths = np.array([self.wn.get_link(p).length for p in self.component_names])
         
-        rpt_file = os.path.join(temp_dir if temp_dir else "", f"temp_rpt_{os.getpid()}.rpt")
-        bin_file = os.path.join(temp_dir if temp_dir else "", f"temp_bin_{os.getpid()}.bin")
+        rpt_file = os.path.join(temp_dir, f"temp_rpt_{os.getpid()}.rpt")
+        bin_file = os.path.join(temp_dir, f"temp_bin_{os.getpid()}.bin")
         
         self.api = ENepanet(self.inp_file, rpt_file, bin_file)
         self.api.ENopen()

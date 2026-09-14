@@ -2,6 +2,7 @@ import matplotlib
 matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
 import pandas as pd
+import tempfile
 import warnings
 import wntr
 import os
@@ -56,8 +57,14 @@ def export_solution(individual, history, inp_file, filename_prefix, config, cost
     print(f"   > ✅ Збережено EPANET INP файл: {inp_path}")
 
     try:
-        sim = wntr.sim.EpanetSimulator(wn)
-        results = sim.run_sim()
+        # `run_sim()` без `file_prefix` пише `temp.inp`, `temp.rpt` і `temp.bin`
+        # у **поточний** каталог і не прибирає їх — а поточним тут є корінь
+        # проєкту. Тому кожен прогін лишав у ньому три файли; ховав це лише
+        # рядок `temp.*` у `.gitignore` (§29.1). Результат читається в пам'ять
+        # цілком, тому каталог можна видаляти одразу після розрахунку.
+        with tempfile.TemporaryDirectory(prefix="wdn_report_") as scratch:
+            sim = wntr.sim.EpanetSimulator(wn)
+            results = sim.run_sim(file_prefix=os.path.join(scratch, "report"))
         
         if cost is None: cost = 0.0
         if time_sec is None: time_sec = 0.0
