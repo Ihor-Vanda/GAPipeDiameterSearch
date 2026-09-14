@@ -9,7 +9,11 @@ class KickStrategies:
         self.ctx = ctx
         self.ls = local_search
 
-    def forcing_hand_kick(self, indices, T, **kwargs):
+    def forcing_hand_kick(self, indices, T, **_kwargs):
+        # `**_kwargs` — плата за єдиний диспетчер: `_apply_kick` передає
+        # усім кікам один і той самий набір аргументів (§13), а цьому
+        # потрібні лише `indices` і `T`. Підкреслення каже, що решта
+        # ігнорується свідомо.
         _, _, _, crit_node = self.ctx.get_cached_stats(indices)
         if not crit_node or crit_node == "ERR": return KickResult(indices, set())
 

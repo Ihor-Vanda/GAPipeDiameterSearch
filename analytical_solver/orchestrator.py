@@ -17,6 +17,7 @@ from .context import SolverContext, beam_width_for, classify_network
 from .pool import SolutionPool
 from .local_search import LocalSearch
 from .worker import WorkerTask, run_island_worker
+from .acceptance import AcceptancePolicy, Verdict
 from .adaptive_rates import AdaptiveRates
 from .strategy_selector import StrategySelector
 from .kick_registry import (
@@ -240,7 +241,7 @@ class SeedFactory:
         return best_intermediate
 
 class IslandWorker:
-    def __init__(self, ctx, kicker, local_search, worker_id, n_workers, max_sims, beam_width, network_class, global_archive, epoch):
+    def __init__(self, ctx, kicker, local_search, worker_id, n_workers, max_sims, beam_width, network_class, global_archive, epoch, ablation=False):
         self.ctx = ctx
         self.kicker = kicker
         self.ls = local_search
@@ -263,7 +264,13 @@ class IslandWorker:
         # all_tracked і три пули в _apply_kick) і містив стратегію
         # "SUBMARINE", якої немає в диспетчері — тобто їй марно велася
         # статистика UCB1. Тепер джерело одне — реєстр.
-        self.selector = StrategySelector(TRACKED_STRATEGIES)
+        # Ablation-режим: фіксує T, знімає послаблення вимоги тиску й
+        # вимикає самонавчання. Раніше це була локальна константа в тілі
+        # `_apply_kick`, тобто шість недосяжних гілок. Тепер це параметр,
+        # і ablation-прогін не вимагає правки вихідника.
+        self.ablation = ablation
+        self.selector = StrategySelector(TRACKED_STRATEGIES, ablation=ablation)
+        self.acceptance = AcceptancePolicy(ablation=ablation)
         
         n = self.ctx.num_pipes
         single_cands = {"SMALL": max(6, n//5), "MEDIUM": max(6, n//10), 
@@ -676,10 +683,8 @@ class IslandWorker:
         return max(0, current_counter - 2)
 
     def _apply_kick(self, round_idx, shared_progress):
-        ABLATION_MODE = False 
- 
         real_T = min(1.0, self.stagnation_counter / max(1, self.stag_limit * 3.0))
-        T = 0.5 if ABLATION_MODE else real_T
+        T = self.acceptance.effective_temperature(real_T)
         
         is_late_game = self.progress_ratio >= 0.5
         pool_strats = pool_for(real_T, len(self.global_archive), self._is_tree)
@@ -748,14 +753,13 @@ class IslandWorker:
         c, p, _, _ = self.ctx.get_cached_stats(forced_sol)
         base_h_min = self.ctx.h_min
         
-        explosion_threshold = self.run_best_cost * (1.5 + 0.5 * T)
+        explosion_threshold = self.acceptance.explosion_threshold(self.run_best_cost, T)
 
-        if max(0.0, base_h_min - p) > max(20.0, base_h_min * (1.0 + T)):
+        if self.acceptance.is_hopeless_pressure(base_h_min, p, T):
             self.selector.note_failure(strategy)
             return
  
-        relaxed_h_min = base_h_min - (0.0 if ABLATION_MODE else 0.5 * T)
-        if p < relaxed_h_min:
+        if p < self.acceptance.relaxed_h_min(base_h_min, T):
             heal_locks = set() if strategy in ["SPATIAL_PERTURB", "SMART_PERTURB", "RUIN_RECREATE"] else locked
             forced_sol, ok, boosts = self.ls.heal_network(forced_sol, heal_locks)
             if not ok: 
@@ -773,16 +777,14 @@ class IslandWorker:
             quick_passes = max(1, 2 - int(T * 2))
             locked_for_squeeze = set() if strategy in ["SMART_PERTURB", "SPATIAL_PERTURB", "RUIN_RECREATE"] else locked
             quick_sol = self.ls.gradient_squeeze(forced_sol, locked_pipes=locked_for_squeeze, max_passes=quick_passes, quick_mode=True, dyn_bonus=self.base_dyn_bonus)
-            quick_cost, quick_p, quick_f, _ = self.ctx.get_cached_stats(quick_sol)
+            quick_st = self.ctx.get_cached_stats(quick_sol)
+            quick_cost = quick_st.cost
  
-            hb_margin = 0.03 - (0.02 * self.progress_ratio)
-            if quick_f and quick_p >= base_h_min and quick_cost < self.run_best_cost * (1.0 + hb_margin):
+            hb_margin = self.acceptance.heartbeat_margin(self.progress_ratio)
+            if (quick_st.is_feasible(base_h_min)
+                    and quick_cost < self.run_best_cost * (1.0 + hb_margin)):
                 gap = (quick_cost - self.run_best_cost) / max(self.run_best_cost, 1.0)
-                if   T >= 0.6: deep_passes = 1
-                elif T >= 0.4: deep_passes = 2
-                elif gap < -0.0001: deep_passes = 8 if self.ctx.num_pipes >= 200 else 5
-                elif gap <= 0.02: deep_passes = 3 if gap <= 0.002 else 2
-                else: deep_passes = 2 if gap <= 0.05 else 1
+                deep_passes = self.acceptance.deep_passes(gap, T, self.ctx.num_pipes)
  
                 consensus_locked = set()
                 if len(self.global_archive) >= 3 and is_late_game and T < 0.2 and not self._force_flush_next:
@@ -804,8 +806,8 @@ class IslandWorker:
         c, p = st.cost, st.p_min
         deficit = max(0.0, base_h_min - p) if st.simulation_ok else float('inf')
 
-        if st.simulation_ok and (deficit <= (0.0 if ABLATION_MODE else 0.5 * T)):
-            effective_cost = c + deficit * (self.run_best_cost * 0.10)
+        if st.simulation_ok and deficit <= self.acceptance.deficit_tolerance(T):
+            effective_cost = self.acceptance.effective_cost(c, deficit, self.run_best_cost)
             
             if effective_cost > explosion_threshold: 
                 self.ctx.log(f"      -> Hard-Rejected (Cost Explosion): {effective_cost/1e6:.4f}M$")
@@ -813,7 +815,7 @@ class IslandWorker:
                 if use_bandit:
                     self.selector.penalise(strategy, StrategySelector.EXPLOSION_PENALTY)
                 
-                if used_pct is not None and not ABLATION_MODE:
+                if used_pct is not None and not self.ablation:
                     self.rates.shrink_after_explosion(strategy)
                     self.ctx.log(f"         🧠 [JADE] Shrunk {strategy} size due to explosion.")
                 return
@@ -822,9 +824,23 @@ class IslandWorker:
  
         score = self.ctx.score(effective_cost, p, self.base_dyn_bonus) if deficit == 0 else effective_cost
 
-        if deficit == 0 and effective_cost < self.run_best_cost:
-            if (self.run_best_cost - effective_cost) > (self.run_best_cost * 0.02) and self.ctx.is_ghost_solution(final_sol): return
- 
+        # Рішення приймає `AcceptancePolicy`; застосування лишається тут,
+        # дослівно в тому порядку, що й було (§20.2). `is_basin_tabu` і
+        # `is_ghost` передаються функціями, бо в оригіналі обчислювались
+        # лише в тих гілках, куди доходив `elif`, а `is_ghost_solution`
+        # ще й виконує симуляції.
+        verdict = self.acceptance.classify(
+            is_escape=(strategy == "BASIN_ESCAPE"),
+            effective_cost=effective_cost, deficit=deficit,
+            best_cost=self.run_best_cost, temperature=T,
+            is_basin_tabu=lambda: self.pool.is_basin_tabu(final_sol),
+            is_ghost=lambda: self.ctx.is_ghost_solution(final_sol),
+        )
+
+        if verdict == Verdict.GHOST_VETO:
+            return
+
+        if verdict == Verdict.RECORD:
             diff = self.run_best_cost - effective_cost
             self.run_best_cost, self.run_best_sol = effective_cost, final_sol
             self.pool.active_pool.insert(0, (score, effective_cost, final_sol))
@@ -837,13 +853,13 @@ class IslandWorker:
                 self.selector.reward(strategy, StrategySelector.record_reward(improvement_pct))
                 self.selector.decay_others(strategy, StrategySelector.OTHERS_DECAY_ON_RECORD)
  
-            if used_pct is not None and not ABLATION_MODE:
+            if used_pct is not None and not self.ablation:
                 self.rates.learn(strategy, used_pct, self.rates.record_alpha(used_pct))
                     
             self.ctx.log(f"   > [FORCE] 💎 Direct Record Update: -${diff:,.0f} ({self.run_best_cost/1e6:.4f}M$)")
             self._update_global_best(shared_progress)
 
-        elif strategy == "BASIN_ESCAPE" and deficit == 0:
+        elif verdict == Verdict.ESCAPE:
             self.pool.active_pool.clear()
             self.pool.active_pool.append((score, effective_cost, final_sol))
             self.stagnation_counter = 0
@@ -860,37 +876,33 @@ class IslandWorker:
  
             self.selector.reset_after_escape()
 
-            if used_pct is not None and not ABLATION_MODE:
+            if used_pct is not None and not self.ablation:
                 self.rates.learn_escape(used_pct)
  
-        elif effective_cost < (self.run_best_cost * (1.03 + 0.07 * T)) and not self.pool.is_basin_tabu(final_sol):
-            pool_gap = (effective_cost - self.run_best_cost) / max(self.run_best_cost, 1)
-            max_pool_gap = 0.20 if T > 0.6 else (0.08 if is_late_game else 0.15)
- 
-            if self.ctx.num_pipes >= 200 and pool_gap > max_pool_gap:
-                self.ctx.log(f"     -> Pool Filtered (gap {pool_gap:.1%}): {effective_cost/1e6:.4f}M$")
-            else:
-                self.pool.active_pool.append((score * 1.05, effective_cost, final_sol))
-                if use_bandit:
-                    hamming_dist = self.pool.hamming_distance(final_sol, self.run_best_sol)
-                    diversity_ratio = hamming_dist / self.ctx.num_pipes
-                    if T >= 0.2 and diversity_ratio > 0.02:
-                        self.selector.reward(
-                            strategy, StrategySelector.diversity_reward(diversity_ratio, T))
-                
-                if used_pct is not None and not ABLATION_MODE:
-                    self.rates.learn(strategy, used_pct, self.rates.pool_alpha(pool_gap))
+        elif verdict == Verdict.POOL:
+            pool_gap = verdict.gap
+            self.pool.active_pool.append((score * 1.05, effective_cost, final_sol))
+            if use_bandit:
+                hamming_dist = self.pool.hamming_distance(final_sol, self.run_best_sol)
+                diversity_ratio = hamming_dist / self.ctx.num_pipes
+                if T >= 0.2 and diversity_ratio > 0.02:
+                    self.selector.reward(
+                        strategy, StrategySelector.diversity_reward(diversity_ratio, T))
+            
+            if used_pct is not None and not self.ablation:
+                self.rates.learn(strategy, used_pct, self.rates.pool_alpha(pool_gap))
 
-                if strategy == "BOTTLENECK" and res.failed_pipe is not None:
-                    self.bottleneck_boosted_pipes[res.failed_pipe] = round_idx
+            if strategy == "BOTTLENECK" and res.failed_pipe is not None:
+                self.bottleneck_boosted_pipes[res.failed_pipe] = round_idx
 
-                self.ctx.log(f"      -> Added to Pool (Water Level Accept): {effective_cost/1e6:.4f}M$")
+            self.ctx.log(f"      -> Added to Pool (Water Level Accept): {effective_cost/1e6:.4f}M$")
  
-        elif T >= 0.95 and not self.pool.is_basin_tabu(final_sol):
+        elif verdict == Verdict.HAIL_MARY:
             quick = self.ls.gradient_squeeze(final_sol, max_passes=1, quick_mode=True, dyn_bonus=self.base_dyn_bonus)
-            q_c, q_p, q_f, _ = self.ctx.get_cached_stats(quick)
+            quick_hail = self.ctx.get_cached_stats(quick)
+            q_c = quick_hail.cost
  
-            if q_f and q_p >= base_h_min and q_c < self.run_best_cost:
+            if quick_hail.is_feasible(base_h_min) and q_c < self.run_best_cost:
                 diff = self.run_best_cost - q_c
                 self.run_best_cost, self.run_best_sol = q_c, quick
                 self.pool.active_pool.insert(0, (q_c, q_c, quick))
@@ -910,7 +922,7 @@ class IslandWorker:
         else:
             self.ctx.log(f"     -> Rejected (Poor or Tabu Basin): {effective_cost/1e6:.4f}M$")
             
-            if used_pct is not None and not ABLATION_MODE:
+            if used_pct is not None and not self.ablation:
                 self.rates.shrink_after_reject(strategy)
  
         if path_sig: self.pool.kick_tabu_set.add(path_sig)

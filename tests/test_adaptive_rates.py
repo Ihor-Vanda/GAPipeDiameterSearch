@@ -35,7 +35,7 @@ def test_learning_moves_the_step_towards_what_was_used():
     rates = AdaptiveRates()
     rates.learn("SMART_PERTURB", used_pct=0.50, alpha=0.20)
 
-    # (1 - 0.2) * 0.10 + 0.2 * 0.50
+    # старт 0.10, зсув на 20 % до 0.50
     assert rates.values["perturb"] == pytest.approx(0.18)
 
 
@@ -64,7 +64,7 @@ def test_zero_alpha_changes_nothing():
 def test_escape_learns_at_a_fixed_rate():
     rates = AdaptiveRates()
     rates.learn_escape(0.40)
-    # (1 - 0.10) * 0.20 + 0.10 * 0.40
+    # старт 0.20, зсув на 10 % до 0.40
     assert rates.escape == pytest.approx(0.22)
 
 

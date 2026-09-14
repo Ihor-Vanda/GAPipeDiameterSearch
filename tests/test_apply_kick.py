@@ -120,7 +120,7 @@ def apply_kick(monkeypatch):
         worker.progress_ratio = progress_ratio
 
         # Один пул стратегій -> вибір детермінований у будь-якій гілці.
-        monkeypatch.setattr(orch, "pool_for", lambda *a, **k: [strategy])
+        monkeypatch.setattr(orch, "pool_for", lambda *_a, **_k: [strategy])
 
         before = snapshot(worker)
         buffer = io.StringIO()
@@ -193,7 +193,7 @@ def test_stagnation_threshold_is_measured_against_the_new_best_not_the_old():
     assert orch.IslandWorker._stagnation_after_record(between, new_best + between, 9) == 7
 
 
-def test_stagnation_never_goes_negative(apply_kick):
+def test_stagnation_never_goes_negative():
     assert orch.IslandWorker._stagnation_after_record(0.0, 1_000_000.0, 1) == 0
 
 
