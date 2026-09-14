@@ -85,7 +85,6 @@ def main():
     base_dir = setup_run_directory()
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log_file = os.path.join(base_dir, "logs", f"run_{timestamp}.txt")
-    os.makedirs(os.path.dirname(log_file), exist_ok=True)
     sys.stdout = DualLogger(log_file)
     sys.stderr = sys.stdout
 

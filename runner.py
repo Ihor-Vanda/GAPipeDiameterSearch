@@ -185,7 +185,14 @@ class OptimizationRunner:
         os.makedirs(temp_dir, exist_ok=True)
         self.simulator = WaterSimulator(req.inp_file, self.config, temp_dir=temp_dir)
         # Pre-flight: один розрахунок, щоб упасти тут, а не в воркері.
-        self.simulator.evaluate([0] * self.simulator.n_variables)
+        # Раніше тут стояв `evaluate`, який на збої симуляції повертав
+        # 1e15, а результат відкидався — тобто перевірка не могла впасти
+        # в принципі (§30.4).
+        probe = self.simulator.get_stats([0] * self.simulator.n_variables)
+        if not probe.simulation_ok:
+            raise RuntimeError(
+                f"Гідравлічний розрахунок не зійшовся на {req.inp_file}: "
+                f"перевірте одиниці (--units {req.units}) і файл мережі")
         return self.config
 
     def _start_workers(self):

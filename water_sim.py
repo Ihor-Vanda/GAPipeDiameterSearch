@@ -29,7 +29,10 @@ class WaterSimulator:
         self.temp_dir = temp_dir
         
         self.wn = wntr.network.WaterNetworkModel(self.inp_file)
-        self.graph = self.wn.get_graph()
+        # `to_graph`, не `get_graph`: друге застаріле і друкує
+        # DeprecationWarning на кожен розбір мережі. Перевірено, що вузли,
+        # ребра й тип графа тотожні (§30.5).
+        self.graph = self.wn.to_graph()
         self.component_names = self.wn.pipe_name_list
         self.n_variables = len(self.component_names)
         
@@ -89,6 +92,10 @@ class WaterSimulator:
             else:
                 self.costs = []
             self.n_options = len(self.diams_m)
+            # Масив цін використовується в кожній симуляції; раніше він
+            # створювався з списку **на кожен виклик** `_apply_pattern`,
+            # тобто мільйон разів за прогін (§30.3).
+            self.cost_array = np.array(self.costs, dtype=np.float64)
 
     def __del__(self):
         try:
@@ -101,8 +108,7 @@ class WaterSimulator:
         if not self.diams_m: self._refresh_config()
         
         ind_arr = np.clip(individual, 0, self.n_options - 1)
-        cost_arr = np.array(self.costs)
-        total_cost = np.sum(self.lengths * cost_arr[ind_arr])
+        total_cost = np.sum(self.lengths * self.cost_array[ind_arr])
         
         for i, pipe_name in enumerate(self.component_names):
             c_idx = self.pipe_name_to_c_idx[pipe_name]
@@ -128,26 +134,6 @@ class WaterSimulator:
         except Exception:
             return False
 
-    def evaluate(self, individual, penalty_factor=1000.0, epsilon=0.0):
-        try: 
-            total_cost = self._apply_pattern(individual)
-        except Exception: 
-            return 1e16
-
-        ok = self._run_simulation_core()
-        if not ok: return 1e15 
-            
-        max_violation = 0.0
-        effective_limit = self.config.h_min - epsilon
-        
-        for c_idx in self.junction_c_indices:
-            p = self.api.ENgetnodevalue(c_idx, EN_PRESSURE) * self.press_si_mult
-            if p < effective_limit:
-                max_violation += (effective_limit - p)
-
-        penalty = max_violation * penalty_factor
-        return total_cost + penalty
-    
     def get_heuristics(self, individual):
         self._apply_pattern(individual)
         ok = self._run_simulation_core()
