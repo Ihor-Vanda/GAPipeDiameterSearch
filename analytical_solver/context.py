@@ -13,9 +13,7 @@ SURPLUS_BONUS_POLICIES = ("damped", "undamped", "none")
 SURPLUS_KNEE = 10.0
 SURPLUS_DAMPING = 0.2
 
-#: Межі класів мережі за кількістю труб і відповідна ширина beam.
-#: Ці ж числа були продубльовані в чотирьох місцях: worker_task,
-#: AnalyticalSolver.__init__ і по копії в main.py та gui.py.
+#: Межі класів мережі за кількістю труб.
 NETWORK_CLASS_BOUNDS = ((50, "SMALL"), (200, "MEDIUM"), (1000, "LARGE"))
 XLARGE_CLASS = "XLARGE"
 WIDE_BEAM_CLASSES = ("LARGE", XLARGE_CLASS)
@@ -29,7 +27,92 @@ def classify_network(num_pipes):
 
 
 def beam_width_for(network_class):
-    return 8 if network_class in WIDE_BEAM_CLASSES else 5
+    """Сумісний вигляд: ширина променя за іменем класу."""
+    return NetworkProfile.BEAM_WIDTH[network_class]
+
+
+class NetworkProfile:
+    """Усе, що в алгоритмі залежить від розміру мережі — в одному місці.
+
+    До цього класу тих залежностей було вісім, у трьох файлах:
+    чотири таблиці «значення на клас» (`beam_width_for`,
+    `SINGLE_CANDIDATES`, `BASE_SIM_BUDGET`, `print_interval`) і три
+    окремих `if num_pipes >= 200`, які випадково збігалися з межею
+    MEDIUM/LARGE із першої таблиці, плюс `LARGE_NETWORK_PIPES` в
+    `AcceptancePolicy`. Через це нічого не відрізняло мережу на 250 труб
+    від мережі на 1105, а щоб змінити поведінку для дуже великих мереж,
+    треба було правити чотири місця й вгадувати, яке з них яке (§21.3).
+
+    Це проміжний крок: таблиці лишаються таблицями, але однією. Заміна
+    їх на величини, які алгоритм міряє сам, — §24.4.
+    """
+
+    BEAM_WIDTH = {"SMALL": 5, "MEDIUM": 5, "LARGE": 8, XLARGE_CLASS: 8}
+
+    #: Бюджет симуляцій за замовчуванням. Раніше таблиця була
+    #: **немонотонною** — LARGE отримував 1.5 млн, тобто вдвічі менше за
+    #: MEDIUM (3 млн), хоч мережа більша (§22.4.3). Тепер не спадає.
+    SIM_BUDGET = {"SMALL": 1_000_000, "MEDIUM": 3_000_000,
+                  "LARGE": 3_000_000, XLARGE_CLASS: 30_000_000}
+
+    #: Як часто друкувати живий статус, с.
+    PRINT_INTERVAL = {"SMALL": 1.0, "MEDIUM": 15.0, "LARGE": 30.0,
+                      XLARGE_CLASS: 60.0}
+
+    #: Дільник для кількості одиночних кандидатів: n // дільник.
+    #: XLARGE — фіксовані 10, бо n//20 там уже завелике.
+    CANDIDATE_DIVISOR = {"SMALL": 5, "MEDIUM": 10, "LARGE": 20}
+    XLARGE_CANDIDATES = 10
+    MIN_CANDIDATES = 6
+
+    #: Глибина глибокого поліру для великих і решти мереж.
+    DEEP_PASSES_LARGE = 8
+    DEEP_PASSES_SMALL = 5
+    #: Множник терплячості перед мінірестартом.
+    RESTART_PATIENCE_LARGE = 6
+    RESTART_PATIENCE_SMALL = 10
+
+    __slots__ = ("num_pipes", "name")
+
+    def __init__(self, num_pipes):
+        self.num_pipes = num_pipes
+        self.name = classify_network(num_pipes)
+
+    def __repr__(self):
+        return f"NetworkProfile({self.num_pipes} pipes, {self.name})"
+
+    @property
+    def is_large(self):
+        """Замінює три окремі `num_pipes >= 200`: це та сама межа."""
+        return self.name in WIDE_BEAM_CLASSES
+
+    @property
+    def beam_width(self):
+        return self.BEAM_WIDTH[self.name]
+
+    @property
+    def sim_budget(self):
+        return self.SIM_BUDGET[self.name]
+
+    @property
+    def print_interval(self):
+        return self.PRINT_INTERVAL[self.name]
+
+    @property
+    def single_candidates(self):
+        if self.name == XLARGE_CLASS:
+            return self.XLARGE_CANDIDATES
+        return max(self.MIN_CANDIDATES,
+                   self.num_pipes // self.CANDIDATE_DIVISOR[self.name])
+
+    @property
+    def deep_polish_passes(self):
+        return self.DEEP_PASSES_LARGE if self.is_large else self.DEEP_PASSES_SMALL
+
+    @property
+    def restart_patience(self):
+        return (self.RESTART_PATIENCE_LARGE if self.is_large
+                else self.RESTART_PATIENCE_SMALL)
 
 
 class SolverContext:
@@ -40,6 +123,10 @@ class SolverContext:
         self.max_d_idx = len(self.diameters) - 1
         self.v_opt = v_opt
         self.num_pipes = simulator.n_variables
+        #: Усе, що залежить від розміру мережі. Раніше клас мережі
+        #: обчислювався окремо в кожній точці входу, а похідні від нього
+        #: значення жили чотирма таблицями в трьох файлах (§21.3).
+        self.profile = NetworkProfile(self.num_pipes)
         # Обмеження тиску — власне поле контексту, а не ланцюг
         # self.ctx.simulator.config.h_min через три об'єкти.
         self.h_min = simulator.config.h_min

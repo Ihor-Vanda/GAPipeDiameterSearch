@@ -208,10 +208,12 @@ def test_escape_clears_the_kick_memories_and_arms_the_flush(apply_kick):
     kick = apply_kick("BASIN_ESCAPE", stagnation=5, best_mult=0.6, archive=ARCHIVE)
     worker = kick.worker
 
-    assert worker.bottleneck_failed_pipes == {}
-    assert worker.bottleneck_boosted_pipes == {}
-    assert worker.loop_balance_failed_pipes == {}
-    assert worker.zero_sum_tabu == {}
+    # Чотири пам'яті переїхали в `KickMemory` (етап 8); перевірка та сама —
+    # після великої втечі не має лишитись жодної.
+    assert worker.kick_memory.bottleneck_failed == {}
+    assert worker.kick_memory.bottleneck_boosted == {}
+    assert worker.kick_memory.loop_balance_failed == {}
+    assert worker.kick_memory.zero_sum_tabu == {}
     assert worker._force_flush_next is True
     assert worker.ipc_immunity == 50
     assert kick.after["stagnation_counter"] == 0

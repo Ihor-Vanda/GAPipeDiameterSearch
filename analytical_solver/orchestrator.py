@@ -13,13 +13,14 @@ try:
 except ImportError:
     HAS_FAST_MATH = False
 
-from .context import SolverContext, beam_width_for, classify_network
+from .context import SolverContext
 from .pool import SolutionPool
 from .local_search import LocalSearch
 from .worker import WorkerTask, run_island_worker
 from .acceptance import AcceptancePolicy, Verdict
 from .adaptive_rates import AdaptiveRates
 from .strategy_selector import StrategySelector
+from .kick_memory import KickMemory
 from .kick_registry import (
     FALLBACK_KICK,
     KICK_REGISTRY,
@@ -272,10 +273,7 @@ class IslandWorker:
         self.selector = StrategySelector(TRACKED_STRATEGIES, ablation=ablation)
         self.acceptance = AcceptancePolicy(ablation=ablation)
         
-        n = self.ctx.num_pipes
-        single_cands = {"SMALL": max(6, n//5), "MEDIUM": max(6, n//10), 
-                        "LARGE": max(6, n//20), "XLARGE": 10}[self.network_class]
-        self.SINGLE_CANDIDATES = single_cands
+        self.SINGLE_CANDIDATES = self.ctx.profile.single_candidates
         
         self.stagnation_counter = 0
         self.run_best_cost = float('inf')
@@ -286,13 +284,12 @@ class IslandWorker:
         self.is_late_game = False
         
         self.last_injected_peer = {}
-        self.bottleneck_boosted_pipes = {}
         self.rescue_fired = False
         self._force_flush_next = False
         self.ipc_immunity = 30
-        self.loop_balance_failed_pipes = {}
-        self.bottleneck_failed_pipes = {}
-        self.zero_sum_tabu = {}
+        # Чотири короткі пам'яті кіків, які створювались, очищались і
+        # передавались у кік разом — тепер один об'єкт.
+        self.kick_memory = KickMemory()
         
         # Розміри кроку кіків і правила їх навчання (JADE) — раніше
         # чотири поля, які оновлювались у п'яти місцях `_apply_kick`,
@@ -596,7 +593,7 @@ class IslandWorker:
                     self.rescue_fired = True
 
     def _check_mini_restart(self, gb):
-        base_mult = 6 if self.ctx.num_pipes >= 200 else 10
+        base_mult = self.ctx.profile.restart_patience
         effective_mult = base_mult if not self.is_late_game else max(4, base_mult // 2)
         
         if self.stagnation_counter >= self.stag_limit * effective_mult:
@@ -711,14 +708,12 @@ class IslandWorker:
 
         kick_args = {
             'T': T,
-            'failed_pipes': self.bottleneck_failed_pipes if strategy == "BOTTLENECK" else self.loop_balance_failed_pipes,
-            'boosted_pipes': self.bottleneck_boosted_pipes,
+            **self.kick_memory.as_kick_args(strategy),
             'current_round': round_idx,
             'tabu_set': self.pool.kick_tabu_set,
             'dyn_bonus': self.base_dyn_bonus,
             'global_archive': self.global_archive,
             'max_perturb': int(self.ctx.num_pipes * 0.50),
-            'zero_sum_tabu': self.zero_sum_tabu,
             **self.rates.as_kick_args(),
         }
 
@@ -734,8 +729,7 @@ class IslandWorker:
         if res.failed:
             self.selector.note_failure(strategy)
             if res.failed_pipe is not None:
-                if strategy == "BOTTLENECK": self.bottleneck_failed_pipes[res.failed_pipe] = round_idx
-                elif strategy == "LOOP_BALANCE": self.loop_balance_failed_pipes[res.failed_pipe] = round_idx
+                self.kick_memory.note_failure(strategy, res.failed_pipe, round_idx)
 
             reason = log_msg if log_msg else "No targets"
             self.ctx.log(f"      -> Kick '{strategy}' failed. Reason: {reason}")
@@ -784,7 +778,7 @@ class IslandWorker:
             if (quick_st.is_feasible(base_h_min)
                     and quick_cost < self.run_best_cost * (1.0 + hb_margin)):
                 gap = (quick_cost - self.run_best_cost) / max(self.run_best_cost, 1.0)
-                deep_passes = self.acceptance.deep_passes(gap, T, self.ctx.num_pipes)
+                deep_passes = self.acceptance.deep_passes(gap, T, self.ctx.profile)
  
                 consensus_locked = set()
                 if len(self.global_archive) >= 3 and is_late_game and T < 0.2 and not self._force_flush_next:
@@ -863,10 +857,7 @@ class IslandWorker:
             self.pool.active_pool.clear()
             self.pool.active_pool.append((score, effective_cost, final_sol))
             self.stagnation_counter = 0
-            self.bottleneck_failed_pipes.clear()
-            self.bottleneck_boosted_pipes.clear()
-            self.loop_balance_failed_pipes.clear()
-            self.zero_sum_tabu.clear()
+            self.kick_memory.clear()
             self._force_flush_next = True
             self.run_best_cost = effective_cost
             self.run_best_sol = list(final_sol)
@@ -892,8 +883,8 @@ class IslandWorker:
             if used_pct is not None and not self.ablation:
                 self.rates.learn(strategy, used_pct, self.rates.pool_alpha(pool_gap))
 
-            if strategy == "BOTTLENECK" and res.failed_pipe is not None:
-                self.bottleneck_boosted_pipes[res.failed_pipe] = round_idx
+            if res.failed_pipe is not None:
+                self.kick_memory.note_boost(strategy, res.failed_pipe, round_idx)
 
             self.ctx.log(f"      -> Added to Pool (Water Level Accept): {effective_cost/1e6:.4f}M$")
  
@@ -926,7 +917,7 @@ class IslandWorker:
                 self.rates.shrink_after_reject(strategy)
  
         if path_sig: self.pool.kick_tabu_set.add(path_sig)
-        if strategy == "ZERO_SUM" and locked: self.zero_sum_tabu[list(locked)[0]] = round_idx
+        self.kick_memory.note_zero_sum(strategy, locked, round_idx)
 
     def _generate_mutations(self):
         next_gen = []
@@ -942,7 +933,7 @@ class IslandWorker:
             elif parent_p_surplus < 2.0: downgrade_limit, upgrade_limit = 3, self.SINGLE_CANDIDATES // 2
             else: downgrade_limit, upgrade_limit = 8, self.SINGLE_CANDIDATES
             
-            if self.network_class in ("LARGE", "XLARGE"):
+            if self.ctx.profile.is_large:
                 top_k = max(20, self.ctx.num_pipes // 5)
                 focus_pipes = set(self.ls.get_high_impact_pipes(parent_sol, top_k))
                 high_friction = [pi for pi in high_friction if pi in focus_pipes]
@@ -1161,12 +1152,12 @@ class AnalyticalSolver:
         self.log_dir = log_dir
         self.n_workers = n_workers
         
-        self.network_class = classify_network(self.ctx.num_pipes)
-        self.BEAM_WIDTH = beam_width_for(self.network_class)
+        self.network_class = self.ctx.profile.name
+        self.BEAM_WIDTH = self.ctx.profile.beam_width
         self.seeder = SeedFactory(self.ctx, self.ls, self.n_workers, self.BEAM_WIDTH)
         self.pool = SolutionPool(self.ctx) 
         
-        self.BASE_SIM_BUDGET = {"SMALL": 1000000, "MEDIUM": 3000000, "LARGE": 1500000, "XLARGE": 30000000}[self.network_class]
+        self.BASE_SIM_BUDGET = self.ctx.profile.sim_budget
             
         if max_sims is not None:
             self.max_sims = max_sims
@@ -1300,7 +1291,7 @@ class AnalyticalSolver:
                     ]
 
                     last_print_time = 0
-                    print_interval = {"SMALL": 1.0, "MEDIUM": 15.0, "LARGE": 30.0, "XLARGE": 60.0}[self.network_class]
+                    print_interval = self.ctx.profile.print_interval
                     
                     last_sent_cost = float('inf')
                     

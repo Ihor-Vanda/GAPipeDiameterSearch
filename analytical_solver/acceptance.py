@@ -72,20 +72,11 @@ class AcceptancePolicy:
     POOL_WINDOW_BASE = 1.03
     POOL_WINDOW_TEMPERATURE_GAIN = 0.07
 
-    #: Поріг «велика мережа» — від нього залежить глибина поліру.
-    LARGE_NETWORK_PIPES = 200
-
-    #: Задумані межі відносного розриву для великих мереж. Наразі вони НЕ
-    #: діють: вікно пулу (`0.03 + 0.07·T`, максимум 0.10) завжди тугіше за
-    #: найменшу з цих меж (0.08), тому рішення, яке пройшло у вікно, ніколи
-    #: не перевищує розрив. Доведено перебором по T у
-    #: `test_pool_window_is_always_tighter_than_the_gap_limit`. Константи
-    #: лишаються як запис задуму: якщо вікно колись розширять, фільтр треба
-    #: повернути — див. §20.8.
-    MAX_POOL_GAP_HOT = 0.20
-    MAX_POOL_GAP_LATE = 0.08
-    MAX_POOL_GAP_COLD = 0.15
-    HOT_TEMPERATURE = 0.6
+    #: Межі розриву для великих мереж не діяли й **видалені** за заміром:
+    #: на Балермі розрив прийнятих у пул рішень не перевищив 5.4 %, а понад
+    #: 8 % не було жодного (§21.4). Причина структурна — вікно прийняття
+    #: саме собою тугіше за найменшу з тих меж, і від розміру мережі не
+    #: залежить, тому й на більших мережах картина та сама.
 
     #: Температура, з якої дозволена остання спроба.
     HAIL_MARY_TEMPERATURE = 0.95
@@ -123,11 +114,6 @@ class AcceptancePolicy:
         return best_cost * (self.POOL_WINDOW_BASE
                             + self.POOL_WINDOW_TEMPERATURE_GAIN * temperature)
 
-    def max_pool_gap(self, temperature, is_late_game):
-        if temperature > self.HOT_TEMPERATURE:
-            return self.MAX_POOL_GAP_HOT
-        return self.MAX_POOL_GAP_LATE if is_late_game else self.MAX_POOL_GAP_COLD
-
     def deficit_tolerance(self, temperature):
         """Скільки недобору тиску ще приймається."""
         if self.ablation:
@@ -154,18 +140,19 @@ class AcceptancePolicy:
 
     # --- глибина поліру ---------------------------------------------------
 
-    def deep_passes(self, gap, temperature, num_pipes):
+    def deep_passes(self, gap, temperature, profile):
         """Скільки проходів глибокого спуску варті цього рішення.
 
         Гаряче — мало (рішення все одно зміниться); холодне і краще за
-        рекорд — багато, бо це кандидат на запис.
+        рекорд — багато, бо це кандидат на запис. Глибину для великих
+        мереж дає `NetworkProfile`, а не власний поріг 200 труб.
         """
         if temperature >= 0.6:
             return 1
         if temperature >= 0.4:
             return 2
         if gap < -0.0001:
-            return 8 if num_pipes >= self.LARGE_NETWORK_PIPES else 5
+            return profile.deep_polish_passes
         if gap <= 0.02:
             return 3 if gap <= 0.002 else 2
         return 2 if gap <= 0.05 else 1

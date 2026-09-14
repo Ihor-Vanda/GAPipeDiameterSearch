@@ -13,6 +13,10 @@
 import pytest
 
 from analytical_solver.acceptance import AcceptancePolicy, Verdict
+from analytical_solver.context import NetworkProfile
+
+SMALL_NETWORK = NetworkProfile(34)     # Ханої
+LARGE_NETWORK = NetworkProfile(454)    # Балерма
 
 
 @pytest.fixture
@@ -85,29 +89,24 @@ def test_heartbeat_margin_narrows_as_the_run_progresses(policy):
     assert policy.heartbeat_margin(1.0) == pytest.approx(0.01)
 
 
-def test_large_network_pool_gap_depends_on_phase(policy):
-    assert policy.max_pool_gap(0.9, is_late_game=False) == 0.20
-    assert policy.max_pool_gap(0.1, is_late_game=True) == 0.08
-    assert policy.max_pool_gap(0.1, is_late_game=False) == 0.15
-
-
 # --- глибина поліру ---------------------------------------------------
 
 def test_hot_solutions_get_the_shallowest_polish(policy):
-    assert policy.deep_passes(gap=-0.5, temperature=0.7, num_pipes=34) == 1
-    assert policy.deep_passes(gap=-0.5, temperature=0.5, num_pipes=34) == 2
+    assert policy.deep_passes(gap=-0.5, temperature=0.7, profile=SMALL_NETWORK) == 1
+    assert policy.deep_passes(gap=-0.5, temperature=0.5, profile=SMALL_NETWORK) == 2
 
 
 def test_a_cold_improvement_earns_the_deepest_polish(policy):
-    assert policy.deep_passes(gap=-0.01, temperature=0.1, num_pipes=34) == 5
-    assert policy.deep_passes(gap=-0.01, temperature=0.1, num_pipes=454) == 8
+    """Глибину задає профіль мережі, а не власний поріг політики."""
+    assert policy.deep_passes(gap=-0.01, temperature=0.1, profile=SMALL_NETWORK) == 5
+    assert policy.deep_passes(gap=-0.01, temperature=0.1, profile=LARGE_NETWORK) == 8
 
 
 def test_polish_depth_falls_off_as_the_gap_grows(policy):
-    assert policy.deep_passes(gap=0.001, temperature=0.1, num_pipes=34) == 3
-    assert policy.deep_passes(gap=0.01, temperature=0.1, num_pipes=34) == 2
-    assert policy.deep_passes(gap=0.04, temperature=0.1, num_pipes=34) == 2
-    assert policy.deep_passes(gap=0.10, temperature=0.1, num_pipes=34) == 1
+    assert policy.deep_passes(gap=0.001, temperature=0.1, profile=SMALL_NETWORK) == 3
+    assert policy.deep_passes(gap=0.01, temperature=0.1, profile=SMALL_NETWORK) == 2
+    assert policy.deep_passes(gap=0.04, temperature=0.1, profile=SMALL_NETWORK) == 2
+    assert policy.deep_passes(gap=0.10, temperature=0.1, profile=SMALL_NETWORK) == 1
 
 
 # --- класифікація -----------------------------------------------------
@@ -160,25 +159,27 @@ def test_a_tabu_basin_is_not_accepted_into_the_pool(policy):
                     is_basin_tabu=Spy(True)) == Verdict.REJECT
 
 
-def test_pool_window_is_always_tighter_than_the_gap_limit(policy):
-    """Фільтр розриву для великих мереж недосяжний — і мусить лишатись таким,
-    доки вікно не розширять.
+def historical_gap_limit(temperature, is_late_game):
+    """Межі, які задумував фільтр великих мереж, поки був недосяжним.
 
-    Задум був такий: рішення, що пройшло у вікно пулу, але на великій
-    мережі дороге за рекорд більш ніж на `max_pool_gap`, у пул не
-    потрапляє. Але вікно — `0.03 + 0.07·T`, максимум 0.10 при T = 1, а
-    найменша межа розриву — 0.08. Тобто вікно завжди тугіше, і рішення,
-    яке його пройшло, ніколи не перевищує межу. Гілка була мертвою.
-
-    Цей тест впаде, якщо хтось розширить вікно: тоді фільтр треба
-    повертати свідомо (§20.8), а не отримати його раптом робочим.
+    Константи видалені з `AcceptancePolicy` за заміром (§21.4), але
+    співвідношення варто тримати під тестом: саме воно робило фільтр
+    мертвим, і якщо вікно колись розширять, рішення про фільтр доведеться
+    ухвалювати заново.
     """
+    if temperature > 0.6:
+        return 0.20
+    return 0.08 if is_late_game else 0.15
+
+
+def test_pool_window_stays_below_the_gap_limit_that_was_once_intended(policy):
+    """Вікно прийняття завжди тугіше за задумані межі — тому фільтр і був мертвим."""
     for step in range(101):
         temperature = step / 100
         window_gap = (policy.POOL_WINDOW_BASE
                       + policy.POOL_WINDOW_TEMPERATURE_GAIN * temperature) - 1.0
         for is_late_game in (False, True):
-            assert window_gap <= policy.max_pool_gap(temperature, is_late_game)
+            assert window_gap <= historical_gap_limit(temperature, is_late_game)
 
 
 def test_a_solution_inside_the_window_goes_to_the_pool_on_any_network_size(policy):

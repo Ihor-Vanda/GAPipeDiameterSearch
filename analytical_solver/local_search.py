@@ -147,7 +147,7 @@ class LocalSearch:
                 
                 curr_d = kicked[idx]
                 if curr_d < self.ctx.max_d_idx: 
-                    if self.ctx.num_pipes >= 200:
+                    if self.ctx.profile.is_large:
                         c_curr = self.ctx.simulator.costs[curr_d]
                         c_next = self.ctx.simulator.costs[curr_d + 1]
                         delta_c_per_m = c_next - c_curr
