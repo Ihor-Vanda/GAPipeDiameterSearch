@@ -6,3 +6,4 @@ OutputData/
 OutputDataExperiments/
 build/
 dist/
+*.pyc
