@@ -21,7 +21,7 @@ from sim_stats import SimStats  # noqa: E402
 
 @dataclass
 class FakeConfig:
-    """Мінімум того, що солвер читає з GAConfig."""
+    """Мінімум того, що солвер читає з SolverConfig."""
 
     h_min: float = 30.0
     diameters_m: list = field(default_factory=lambda: [0.3, 0.4, 0.5, 0.6])

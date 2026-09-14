@@ -42,8 +42,8 @@ import networkx as nx  # noqa: E402
 
 from analytical_solver.context import SolverContext  # noqa: E402
 from analytical_solver.local_search import LocalSearch  # noqa: E402
-from ga_config import GAConfig  # noqa: E402
-from ga_data import load_config  # noqa: E402
+from config import SolverConfig  # noqa: E402
+from cost_table import load_cost_table  # noqa: E402
 from make_grid_network import build  # noqa: E402
 from water_sim import WaterSimulator  # noqa: E402
 
@@ -222,9 +222,9 @@ def evaluate(ctx, local_search, name, h_min, sample_limit, mode="paths"):
 
 
 def load(inp_file, cost_file, h_min, units):
-    config = GAConfig(cost_file=os.path.abspath(cost_file), h_min=h_min,
+    config = SolverConfig(cost_file=os.path.abspath(cost_file), h_min=h_min,
                       unit_system=units, run_mode="analytical", v_opt=1.0)
-    load_config(config)
+    load_cost_table(config)
     temp_dir = os.path.abspath(os.path.join("_temp_sim_data", "screen"))
     os.makedirs(temp_dir, exist_ok=True)
     simulator = WaterSimulator(os.path.abspath(inp_file), config, temp_dir=temp_dir)

@@ -22,7 +22,7 @@ import pandas as pd
 from PIL import Image
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-import ga_data
+import cost_table
 import gui_widgets as widgets
 import netdraw
 import solution_table
@@ -170,7 +170,7 @@ class ResultsViewer(ctk.CTkToplevel):
             widget.destroy()
 
         paths = self._run_paths(selected_run)
-        table = ga_data.diameter_table(self.cost_file)
+        table = cost_table.diameter_table(self.cost_file)
 
         self._fill_solution_table(paths["solution"], table)
         self._fill_network_map(selected_run, paths, table)

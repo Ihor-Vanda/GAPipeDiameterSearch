@@ -15,7 +15,7 @@ from datetime import datetime
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-import ga_data
+import cost_table
 import netdraw
 import gui_widgets as widgets
 from analytical_solver.worker import clean_temp_root, get_temp_root
@@ -458,7 +458,7 @@ class PipelineOptimizerApp(ctk.CTk):
                 self._live_inp_path = self.selected_inp
 
             diameters = netdraw.diameters_from_solution(
-                self._live_geometry, best_sol, ga_data.diameter_table(self.selected_costs))
+                self._live_geometry, best_sol, cost_table.diameter_table(self.selected_costs))
 
             self.topo_ax.clear()
             scale = netdraw.draw(self.topo_ax, self._live_geometry, diameters)

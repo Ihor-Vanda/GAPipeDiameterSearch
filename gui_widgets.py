@@ -12,8 +12,8 @@
 Тепер це функції модуля, і жоден із двох екранів не мусить знати про
 інший. П'ятий метод, `_get_actual_diams`, сюди не переїхав: він читав
 таблицю цін, тобто був не про інтерфейс, а про дані, і при цьому
-дублював `ga_data.load_config` у слабшому вигляді. Його місце —
-`ga_data.diameter_table` (§27.3).
+дублював `cost_table.load_cost_table` у слабшому вигляді. Його місце —
+`cost_table.diameter_table` (§27.3).
 """
 
 from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk

@@ -2,7 +2,7 @@
 
 До цього модуля той самий сценарій існував двічі: `main()` у `main.py`
 (154 рядки) і `PipelineOptimizerApp.run_optimization()` у `gui.py`
-(171 рядок). Обидві реалізації робили одне й те саме — збирали `GAConfig`,
+(171 рядок). Обидві реалізації робили одне й те саме — збирали `SolverConfig`,
 підіймали `WaterSimulator`, створювали пул, крутили цикл `runs`,
 перетворювали діаметри назад в індекси, вибирали чемпіона й експортували
 звіти, — і вже розійшлися в деталях (CLI при `runs > 1` зберігав рішення
@@ -23,9 +23,9 @@ import pandas as pd
 
 from analytical_solver import AnalyticalSolver
 from analytical_solver.worker import get_temp_root, init_worker_process, set_simulator
-from ga_config import GAConfig
-from ga_data import load_config
-from ga_utils import format_time
+from config import SolverConfig
+from console import format_time
+from cost_table import load_cost_table
 from plot import export_solution, plot_convergence, plot_network_map
 from water_sim import WaterSimulator
 
@@ -175,11 +175,11 @@ class OptimizationRunner:
     def prepare(self):
         """Зібрати конфіг, підняти симулятор і перевірити його на працездатність."""
         req = self.request
-        self.config = GAConfig(
+        self.config = SolverConfig(
             cost_file=req.cost_file, h_min=req.h_min, unit_system=req.units,
             run_mode=req.run_mode, v_opt=req.v_opt,
         )
-        load_config(self.config)
+        load_cost_table(self.config)
 
         temp_dir = os.path.abspath(os.path.join(get_temp_root(), "main_process"))
         os.makedirs(temp_dir, exist_ok=True)

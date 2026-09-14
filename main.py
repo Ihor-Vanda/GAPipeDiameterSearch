@@ -6,7 +6,7 @@ import sys
 from datetime import datetime
 
 from analytical_solver.worker import clean_temp_root, get_temp_root
-from ga_utils import DualLogger, silence_warnings
+from console import DualLogger, silence_warnings
 from runner import OptimizationRunner, RunRequest, setup_run_directory
 
 silence_warnings()

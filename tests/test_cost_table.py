@@ -1,6 +1,6 @@
 """Розбір таблиці цін — один парсер на застосунок і на інтерфейс.
 
-Розбір жив усередині `load_config`, який на будь-якій помилці робить
+Розбір жив усередині `load_cost_table`, який на будь-якій помилці робить
 `sys.exit(1)`. Інтерфейсу така реакція не годиться: жива карта мережі
 малюється до створення конфігу, тому GUI мав власний читач
 (`_get_actual_diams`) — слабший: він не знав ні `;`, ні варіантів назв
@@ -8,7 +8,7 @@
 інший результат (§27.3).
 
 Тепер розбір один (`read_cost_table`), а різниця лишилась тільки в
-реакції на помилку: `load_config` завершує процес, `diameter_table`
+реакції на помилку: `load_cost_table` завершує процес, `diameter_table`
 повертає `None`. Саме цю пару властивостей і фіксують тести.
 """
 
@@ -17,8 +17,8 @@ import os
 import pandas as pd
 import pytest
 
-from ga_config import GAConfig
-from ga_data import diameter_table, load_config, read_cost_table
+from config import SolverConfig
+from cost_table import diameter_table, load_cost_table, read_cost_table
 
 HANOI_COSTS = os.path.join("InputData", "Hanoi", "costs.csv")
 
@@ -81,7 +81,7 @@ def test_every_documented_column_name_is_accepted(tmp_path, header):
                                     "DIAM_mm,COST_usd",
                                     "Діаметр,Ціна"])
 def test_a_column_name_with_extra_words_is_found_by_substring(tmp_path, header):
-    """Точного збігу тут немає — саме цього не бачив `load_config`, хоча
+    """Точного збігу тут немає — саме цього не бачив `load_cost_table`, хоча
     читач інтерфейсу бачив. Тепер приймається обидва способи (§27.3)."""
     path = write(tmp_path / "c.csv", f"{header}\n300,10\n")
     frame, diam, cost = read_cost_table(path)
@@ -149,17 +149,17 @@ def test_non_numeric_diameters_are_not_an_error_for_the_interface(tmp_path):
 
 # --- те саме, але для застосунку: помилка спиняє прогін ---------------
 
-def test_load_config_exits_when_the_file_is_missing(tmp_path):
-    config = GAConfig(cost_file=str(tmp_path / "nope.csv"))
+def test_load_cost_table_exits_when_the_file_is_missing(tmp_path):
+    config = SolverConfig(cost_file=str(tmp_path / "nope.csv"))
     with pytest.raises(SystemExit):
-        load_config(config, silent=True)
+        load_cost_table(config, silent=True)
 
 
-def test_load_config_exits_when_the_columns_are_wrong(tmp_path):
+def test_load_cost_table_exits_when_the_columns_are_wrong(tmp_path):
     path = write(tmp_path / "c.csv", "Name,Length\nP1,10\n")
-    config = GAConfig(cost_file=path)
+    config = SolverConfig(cost_file=path)
     with pytest.raises(SystemExit):
-        load_config(config, silent=True)
+        load_cost_table(config, silent=True)
 
 
 # --- один парсер на двох ----------------------------------------------
@@ -171,39 +171,39 @@ def test_the_interface_and_the_solver_see_the_same_diameters(tmp_path):
     або з назвою стовпця, відмінною від `Diameter`.
     """
     path = write(tmp_path / "c.csv", "Diam;Price\n400;20\n300;10\n")
-    config = GAConfig(cost_file=path, unit_system="mm")
-    load_config(config, silent=True)
+    config = SolverConfig(cost_file=path, unit_system="mm")
+    load_cost_table(config, silent=True)
     assert diameter_table(path) == config.diameters_raw
 
 
 @pytest.mark.skipif(not os.path.exists(HANOI_COSTS), reason="немає InputData")
 def test_the_two_paths_agree_on_the_real_hanoi_table():
-    config = GAConfig(cost_file=HANOI_COSTS, unit_system="in")
-    load_config(config, silent=True)
+    config = SolverConfig(cost_file=HANOI_COSTS, unit_system="in")
+    load_cost_table(config, silent=True)
     assert diameter_table(HANOI_COSTS) == config.diameters_raw
     assert config.diameters_raw == [12.0, 16.0, 20.0, 24.0, 30.0, 40.0]
 
 
-# --- те, що load_config робить понад розбір ---------------------------
+# --- те, що load_cost_table робить понад розбір -----------------------
 
 def test_millimetres_are_converted_to_metres(tmp_path):
     path = write(tmp_path / "c.csv", "Diameter,Cost\n300,10\n")
-    config = GAConfig(cost_file=path, unit_system="mm")
-    load_config(config, silent=True)
+    config = SolverConfig(cost_file=path, unit_system="mm")
+    load_cost_table(config, silent=True)
     assert config.diameters_m == [0.3]
 
 
 def test_inches_are_converted_to_metres(tmp_path):
     path = write(tmp_path / "c.csv", "Diameter,Cost\n12,10\n")
-    config = GAConfig(cost_file=path, unit_system="in")
-    load_config(config, silent=True)
+    config = SolverConfig(cost_file=path, unit_system="in")
+    load_cost_table(config, silent=True)
     assert config.diameters_m == pytest.approx([0.3048])
 
 
 def test_costs_are_keyed_by_raw_diameter(tmp_path):
     path = write(tmp_path / "c.csv", "Diameter,Cost\n400,20\n300,10\n")
-    config = GAConfig(cost_file=path, unit_system="mm")
-    load_config(config, silent=True)
+    config = SolverConfig(cost_file=path, unit_system="mm")
+    load_cost_table(config, silent=True)
     assert config.costs == {300: 10, 400: 20}
 
 
@@ -211,8 +211,8 @@ def test_the_diameter_table_keeps_the_index_contract(tmp_path):
     """`diameters_raw[i]`, `diameters_m[i]` і `diameter_table(...)[i]` — це
     одна й та сама труба: на цьому тримається переклад індексів у рішенні."""
     path = write(tmp_path / "c.csv", "Diameter,Cost\n600,40\n300,10\n400,20\n")
-    config = GAConfig(cost_file=path, unit_system="mm")
-    load_config(config, silent=True)
+    config = SolverConfig(cost_file=path, unit_system="mm")
+    load_cost_table(config, silent=True)
 
     table = diameter_table(path)
     assert table == config.diameters_raw

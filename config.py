@@ -1,12 +1,12 @@
 from dataclasses import dataclass, field
-from typing import List, Dict
+from typing import Dict, List
 
 
 @dataclass
-class GAConfig:
+class SolverConfig:
     """Конфігурація задачі: обмеження, одиниці та таблиця діаметрів/цін.
 
-    Заповнюється частково з CLI/GUI, частково у `load_config()` (поля
+    Заповнюється частково з CLI/GUI, частково у `load_cost_table()` (поля
     `diameters_raw`, `diameters_m`, `costs`).
     """
 
