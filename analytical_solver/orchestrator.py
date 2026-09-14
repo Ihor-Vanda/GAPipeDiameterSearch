@@ -17,6 +17,8 @@ from .context import SolverContext, beam_width_for, classify_network
 from .pool import SolutionPool
 from .local_search import LocalSearch
 from .worker import WorkerTask, run_island_worker
+from .adaptive_rates import AdaptiveRates
+from .strategy_selector import StrategySelector
 from .kick_registry import (
     FALLBACK_KICK,
     KICK_REGISTRY,
@@ -261,16 +263,7 @@ class IslandWorker:
         # all_tracked і три пули в _apply_kick) і містив стратегію
         # "SUBMARINE", якої немає в диспетчері — тобто їй марно велася
         # статистика UCB1. Тепер джерело одне — реєстр.
-        all_tracked = TRACKED_STRATEGIES
-        
-        self.strat_wins_cold = {s: 1.0 for s in all_tracked}
-        self.strat_wins_hot = {s: 1.0 for s in all_tracked} 
-
-        self.strat_tries_cold = {s: 1.0 for s in all_tracked}
-                
-        self.strat_tries_hot = {s: 1.0 for s in all_tracked}
-        
-        self.strat_consecutive_fails = {s: 0.0 for s in all_tracked}
+        self.selector = StrategySelector(TRACKED_STRATEGIES)
         
         n = self.ctx.num_pipes
         single_cands = {"SMALL": max(6, n//5), "MEDIUM": max(6, n//10), 
@@ -286,8 +279,6 @@ class IslandWorker:
         self.is_late_game = False
         
         self.last_injected_peer = {}
-        self._last_strategy = None
-        self._strategy_burst_count = 0
         self.bottleneck_boosted_pipes = {}
         self.rescue_fired = False
         self._force_flush_next = False
@@ -296,10 +287,10 @@ class IslandWorker:
         self.bottleneck_failed_pipes = {}
         self.zero_sum_tabu = {}
         
-        self.mu_ruin_pct = 0.05 
-        self.mu_perturb_pct = 0.10 
-        self.mu_spatial_pct = 0.20 
-        self.mu_escape_pct = 0.20 
+        # Розміри кроку кіків і правила їх навчання (JADE) — раніше
+        # чотири поля, які оновлювались у п'яти місцях `_apply_kick`,
+        # кожне через власну копію ланцюга if/elif по стратегії.
+        self.rates = AdaptiveRates()
 
         # Ці поля читалися дев'ятьма методами (`base_dyn_bonus`), п'ятьма
         # (`stag_limit`) і одним (`reserve_pool`), але присвоювалися лише в
@@ -691,57 +682,13 @@ class IslandWorker:
         T = 0.5 if ABLATION_MODE else real_T
         
         is_late_game = self.progress_ratio >= 0.5
-        active_wins = self.strat_wins_hot if is_late_game else self.strat_wins_cold
-        active_tries = self.strat_tries_hot if is_late_game else self.strat_tries_cold
-        n_total = sum(active_tries.values())
-
         pool_strats = pool_for(real_T, len(self.global_archive), self._is_tree)
 
-        max_fails = 3 if T < 0.5 else 5
-        valid_strats = [s for s in pool_strats if s in active_wins and self.strat_consecutive_fails.get(s, 0) < max_fails]
-        if not valid_strats:
-            valid_strats = [s for s in pool_strats if s in active_wins]
- 
-        untried_strats = [s for s in pool_strats if s not in active_wins]
+        choice = self.selector.pick(pool_strats, real_T, T, is_late_game)
+        strategy, use_bandit = choice.strategy, choice.bandit_active
 
-        use_bandit = not ABLATION_MODE and not is_late_game and T < 0.60
- 
-        if untried_strats:
-            strategy = random.choice(untried_strats)
-        elif not use_bandit:
-            last_s = self._last_strategy
-            vnd_pool = [s for s in valid_strats if s != last_s] if valid_strats else [s for s in pool_strats if s != last_s]
-            
-            if not vnd_pool:
-                vnd_pool = valid_strats if valid_strats else pool_strats
-                
-            strategy = random.choice(vnd_pool)
-        else:
-            exploration_C = 0.05 + (0.15 * real_T)
-            
-            def get_ucb_score(s):
-                base_score = active_wins[s] / max(1, active_tries.get(s, 1))
-                explore_bonus = exploration_C * math.sqrt(math.log(max(1, n_total)) / max(1, active_tries.get(s, 1)))
-                
-                burst_penalty = 1.0
-                if s == self._last_strategy:
-                    burst = self._strategy_burst_count
-                    burst_penalty = 0.5 ** burst
-                
-                return (base_score + explore_bonus) * burst_penalty
-
-            strategy = max(valid_strats, key=get_ucb_score)
-            
-        if strategy == self._last_strategy:
-            self._strategy_burst_count += 1
-        else:
-            self._last_strategy = strategy
-            self._strategy_burst_count = 1
-
-        active_tries[strategy] = active_tries.get(strategy, 0) + 1
-
-        mode_label = "[VND RAND]" if not use_bandit else f"[UCB1 Temp: {T:.2f}]"
-        self.ctx.log(f"{mode_label} (Stag: {self.stagnation_counter}/{self.stag_limit}) -> Applying '{strategy}'...")
+        self.ctx.log(f"{choice.mode_label} (Stag: {self.stagnation_counter}/"
+                     f"{self.stag_limit}) -> Applying '{strategy}'...")
  
         if real_T >= 0.8 and self.pool.active_pool:
             source_pool = [x for x in self.pool.active_pool if self.ctx.get_cached_stats(x[2])[1] >= self.ctx.h_min]
@@ -767,10 +714,7 @@ class IslandWorker:
             'global_archive': self.global_archive,
             'max_perturb': int(self.ctx.num_pipes * 0.50),
             'zero_sum_tabu': self.zero_sum_tabu,
-            'mu_ruin_pct':    self.mu_ruin_pct,
-            'mu_perturb_pct': self.mu_perturb_pct,
-            'mu_spatial_pct': self.mu_spatial_pct,
-            'mu_escape_pct':  self.mu_escape_pct,
+            **self.rates.as_kick_args(),
         }
 
         try:
@@ -783,7 +727,7 @@ class IslandWorker:
         path_sig, used_pct = res.path_signature, res.used_pct
 
         if res.failed:
-            self.strat_consecutive_fails[strategy] = self.strat_consecutive_fails.get(strategy, 0) + 1
+            self.selector.note_failure(strategy)
             if res.failed_pipe is not None:
                 if strategy == "BOTTLENECK": self.bottleneck_failed_pipes[res.failed_pipe] = round_idx
                 elif strategy == "LOOP_BALANCE": self.loop_balance_failed_pipes[res.failed_pipe] = round_idx
@@ -796,10 +740,10 @@ class IslandWorker:
                 self.ctx.log("      -> [TABU CLEARED] Topo paths memory reset to unblock strategy.")
             
             if use_bandit:
-                active_wins[strategy] = max(0.1, active_wins.get(strategy, 1.0) * 0.25)
+                self.selector.penalise(strategy, StrategySelector.FAILED_KICK_PENALTY)
             return
  
-        self.strat_consecutive_fails[strategy] = 0
+        self.selector.note_success(strategy)
  
         c, p, _, _ = self.ctx.get_cached_stats(forced_sol)
         base_h_min = self.ctx.h_min
@@ -807,7 +751,7 @@ class IslandWorker:
         explosion_threshold = self.run_best_cost * (1.5 + 0.5 * T)
 
         if max(0.0, base_h_min - p) > max(20.0, base_h_min * (1.0 + T)):
-            self.strat_consecutive_fails[strategy] = self.strat_consecutive_fails.get(strategy, 0) + 1
+            self.selector.note_failure(strategy)
             return
  
         relaxed_h_min = base_h_min - (0.0 if ABLATION_MODE else 0.5 * T)
@@ -867,13 +811,10 @@ class IslandWorker:
                 self.ctx.log(f"      -> Hard-Rejected (Cost Explosion): {effective_cost/1e6:.4f}M$")
                 
                 if use_bandit:
-                    active_wins[strategy] = max(0.1, active_wins.get(strategy, 1.0) * 0.50)
+                    self.selector.penalise(strategy, StrategySelector.EXPLOSION_PENALTY)
                 
                 if used_pct is not None and not ABLATION_MODE:
-                    shrink = 0.90
-                    if strategy == "RUIN_RECREATE": self.mu_ruin_pct *= shrink
-                    elif strategy == "SMART_PERTURB": self.mu_perturb_pct *= shrink
-                    elif strategy == "SPATIAL_PERTURB": self.mu_spatial_pct *= shrink
+                    self.rates.shrink_after_explosion(strategy)
                     self.ctx.log(f"         🧠 [JADE] Shrunk {strategy} size due to explosion.")
                 return
         else: 
@@ -893,19 +834,11 @@ class IslandWorker:
  
             if use_bandit:
                 improvement_pct = diff / max(self.run_best_cost, 1.0)
-                reward = 1.0 + (improvement_pct * 100.0) 
-                new_win_score = active_wins.get(strategy, 1.0) + reward
-                active_wins[strategy] = min(4.0, new_win_score) 
-                
-                for k in list(active_wins.keys()):
-                    if k != strategy:
-                        active_wins[k] = max(1.0, active_wins[k] * 0.80)
+                self.selector.reward(strategy, StrategySelector.record_reward(improvement_pct))
+                self.selector.decay_others(strategy, StrategySelector.OTHERS_DECAY_ON_RECORD)
  
             if used_pct is not None and not ABLATION_MODE:
-                alpha = 0.15 * (1.0 - 0.5 * (math.log1p(used_pct * 10) / math.log1p(10)))
-                if strategy == "RUIN_RECREATE": self.mu_ruin_pct = (1 - alpha) * self.mu_ruin_pct + alpha * used_pct
-                elif strategy == "SMART_PERTURB": self.mu_perturb_pct = (1 - alpha) * self.mu_perturb_pct + alpha * used_pct
-                elif strategy == "SPATIAL_PERTURB": self.mu_spatial_pct = (1 - alpha) * self.mu_spatial_pct + alpha * used_pct
+                self.rates.learn(strategy, used_pct, self.rates.record_alpha(used_pct))
                     
             self.ctx.log(f"   > [FORCE] 💎 Direct Record Update: -${diff:,.0f} ({self.run_best_cost/1e6:.4f}M$)")
             self._update_global_best(shared_progress)
@@ -925,16 +858,10 @@ class IslandWorker:
             if effective_cost < self.global_best_cost: self._update_global_best(shared_progress)
             self.ctx.log(f"      -> POOL FLUSHED. Adopted Major Escape: {effective_cost/1e6:.4f}M$")
  
-            decay = 0.3
-            for k in self.strat_wins_hot:
-                self.strat_wins_hot[k] = max(1.0, self.strat_wins_hot[k] * decay)
-                self.strat_tries_hot[k] = max(1.0, self.strat_tries_hot[k] * decay)
-            for k in self.strat_wins_cold:
-                self.strat_wins_cold[k] = max(1.0, self.strat_wins_cold[k] * decay)
-                self.strat_tries_cold[k] = max(1.0, self.strat_tries_cold[k] * decay)
+            self.selector.reset_after_escape()
 
             if used_pct is not None and not ABLATION_MODE:
-                self.mu_escape_pct = (1 - 0.10) * self.mu_escape_pct + 0.10 * used_pct
+                self.rates.learn_escape(used_pct)
  
         elif effective_cost < (self.run_best_cost * (1.03 + 0.07 * T)) and not self.pool.is_basin_tabu(final_sol):
             pool_gap = (effective_cost - self.run_best_cost) / max(self.run_best_cost, 1)
@@ -948,16 +875,11 @@ class IslandWorker:
                     hamming_dist = self.pool.hamming_distance(final_sol, self.run_best_sol)
                     diversity_ratio = hamming_dist / self.ctx.num_pipes
                     if T >= 0.2 and diversity_ratio > 0.02:
-                        soft_reward = 0.5 * diversity_ratio * T
-                        active_wins[strategy] = min(4.0, active_wins.get(strategy, 1.0) + soft_reward)
+                        self.selector.reward(
+                            strategy, StrategySelector.diversity_reward(diversity_ratio, T))
                 
                 if used_pct is not None and not ABLATION_MODE:
-                    proximity = 1.0 - min(1.0, pool_gap / 0.10)
-                    if proximity > 0:
-                        alpha_weak = 0.03 * proximity 
-                        if strategy == "RUIN_RECREATE": self.mu_ruin_pct = (1 - alpha_weak) * self.mu_ruin_pct + alpha_weak * used_pct
-                        elif strategy == "SMART_PERTURB": self.mu_perturb_pct = (1 - alpha_weak) * self.mu_perturb_pct + alpha_weak * used_pct
-                        elif strategy == "SPATIAL_PERTURB": self.mu_spatial_pct = (1 - alpha_weak) * self.mu_spatial_pct + alpha_weak * used_pct
+                    self.rates.learn(strategy, used_pct, self.rates.pool_alpha(pool_gap))
 
                 if strategy == "BOTTLENECK" and res.failed_pipe is not None:
                     self.bottleneck_boosted_pipes[res.failed_pipe] = round_idx
@@ -976,8 +898,8 @@ class IslandWorker:
                     diff, self.run_best_cost, self.stagnation_counter)
                 
                 if use_bandit:
-                    reward = 1.0 + ((diff / max(self.run_best_cost, 1.0)) * 100.0)
-                    active_wins[strategy] = min(4.0, active_wins.get(strategy, 1.0) + reward)
+                    self.selector.reward(strategy, StrategySelector.record_reward(
+                        diff / max(self.run_best_cost, 1.0)))
                 
                 self._update_global_best(shared_progress)
                 self.ctx.log(f"     -> 🚀 HAIL MARY → DIRECT RECORD: {q_c/1e6:.4f}M$")
@@ -989,13 +911,7 @@ class IslandWorker:
             self.ctx.log(f"     -> Rejected (Poor or Tabu Basin): {effective_cost/1e6:.4f}M$")
             
             if used_pct is not None and not ABLATION_MODE:
-                shrink = 0.95
-                if strategy == "RUIN_RECREATE": 
-                    self.mu_ruin_pct = max(0.02, self.mu_ruin_pct * shrink)
-                elif strategy == "SMART_PERTURB": 
-                    self.mu_perturb_pct = max(0.03, self.mu_perturb_pct * shrink)
-                elif strategy == "SPATIAL_PERTURB": 
-                    self.mu_spatial_pct = max(0.05, self.mu_spatial_pct * shrink)
+                self.rates.shrink_after_reject(strategy)
  
         if path_sig: self.pool.kick_tabu_set.add(path_sig)
         if strategy == "ZERO_SUM" and locked: self.zero_sum_tabu[list(locked)[0]] = round_idx

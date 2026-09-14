@@ -36,8 +36,7 @@ from analytical_solver.local_search import LocalSearch
 
 #: Поля воркера, які читаються в тестах як «стан після кіка».
 WATCHED = ("run_best_cost", "run_best_sol", "global_best_cost", "stagnation_counter",
-           "ipc_immunity", "_force_flush_next", "_last_strategy", "_strategy_burst_count",
-           "mu_ruin_pct", "mu_perturb_pct", "mu_spatial_pct", "mu_escape_pct")
+           "ipc_immunity", "_force_flush_next")
 
 
 class Kick:
@@ -73,9 +72,15 @@ def snapshot(worker):
     state = {f: getattr(worker, f) for f in WATCHED}
     state["run_best_sol"] = list(worker.run_best_sol) if worker.run_best_sol else None
     state["pool_size"] = len(worker.pool.active_pool)
-    state["wins_cold"] = dict(worker.strat_wins_cold)
-    state["tries_cold"] = dict(worker.strat_tries_cold)
-    state["fails"] = dict(worker.strat_consecutive_fails)
+    # Статистика стратегій і розміри кроку читаються через одну точку: на
+    # етапі 7 вони переїхали з дев'яти полів воркера в `StrategySelector` і
+    # `AdaptiveRates`, і це єдине місце в сітці, яке про переїзд знає.
+    state["wins_cold"] = dict(worker.selector.wins["cold"])
+    state["tries_cold"] = dict(worker.selector.tries["cold"])
+    state["fails"] = dict(worker.selector.consecutive_fails)
+    state["last_strategy"] = worker.selector.last_strategy
+    state["burst_count"] = worker.selector.burst_count
+    state["rates"] = worker.rates.snapshot()
     return state
 
 
@@ -275,7 +280,7 @@ def test_reject_shrinks_the_step_size_of_size_driven_kicks(apply_kick):
     """JADE: відкид — сигнал, що крок завеликий."""
     kick = apply_kick("SMART_PERTURB", stagnation=1, best_mult=0.30)
     if kick.verdict == "REJECT":
-        assert kick.after["mu_perturb_pct"] < kick.before["mu_perturb_pct"]
+        assert kick.after["rates"]["perturb"] < kick.before["rates"]["perturb"]
 
 
 def test_failed_kick_counts_a_consecutive_failure(apply_kick):
@@ -309,8 +314,8 @@ def test_every_kick_counts_a_try(apply_kick):
 
 def test_repeating_a_strategy_grows_the_burst_counter(apply_kick):
     kick = apply_kick("SHOCK", stagnation=1, best_mult=1.0)
-    assert kick.after["_last_strategy"] == "SHOCK"
-    assert kick.after["_strategy_burst_count"] == 1
+    assert kick.after["last_strategy"] == "SHOCK"
+    assert kick.after["burst_count"] == 1
 
 
 def test_a_successful_kick_clears_its_failure_streak(apply_kick):
