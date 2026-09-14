@@ -55,7 +55,6 @@ def test_task_requires_only_the_essentials(sim):
     assert t.shared_progress is None
     assert t.log_dir is None
     assert t.global_archive == []
-    assert t.epoch == 0
 
 
 def test_task_is_immutable(task):

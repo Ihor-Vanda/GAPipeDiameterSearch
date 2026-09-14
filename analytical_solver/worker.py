@@ -149,9 +149,6 @@ class WorkerTask:
     # `global_archive` при створенні завдання завжди порожній: реальне
     # значення воркер отримує з shared_progress під час міграції (§2.3).
     global_archive: list = field(default_factory=list)
-    # Епохи — історичний артефакт, epoch завжди 0 (§2.3). Поле лишається
-    # доки епохи не прибрані повністю, бо від нього залежить вибір seeds.
-    epoch: int = 0
 
 
 class WorkerResult(NamedTuple):
@@ -231,7 +228,7 @@ def run_island_worker(task):
         worker = IslandWorker(
             ctx, kicker, local_search, task.worker_id, task.n_workers,
             task.max_sims, beam_width_for(network_class), network_class,
-            task.global_archive, task.epoch,
+            task.global_archive,
         )
         best_cost, best_solution = worker.run(task.time_budget, task.global_best_cost,
                                               task.shared_progress)

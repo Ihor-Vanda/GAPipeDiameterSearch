@@ -105,7 +105,7 @@ def apply_kick(monkeypatch):
         local_search = LocalSearch(ctx)
         worker = orch.IslandWorker(
             ctx, KickStrategies(ctx, local_search), local_search,
-            0, 1, 100_000, 5, "SMALL", archive if archive is not None else [], 0,
+            0, 1, 100_000, 5, "SMALL", archive if archive is not None else [],
         )
 
         base = [3] * ctx.num_pipes

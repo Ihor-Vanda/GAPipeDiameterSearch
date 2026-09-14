@@ -121,101 +121,6 @@ class SeedFactory:
             return self.ls.gradient_squeeze(healed, max_passes=2, quick_mode=True)
         return None
 
-    def make_warm_seeds(self, archive, worker_id=0, failed_basins=None):
-        failed_basins = failed_basins or set()
-        if not archive: return self.make_diverse_seeds()
-        
-        archive_idx = worker_id % len(archive)
-        base_sol = archive[archive_idx][1] 
-        
-        force_cold = (worker_id == self.n_workers - 1)
-        if force_cold:
-            self.ctx.log(f"[CASTE] Worker {worker_id+1:02d} -> 🏴‍☠️ FORCED ADVENTURER (Epoch Diversity)")
-            return self.make_diverse_seeds()
-
-        seeds = []
-        if worker_id % 4 == 3:
-            role = "ADVENTURER"
-        else:
-            adjusted_id = worker_id - (worker_id // 4)
-            elite_roles = ["EXPLOITER", "RELINKER", "ARCHITECT", "EXPLORER"]
-            role = elite_roles[adjusted_id % 4]
-
-        if role == "EXPLOITER":
-            self.ctx.log(f"[CASTE] Worker {worker_id+1:02d} -> 🎯 EXPLOITER (Micro-mutations on Archive {archive_idx+1})")
-            top_sols = [base_sol] 
-            n_perturb = max(2, self.ctx.num_pipes // 10) 
-            deltas = [-1, 1]
-            for sol in top_sols:
-                seeds.append(list(sol))
-                for _ in range(self.BEAM_WIDTH - 1):
-                    perturbed = list(sol)
-                    for p_idx in random.sample(range(self.ctx.num_pipes), n_perturb):
-                        perturbed[p_idx] = max(0, min(self.ctx.max_d_idx, perturbed[p_idx] + random.choice(deltas)))
-                    seeds.append(perturbed)
-                    
-        elif role == "RELINKER":
-            self.ctx.log(f"[CASTE] Worker {worker_id+1:02d} -> 🧬 RELINKER (Greedy Path-Relinking)")
-            seeds.append(list(base_sol))
-            
-            if len(archive) >= 2:
-                best_dist = -1
-                target_sol = None
-                for _, arch_sol in archive:
-                    dist = sum(1 for a, b in zip(base_sol, arch_sol) if a != b)
-                    if dist > best_dist and dist > 0:
-                        best_dist = dist
-                        target_sol = arch_sol
-                
-                if target_sol is None:
-                    div_seeds = self.make_diverse_seeds()
-                    while len(seeds) < self.BEAM_WIDTH and div_seeds:
-                        seeds.append(div_seeds.pop(0))
-                else:
-                    diff_indices = [i for i in range(self.ctx.num_pipes) if base_sol[i] != target_sol[i]]
-                
-                if not diff_indices:
-                    div_seeds = self.make_diverse_seeds()
-                    while len(seeds) < self.BEAM_WIDTH and div_seeds:
-                        seeds.append(div_seeds.pop(0))
-                else:
-                    self.ctx.log(f"   > Relinking across {len(diff_indices)} pipes to distant target.")
-                    for _ in range(self.BEAM_WIDTH - 1):
-                        child = self.greedy_path_relink(base_sol, target_sol)
-                        seeds.append(child)
-            else:
-                div_seeds = self.make_diverse_seeds()
-                while len(seeds) < self.BEAM_WIDTH and div_seeds:
-                    seeds.append(div_seeds.pop(0))
-                
-        elif role == "ARCHITECT":
-            self.ctx.log(f"[CASTE] Worker {worker_id+1:02d} -> 🏛️ ARCHITECT (Consensus Fixing)")
-            seeds.append(list(base_sol))
-            consensus = list(base_sol)
-            if len(archive) >= 3:
-                for i in range(self.ctx.num_pipes):
-                    vals = [a[1][i] for a in archive[:3]]
-                    if vals.count(vals[0]) == len(vals): consensus[i] = vals[0]
-            for _ in range(self.BEAM_WIDTH - 1):
-                child = list(consensus)
-                for p_idx in random.sample(range(self.ctx.num_pipes), max(2, self.ctx.num_pipes // 15)):
-                    child[p_idx] = max(0, min(self.ctx.max_d_idx, child[p_idx] + random.choice([-2, -1, 1, 2])))
-                seeds.append(child)
-                
-        else:
-            self.ctx.log(f"[CASTE] Worker {worker_id+1:02d} -> 🔭 EXPLORER (Macro-mutations on Archive {archive_idx+1})")
-            top_sols = [base_sol]
-            n_perturb = max(5, self.ctx.num_pipes // 5)
-            deltas = [-2, -1, 1, 2]
-            for sol in top_sols:
-                seeds.append(list(sol))
-                for _ in range(self.BEAM_WIDTH - 1):
-                    perturbed = list(sol)
-                    for p_idx in random.sample(range(self.ctx.num_pipes), n_perturb):
-                        perturbed[p_idx] = max(0, min(self.ctx.max_d_idx, perturbed[p_idx] + random.choice(deltas)))
-                    seeds.append(perturbed)
-                    
-        return seeds[:self.BEAM_WIDTH]
     
     def greedy_path_relink(self, sol_A, sol_B):
         current = list(sol_A)
@@ -242,7 +147,7 @@ class SeedFactory:
         return best_intermediate
 
 class IslandWorker:
-    def __init__(self, ctx, kicker, local_search, worker_id, n_workers, max_sims, beam_width, network_class, global_archive, epoch, ablation=False):
+    def __init__(self, ctx, kicker, local_search, worker_id, n_workers, max_sims, beam_width, network_class, global_archive, ablation=False):
         self.ctx = ctx
         self.kicker = kicker
         self.ls = local_search
@@ -252,7 +157,6 @@ class IslandWorker:
         self.BEAM_WIDTH = beam_width
         self.network_class = network_class
         self.global_archive = global_archive
-        self.epoch = epoch
         
         self.pool = SolutionPool(self.ctx)
         self.seeder = SeedFactory(self.ctx, self.ls, self.n_workers, self.BEAM_WIDTH)
@@ -311,12 +215,37 @@ class IslandWorker:
         self._migration_interval_sims = 15000
         self._last_migration_sims = 0
 
+    def progress_of(self, sims, elapsed, time_budget):
+        """Частка пройденого прогону — за тим бюджетом, який ближче до кінця.
+
+        Раніше це було «або симуляції, або час»: при заданому `max_sims`
+        час не враховувався взагалі. Прогін, обмежений годинником (а на
+        великих мережах практично будь-який: квота XLARGE — 30 млн
+        симуляцій, тобто близько 20 діб на одному ядрі), давав частку
+        близько нуля до самого кінця. А від неї залежать **одинадцять**
+        рішень: перехід у другу половину прогону (`is_late_game`), ліміт
+        застою, інтервал міграції, поріг «авантюриста», вікно
+        серцебиття, заморозка консенсусу, дистанція різноманітності
+        променя, його динамічна ширина. Тобто такий прогін від початку
+        до кінця поводився так, ніби щойно почався.
+
+        Тепер береться максимум з двох часток. Там, де скінченний лише
+        один бюджет, результат не змінюється: другий доданок дає 0.
+        """
+        by_sims = (sims / max(1, self.max_sims)
+                   if self.max_sims != float('inf') else 0.0)
+        by_time = (elapsed / time_budget
+                   if time_budget and time_budget != float('inf') else 0.0)
+        return min(1.0, max(by_sims, by_time))
+
     def run(self, time_budget, global_best_cost, shared_progress):
         self.global_best_cost = global_best_cost
         start_time = time.time()
         self.pool.clear_all()
         
-        seeds = self.seeder.make_diverse_seeds() if self.epoch == 0 else self.seeder.make_warm_seeds(self.global_archive, self.worker_id)
+        # Раніше тут була гілка під `epoch != 0`, яка звала `make_warm_seeds`
+        # (96 рядків, CC 37). Епох більше немає — гілка була недосяжна.
+        seeds = self.seeder.make_diverse_seeds()
         self.reserve_pool = self.seeder.make_reserve_pool(size=4)
         
         best_initial_cost = min([self.ctx.get_cached_stats(s)[0] for s in seeds]) if seeds else global_best_cost
@@ -327,7 +256,7 @@ class IslandWorker:
         self.ipc_immunity = 30
         self.stag_limit = 4 
         round_idx = 0
-        epoch_start_sims = self.ctx.sim_count 
+        run_start_sims = self.ctx.sim_count
         just_flushed = False
         
         self._last_ping_sims = self.ctx.sim_count
@@ -374,14 +303,13 @@ class IslandWorker:
                 shared_progress[self.worker_id] = {"round": round_idx + 1, "sims": self.ctx.sim_count, "best_cost": self.run_best_cost}
             
             elapsed = time.time() - start_time
-            epoch_sims = self.ctx.sim_count - epoch_start_sims
-            if elapsed > time_budget or epoch_sims >= self.max_sims: break
+            sims_used = self.ctx.sim_count - run_start_sims
+            if elapsed > time_budget or sims_used >= self.max_sims: break
                 
             just_flushed = self.rescue_fired
             self.rescue_fired = False
             
-            self.progress_ratio = min(1.0, epoch_sims / max(1, self.max_sims)) \
-                if self.max_sims != float('inf') else min(1.0, elapsed / time_budget)
+            self.progress_ratio = self.progress_of(sims_used, elapsed, time_budget)
             self.is_late_game = self.progress_ratio > 0.5 
             
             self.stag_limit = max(4, int(12 * (1.0 - self.progress_ratio)))
@@ -597,7 +525,7 @@ class IslandWorker:
         effective_mult = base_mult if not self.is_late_game else max(4, base_mult // 2)
         
         if self.stagnation_counter >= self.stag_limit * effective_mult:
-            self.ctx.log(f"   [MINI-RESTART] {self.stagnation_counter} rounds without progress. Soft epoch restart.")
+            self.ctx.log(f"   [MINI-RESTART] {self.stagnation_counter} rounds without progress. Soft restart.")
             self.pool.tabu_fingerprints.clear()
             self.pool.kick_tabu_set.clear()
             self.pool.active_pool.clear()
@@ -1243,15 +1171,17 @@ class AnalyticalSolver:
         
         self.history = []
 
-        epochs = 1 
-        time_per_epoch = self.time_limit_sec
-        
+        # Епох більше немає: острівна модель із асинхронною синхронізацією
+        # замінила їх на один прогін із міграцією (§2.3). Цикл `for epoch in
+        # range(1)` і поле `epoch` прибрані, бюджет ділиться між островами.
+        run_time_budget = self.time_limit_sec
+
         if self.max_sims == float('inf'):
-            worker_epoch_sims = float('inf')
+            worker_sim_quota = float('inf')
         else:
-            worker_epoch_sims = int(self.max_sims // self.n_workers)
-        
-        quota_str = "∞" if worker_epoch_sims == float('inf') else f"{worker_epoch_sims:,}"
+            worker_sim_quota = int(self.max_sims // self.n_workers)
+
+        quota_str = "∞" if worker_sim_quota == float('inf') else f"{worker_sim_quota:,}"
         print(f"  [Quota] Allocated {quota_str} sims per worker.\n")
 
         manager = multiprocessing.Manager() if self.mp_pool else None
@@ -1260,144 +1190,143 @@ class AnalyticalSolver:
             for i in range(self.n_workers): shared_progress[i] = 0
             shared_progress['global_archive'] = []
 
-        cumulative_epoch_sims = 0 
-        global_failed_basins = set()
+        # Симуляції, виконані островами: лічильник головного процесу їх
+        # не бачить, бо кожен воркер має власний контекст.
+        worker_sims_total = 0
 
         try:
-            for epoch in range(epochs):
-                mode_str = "PARALLEL" if self.mp_pool else "SEQUENTIAL"
-                print("="*46)
-                print(f" [CONTINUOUS RUN] {mode_str} Workers: {self.n_workers} | Time Limit: {time_per_epoch/60:.1f} min")
-                print("="*46)
-                
-                seed_modifier = random.randint(1, 10000)
-                tasks = [
-                    WorkerTask(
-                        diameters=self.ctx.diameters, v_opt=self.ctx.v_opt,
-                        time_budget=time_per_epoch, global_best_cost=global_best_cost,
-                        seed=seed_modifier + i, worker_id=i, n_workers=self.n_workers,
-                        max_sims=worker_epoch_sims, shared_progress=shared_progress,
-                        log_dir=self.log_dir, global_archive=global_archive, epoch=epoch,
-                    )
-                    for i in range(self.n_workers)
+            mode_str = "PARALLEL" if self.mp_pool else "SEQUENTIAL"
+            print("="*46)
+            print(f" [CONTINUOUS RUN] {mode_str} Workers: {self.n_workers} | Time Limit: {run_time_budget/60:.1f} min")
+            print("="*46)
+            
+            seed_modifier = random.randint(1, 10000)
+            tasks = [
+                WorkerTask(
+                    diameters=self.ctx.diameters, v_opt=self.ctx.v_opt,
+                    time_budget=run_time_budget, global_best_cost=global_best_cost,
+                    seed=seed_modifier + i, worker_id=i, n_workers=self.n_workers,
+                    max_sims=worker_sim_quota, shared_progress=shared_progress,
+                    log_dir=self.log_dir, global_archive=global_archive,
+                )
+                for i in range(self.n_workers)
+            ]
+
+            island_results = []
+            
+            if self.mp_pool:
+                async_results = [
+                    (t.worker_id, self.mp_pool.apply_async(run_island_worker, (t,)))
+                    for t in tasks
                 ]
 
-                epoch_results = []
+                last_print_time = 0
+                print_interval = self.ctx.profile.print_interval
                 
-                if self.mp_pool:
-                    async_results = [
-                        (t.worker_id, self.mp_pool.apply_async(run_island_worker, (t,)))
-                        for t in tasks
-                    ]
-
-                    last_print_time = 0
-                    print_interval = self.ctx.profile.print_interval
-                    
-                    last_sent_cost = float('inf')
-                    
-                    while True:
-                        all_done = all(res.ready() for _, res in async_results)
-                        if all_done: break
-                            
-                        curr_time = time.time()
-                        if curr_time - last_print_time >= print_interval:
-                            last_print_time = curr_time
-                            elapsed_total = curr_time - start_time 
-                            m, s = divmod(int(elapsed_total), 60)
-                            
-                            status_parts = []
-                            total_sims = 0
-                            live_best = global_best_cost
-                            
-                            live_best_sol = global_best_sol 
-                            
-                            live_archive = []
-                            gb = shared_progress.get('global_best')
-                            if gb: 
-                                live_archive.append(gb)
-                                if gb[0] < live_best: 
-                                    live_best = gb[0]
-                                    live_best_sol = gb[1]
-
-                            for wid in range(self.n_workers):
-                                prog = shared_progress.get(wid, 0)
-                                if isinstance(prog, dict):
-                                    sims = prog.get('sims', 0)
-                                    w_best = prog.get('best_cost', float('inf'))
-                                    
-                                    if w_best < live_best: 
-                                        live_best = w_best
-                                        if 'best_sol' in prog:
-                                            live_best_sol = prog['best_sol']
-                                else:
-                                    sims = prog
-                                    
-                                total_sims += sims
-                                if sims > 0: status_parts.append(f"W{wid+1}:{sims//1000}k")
-                                else: status_parts.append(f"W{wid+1}:--")
-                                
-                                w_sol = shared_progress.get(f'best_sol_{wid}')
-                                if w_sol: live_archive.append(w_sol)
-                                    
-                            status_str = " ".join(status_parts)
-                            best_str = f"{live_best/1e6:.4f}M$" if live_best != float('inf') else "---"
-                            print(f"   > [Live {m:02d}:{s:02d}] Best: {best_str} | Sims: {total_sims/1000:.1f}k | {status_str}")
-                            
-                            current_total = self.ctx.sim_count + cumulative_epoch_sims + total_sims
-                            
-                            if live_best < global_best_cost:
-                                global_best_cost = live_best
-                                global_best_sol = live_best_sol
-                            
-                            if live_best != float('inf'):
-                                self.history.append((current_total, live_best))
-                                
-                            if ui_callback is not None:
-                                if global_best_cost < last_sent_cost and global_best_sol is not None:
-                                    last_sent_cost = global_best_cost
-                                    ui_callback(current_total, global_best_cost, list(global_best_sol))
-                                else:
-                                    ui_callback(current_total, global_best_cost, None)
-                                
-                            if live_archive:
-                                live_archive.sort(key=lambda x: x[0])
-                                unique_archive = []
-                                seen_sigs = set()
-                                for cost, sol in live_archive:
-                                    sig = tuple(sol)
-                                    if sig not in seen_sigs:
-                                        seen_sigs.add(sig)
-                                        unique_archive.append((cost, sol))
-                                        if len(unique_archive) >= 6: break
-                                shared_progress['global_archive'] = unique_archive
+                last_sent_cost = float('inf')
+                
+                while True:
+                    all_done = all(res.ready() for _, res in async_results)
+                    if all_done: break
                         
-                        time.sleep(1.0)
+                    curr_time = time.time()
+                    if curr_time - last_print_time >= print_interval:
+                        last_print_time = curr_time
+                        elapsed_total = curr_time - start_time 
+                        m, s = divmod(int(elapsed_total), 60)
+                        
+                        status_parts = []
+                        total_sims = 0
+                        live_best = global_best_cost
+                        
+                        live_best_sol = global_best_sol 
+                        
+                        live_archive = []
+                        gb = shared_progress.get('global_best')
+                        if gb: 
+                            live_archive.append(gb)
+                            if gb[0] < live_best: 
+                                live_best = gb[0]
+                                live_best_sol = gb[1]
 
-                    for wid, res in async_results:
-                        try:
-                            result = res.get()
-                            if result.best_solution is not None:
-                                epoch_results.append((result.best_cost, result.best_solution))
-                        except Exception as e:
-                            print(f"     [Error] Worker {wid+1} crashed: {e}")
-
-                    if shared_progress is not None:
                         for wid in range(self.n_workers):
-                            prog = shared_progress.get(wid, {})
+                            prog = shared_progress.get(wid, 0)
                             if isinstance(prog, dict):
-                                cumulative_epoch_sims += prog.get('sims', 0)
+                                sims = prog.get('sims', 0)
+                                w_best = prog.get('best_cost', float('inf'))
+                                
+                                if w_best < live_best: 
+                                    live_best = w_best
+                                    if 'best_sol' in prog:
+                                        live_best_sol = prog['best_sol']
+                            else:
+                                sims = prog
+                                
+                            total_sims += sims
+                            if sims > 0: status_parts.append(f"W{wid+1}:{sims//1000}k")
+                            else: status_parts.append(f"W{wid+1}:--")
+                            
+                            w_sol = shared_progress.get(f'best_sol_{wid}')
+                            if w_sol: live_archive.append(w_sol)
+                                
+                        status_str = " ".join(status_parts)
+                        best_str = f"{live_best/1e6:.4f}M$" if live_best != float('inf') else "---"
+                        print(f"   > [Live {m:02d}:{s:02d}] Best: {best_str} | Sims: {total_sims/1000:.1f}k | {status_str}")
+                        
+                        current_total = self.ctx.sim_count + worker_sims_total + total_sims
+                        
+                        if live_best < global_best_cost:
+                            global_best_cost = live_best
+                            global_best_sol = live_best_sol
+                        
+                        if live_best != float('inf'):
+                            self.history.append((current_total, live_best))
+                            
+                        if ui_callback is not None:
+                            if global_best_cost < last_sent_cost and global_best_sol is not None:
+                                last_sent_cost = global_best_cost
+                                ui_callback(current_total, global_best_cost, list(global_best_sol))
+                            else:
+                                ui_callback(current_total, global_best_cost, None)
+                            
+                        if live_archive:
+                            live_archive.sort(key=lambda x: x[0])
+                            unique_archive = []
+                            seen_sigs = set()
+                            for cost, sol in live_archive:
+                                sig = tuple(sol)
+                                if sig not in seen_sigs:
+                                    seen_sigs.add(sig)
+                                    unique_archive.append((cost, sol))
+                                    if len(unique_archive) >= 6: break
+                            shared_progress['global_archive'] = unique_archive
+                    
+                    time.sleep(1.0)
 
-                else:
-                    for t in tasks:
-                        try:
-                            result = run_island_worker(t)
-                            if result.best_solution is not None:
-                                epoch_results.append((result.best_cost, result.best_solution))
-                            global_failed_basins.update(result.basin_tabu)
-                            cumulative_epoch_sims += result.sim_count
-                            print(f"   > Worker {t.worker_id+1} Finished. Best: {result.best_cost/1e6:.4f}M$")
-                        except Exception as e:
-                            print(f"     [Error] Sequential Worker {t.worker_id+1} crashed: {e}")
+                for wid, res in async_results:
+                    try:
+                        result = res.get()
+                        if result.best_solution is not None:
+                            island_results.append((result.best_cost, result.best_solution))
+                    except Exception as e:
+                        print(f"     [Error] Worker {wid+1} crashed: {e}")
+
+                if shared_progress is not None:
+                    for wid in range(self.n_workers):
+                        prog = shared_progress.get(wid, {})
+                        if isinstance(prog, dict):
+                            worker_sims_total += prog.get('sims', 0)
+
+            else:
+                for t in tasks:
+                    try:
+                        result = run_island_worker(t)
+                        if result.best_solution is not None:
+                            island_results.append((result.best_cost, result.best_solution))
+                        worker_sims_total += result.sim_count
+                        print(f"   > Worker {t.worker_id+1} Finished. Best: {result.best_cost/1e6:.4f}M$")
+                    except Exception as e:
+                        print(f"     [Error] Sequential Worker {t.worker_id+1} crashed: {e}")
 
         except KeyboardInterrupt:
             print("\n\n[AnalyticalSolver] 🛑 Отримано сигнал переривання (Ctrl+C)!")
@@ -1407,7 +1336,7 @@ class AnalyticalSolver:
         # значення приходять і через shared_progress, але в послідовному
         # (pool=None) це єдине джерело — без цього рішення воркера втрачалось
         # і solve_standalone повертав запасний варіант «усі максимальні».
-        for c, sol in epoch_results:
+        for c, sol in island_results:
             if sol is not None and c < global_best_cost:
                 global_best_cost = c
                 global_best_sol = list(sol)
@@ -1433,7 +1362,7 @@ class AnalyticalSolver:
                 global_best_sol = polished
                 print(f"   > [POLISH] Improved! Final: {global_best_cost/1e6:.4f}M$")
                 
-            current_sims = self.ctx.sim_count + cumulative_epoch_sims
+            current_sims = self.ctx.sim_count + worker_sims_total
             self.history.append((current_sims, global_best_cost))
         else:
             print("\n[WARNING] No valid solution found. Returning safe default.")
@@ -1442,7 +1371,7 @@ class AnalyticalSolver:
             except: global_best_cost = float('inf')
         
         total_time = time.time() - start_time
-        total_cluster_sims = self.ctx.sim_count + cumulative_epoch_sims
+        total_cluster_sims = self.ctx.sim_count + worker_sims_total
 
         if global_best_cost != float('inf'):
             print(f"\n[AnalyticalSolver] FINAL RESULT: {global_best_cost/1e6:.4f}M$ (Total Time: {total_time/60:.1f}m | Total Sims: {total_cluster_sims:,})")

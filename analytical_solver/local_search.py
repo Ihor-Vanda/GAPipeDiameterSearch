@@ -2,9 +2,74 @@ import itertools
 import random
 import math
 
+
+class DescentStats:
+    """Врожай проходів градієнтного спуску.
+
+    Перша величина, яку солвер міряє **сам про себе** — і яка потрібна,
+    щоб позбутись порогів «за класом мережі» (§24.4). Замір §22.2
+    показав: у зійшовшомуся стані поліпшуваних труб нуль із 454, а прохід
+    по них коштує Θ(n) симуляцій. Врожай (`accepted / scanned`) — це той
+    самий факт у вигляді числа, доступного під час прогону: коли він
+    падає до нуля, повні проходи перестають себе виправдовувати.
+
+    Поки що лише лічильники: жодне рішення від них не залежить, і
+    поведінка пошуку не змінюється. Правило, яке їх читає, — наступний
+    крок (§23.2), і воно вимагає окремого A/B-заміру.
+    """
+
+    __slots__ = ("passes", "scanned", "skipped", "accepted", "last_pass_yield")
+
+    def __init__(self):
+        self.passes = 0
+        #: Труби, для яких хід справді перевірявся симуляцією.
+        self.scanned = 0
+        #: Труби, пропущені евристикою `quick_mode` без перевірки.
+        self.skipped = 0
+        self.accepted = 0
+        #: Врожай останнього завершеного проходу — саме він цікавий
+        #: правилу зупинки: середнє за весь прогін згладжує момент, коли
+        #: спуск уже зійшовся.
+        self.last_pass_yield = None
+
+    @property
+    def yield_rate(self):
+        """Частка перевірених труб, для яких хід було прийнято."""
+        if not self.scanned:
+            return None
+        return self.accepted / self.scanned
+
+    def start_pass(self):
+        self.passes += 1
+        return self.scanned, self.accepted
+
+    def finish_pass(self, marks):
+        scanned_before, accepted_before = marks
+        scanned = self.scanned - scanned_before
+        if scanned:
+            self.last_pass_yield = (self.accepted - accepted_before) / scanned
+
+    def note_scan(self):
+        self.scanned += 1
+
+    def note_skip(self):
+        self.skipped += 1
+
+    def note_accept(self):
+        self.accepted += 1
+
+    def snapshot(self):
+        return {"passes": self.passes, "scanned": self.scanned,
+                "skipped": self.skipped, "accepted": self.accepted,
+                "yield_rate": self.yield_rate,
+                "last_pass_yield": self.last_pass_yield}
+
+
 class LocalSearch:
     def __init__(self, ctx):
         self.ctx = ctx
+        #: Накопичується за весь прогін; поведінки не змінює (§25.6).
+        self.stats = DescentStats()
 
     def get_high_impact_pipes(self, indices, top_k):
         unit_losses = self.ctx.get_cached_heuristics(indices)
@@ -59,6 +124,7 @@ class LocalSearch:
         while improved:
             improved = False
             passes += 1
+            pass_marks = self.stats.start_pass()
             
             if getattr(self, 'progress_callback', None):
                 self.progress_callback()
@@ -90,8 +156,12 @@ class LocalSearch:
                     loss_threshold = 0.02 if is_critically_tight else 0.10
                     crit_threshold = 0.005 if is_critically_tight else 0.02
                     
-                    if unit_losses[idx] >= loss_threshold: continue
-                    if is_critically_tight and unit_losses[idx] >= crit_threshold: continue
+                    if unit_losses[idx] >= loss_threshold:
+                        self.stats.note_skip(); continue
+                    if is_critically_tight and unit_losses[idx] >= crit_threshold:
+                        self.stats.note_skip(); continue
+
+                self.stats.note_scan()
                 
                 best_local_sol = None
                 best_local_score = best_score
@@ -120,6 +190,9 @@ class LocalSearch:
                     current_indices = best_local_sol
                     best_score, cost, p_min = best_local_score, best_local_cost, best_local_p
                     improved = True
+                    self.stats.note_accept()
+
+            self.stats.finish_pass(pass_marks)
 
         return current_indices
 

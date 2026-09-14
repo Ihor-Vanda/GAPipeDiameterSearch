@@ -120,7 +120,7 @@ def run_probe(inp_file, cost_file, h_min, max_sims, seed, units):
 
     worker = ProbedWorker(ctx, KickStrategies(ctx, local_search), local_search,
                           0, 1, max_sims, beam_width_for(network_class),
-                          network_class, [], 0)
+                          network_class, [])
     worker.run(float("inf"), float("inf"), None)
     return worker, ctx
 

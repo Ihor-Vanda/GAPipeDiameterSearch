@@ -143,7 +143,7 @@ def profile(inp_file, cost_file, h_min, units, max_sims, seed, sim_samples,
 
     worker = ProfiledWorker(
         ctx, KickStrategies(ctx, local_search), local_search, 0, 1,
-        max_sims, beam_width_for(network_class), network_class, [], 0,
+        max_sims, beam_width_for(network_class), network_class, [],
         wall_cap=wall_cap,
     )
 
