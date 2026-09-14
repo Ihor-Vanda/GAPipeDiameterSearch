@@ -240,3 +240,38 @@ def test_scratch_files_stay_in_the_temp_directory(cfg, tmp_path, monkeypatch):
 def test_the_temp_directory_is_required(cfg):
     with pytest.raises(TypeError):
         WaterSimulator(HANOI_INP, cfg)
+
+
+# --- закриття Toolkit ---------------------------------------------------
+
+def test_closing_releases_the_toolkit(cfg, tmp_path):
+    """Без явного закриття на Windows `_temp_sim_data` не видаляється:
+    Toolkit тримає .rpt відкритим, поки живий симулятор (§31.1)."""
+    simulator = WaterSimulator(HANOI_INP, cfg, temp_dir=str(tmp_path))
+    assert simulator.api is not None
+
+    simulator.close()
+    assert simulator.api is None
+
+
+def test_closing_twice_is_not_an_error(cfg, tmp_path):
+    """`close()` викликається і з `OptimizationRunner.close`, і з
+    `__del__`, тому мусить бути ідемпотентним."""
+    simulator = WaterSimulator(HANOI_INP, cfg, temp_dir=str(tmp_path))
+    simulator.close()
+    simulator.close()
+    assert simulator.api is None
+
+
+def test_the_scratch_files_can_be_deleted_after_closing(cfg, tmp_path):
+    """Саме те, чого не міг зробити `clean_temp_root` у CLI: видалити
+    робочі файли симулятора головного процесу."""
+    simulator = WaterSimulator(HANOI_INP, cfg, temp_dir=str(tmp_path))
+    simulator.get_stats([MAX_IDX] * PIPES)
+    scratch = [name for name in os.listdir(tmp_path) if name.startswith("temp_")]
+    assert scratch
+
+    simulator.close()
+    for name in scratch:
+        os.remove(tmp_path / name)
+    assert not [n for n in os.listdir(tmp_path) if n.startswith("temp_")]

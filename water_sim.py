@@ -97,12 +97,25 @@ class WaterSimulator:
             # тобто мільйон разів за прогін (§30.3).
             self.cost_array = np.array(self.costs, dtype=np.float64)
 
+    def close(self):
+        """Закрити EPANET Toolkit і відпустити .rpt/.bin файли.
+
+        Потрібне явно, а не лише у `__del__`: на Windows Toolkit тримає
+        дескриптори, і поки симулятор живий, `_temp_sim_data` не
+        видаляється. Раніше це обходили в GUI через `gc.collect()` і
+        `time.sleep(1.0)` перед прибиранням, а в CLI не обходили ніяк —
+        тому після кожного прогону лишався один `temp_rpt_<pid>.rpt`
+        (§31.1). Ідемпотентне.
+        """
+        api, self.api = getattr(self, 'api', None), None
+        if api is not None:
+            try:
+                api.ENclose()
+            except Exception:
+                pass
+
     def __del__(self):
-        try:
-            if hasattr(self, 'api') and self.api is not None:
-                self.api.ENclose()
-        except:
-            pass
+        self.close()
 
     def _apply_pattern(self, individual):
         if not self.diams_m: self._refresh_config()

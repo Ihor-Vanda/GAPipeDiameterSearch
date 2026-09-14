@@ -111,6 +111,7 @@ def main():
         results = runner.run(base_dir)
         runner.export(results, base_dir)
     finally:
+        runner.close()
         clean_temp_root()
 
 

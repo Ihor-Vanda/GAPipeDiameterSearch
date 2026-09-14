@@ -38,45 +38,65 @@ from .local_search import LocalSearch
 _simulator = None
 
 
+#: Назва кореня тимчасових каталогів. Він створюється поруч із місцем
+#: запуску, тому визначається відносно поточного каталогу процесу.
+TEMP_ROOT_NAME = "_temp_sim_data"
+#: Розширення, які лишає по собі EPANET Toolkit.
+SCRATCH_SUFFIXES = ('.bin', '.inp', '.rpt', '.out')
+
+
 def get_temp_root():
     """Корінь тимчасових каталогів воркерів (окремий каталог на процес)."""
-    return os.path.abspath("_temp_sim_data")
+    return os.path.abspath(TEMP_ROOT_NAME)
+
+
+def _leave_temp_root():
+    """Вийти з тимчасового кореня, якщо процес стоїть усередині нього.
+
+    Дві причини, і друга важливіша за першу. На Windows каталог, у якому
+    хтось стоїть, видалити не можна — про це знала й попередня версія. Але
+    корінь визначається **відносно поточного каталогу**, тому стояти
+    всередині нього означало порахувати не той шлях: із
+    `_temp_sim_data/worker_101` корінь виходив
+    `_temp_sim_data/worker_101/_temp_sim_data`, якого не існує, і
+    прибирання тихо завершувалось, нічого не зробивши. Попередня версія
+    виходила з каталогу **після** того, як порахувала корінь, тому цього
+    не лікувала (§31.2).
+    """
+    parts = os.path.abspath(os.getcwd()).split(os.sep)
+    if TEMP_ROOT_NAME not in parts:
+        return
+
+    above = os.sep.join(parts[:parts.index(TEMP_ROOT_NAME)])
+    if not above:
+        above = os.sep
+    elif above.endswith(":"):
+        above += os.sep
+
+    try:
+        os.chdir(above)
+    except OSError:
+        pass
 
 
 def clean_temp_root():
     """Прибрати всі тимчасові каталоги воркерів.
 
-    Версія з `gui.py`: на Windows EPANET Toolkit тримає дескриптори
-    .rpt/.bin навіть після завершення воркера, тому `rmtree` іноді падає
-    з першого разу — звідси спроби з паузою. У `main.py` була спрощена
-    версія на 9 рядків, яка на Windows лишала сміття.
+    На Windows EPANET Toolkit тримає дескриптори .rpt/.bin навіть після
+    завершення воркера, тому `rmtree` іноді падає з першого разу — звідси
+    спроби з паузою. Симулятор головного процесу закривається явно
+    (`OptimizationRunner.close`) саме перед цим викликом (§31.1).
     """
     import time
 
+    _leave_temp_root()
     root = get_temp_root()
-
-    # Якщо поточний каталог усередині кореня, вийти з нього, інакше
-    # Windows не дасть його видалити.
-    try:
-        if os.path.abspath(os.getcwd()).startswith(os.path.abspath(root)):
-            os.chdir(os.path.dirname(os.path.abspath(root)))
-    except OSError:
-        pass
-
-    for name in os.listdir(os.getcwd()):
-        low = name.lower()
-        if low.startswith('temp') and low.endswith(('.bin', '.inp', '.rpt', '.out')):
-            try:
-                os.remove(os.path.join(os.getcwd(), name))
-            except OSError:
-                pass
-
     if not os.path.exists(root):
         return
 
     for dirpath, _, filenames in os.walk(root):
         for name in filenames:
-            if name.lower().endswith(('.bin', '.inp', '.rpt', '.out')):
+            if name.lower().endswith(SCRATCH_SUFFIXES):
                 try:
                     os.remove(os.path.join(dirpath, name))
                 except OSError:

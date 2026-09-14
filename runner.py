@@ -323,6 +323,16 @@ class OptimizationRunner:
         if len(result.history) > 1:
             plot_convergence(result.history, os.path.join(plots, "convergence.png"))
 
+    def close(self):
+        """Відпустити EPANET Toolkit головного процесу.
+
+        Викликається перед `clean_temp_root()`: поки симулятор живий,
+        Windows не дає видалити його .rpt (§31.1).
+        """
+        if self.simulator is not None:
+            self.simulator.close()
+            self.simulator = None
+
     @staticmethod
     def champion(results):
         """Найкращий прогін: спершу допустимі, потім за вартістю."""

@@ -7,7 +7,6 @@ from tkinter import filedialog, messagebox, ttk
 import threading
 import sys
 import os
-import time
 import multiprocessing
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -289,6 +288,7 @@ class PipelineOptimizerApp(ctk.CTk):
         рядок сценарію з `main()`.
         """
         base_dir = None
+        runner = None
         try:
             clean_temp_root()
             os.makedirs(get_temp_root(), exist_ok=True)
@@ -336,10 +336,12 @@ class PipelineOptimizerApp(ctk.CTk):
                 import traceback
                 print(traceback.format_exc())
         finally:
+            # Раніше тут стояли `gc.collect()` і `time.sleep(1.0)` — спроба
+            # домогтися, щоб `__del__` симулятора закрив Toolkit до
+            # прибирання. Тепер він закривається явно (§31.1).
             try:
-                import gc
-                gc.collect()
-                time.sleep(1.0)
+                if runner is not None:
+                    runner.close()
                 clean_temp_root()
             except Exception:
                 pass
