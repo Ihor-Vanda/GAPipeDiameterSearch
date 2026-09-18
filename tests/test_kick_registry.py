@@ -8,7 +8,7 @@
 
 import pytest
 
-from analytical_solver.kick_registry import (
+from pipeopt.solver.kick_registry import (
     COLD_POOL,
     FALLBACK_KICK,
     HOT_THRESHOLD,
@@ -19,7 +19,7 @@ from analytical_solver.kick_registry import (
     KickResult,
     pool_for,
 )
-from analytical_solver.kicks import KickStrategies
+from pipeopt.solver.kicks import KickStrategies
 
 # Пули дослівно з коду до етапу 3 (orchestrator._apply_kick, рядки 660-669).
 LEGACY_COLD = ["SHOCK", "BOTTLENECK", "LOOP_BALANCE", "ZERO_SUM", "TRIM"]

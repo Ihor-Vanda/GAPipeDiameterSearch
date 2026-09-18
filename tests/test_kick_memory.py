@@ -8,7 +8,7 @@
 
 import pytest
 
-from analytical_solver.kick_memory import KickMemory
+from pipeopt.solver.kick_memory import KickMemory
 
 
 @pytest.fixture

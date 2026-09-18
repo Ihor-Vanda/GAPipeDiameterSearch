@@ -1,6 +1,6 @@
 """LRUCache: витіснення найстарішого та оновлення давності при читанні."""
 
-from analytical_solver.cache import LRUCache
+from pipeopt.solver.cache import LRUCache
 
 
 def test_get_missing_returns_none():

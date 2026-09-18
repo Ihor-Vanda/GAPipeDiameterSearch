@@ -10,7 +10,7 @@
 
 import pytest
 
-from analytical_solver.context import NetworkProfile, beam_width_for, classify_network
+from pipeopt.solver.context import NetworkProfile, beam_width_for, classify_network
 
 
 # --- класи ------------------------------------------------------------
@@ -96,3 +96,45 @@ def test_budget_never_decreases_with_network_size():
 
 def test_large_networks_now_get_at_least_the_medium_budget():
     assert NetworkProfile(454).sim_budget >= NetworkProfile(150).sim_budget
+
+
+# --- жодного порогу «200» повз профіль --------------------------------
+
+def test_no_module_hardcodes_the_medium_large_boundary():
+    """Етап 8 звів вісім місць до `NetworkProfile.is_large`; два лишились.
+
+    `swap_search` у `local_search.py` мав власні `num_pipes > 200` і
+    `num_pipes <= 200` — ту саму межу MEDIUM/LARGE, записану числом. Поки
+    вона існує двома копіями, зміна `NETWORK_CLASS_BOUNDS` тихо розведе
+    поведінку спуску з рештою солвера.
+
+    Тест дивиться на вихідники навмисне: жодна поведінкова перевірка не
+    спіймає *дублювання* межі — вона спіймає лише її зсув.
+    """
+    import pathlib
+    import re
+
+    package = pathlib.Path(__file__).resolve().parents[1] / "pipeopt" / "solver"
+    offenders = []
+    for path in sorted(package.glob("*.py")):
+        if path.name == "context.py":
+            continue  # тут межа і визначається
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if line.lstrip().startswith("#"):
+                continue
+            if re.search(r"num_pipes\s*[<>]=?\s*200", line):
+                offenders.append(f"{path.name}:{n}")
+    assert not offenders, (
+        "межа MEDIUM/LARGE мусить читатись із профілю мережі "
+        f"(`ctx.profile.is_large`), а не вписуватись числом: {offenders}")
+
+
+@pytest.mark.parametrize("num_pipes,expected", [
+    (34, False),    # Ханої
+    (199, False),
+    (200, True),    # рівно межа: 200 труб — уже LARGE
+    (454, True),    # Балерма
+    (5000, True),   # XLARGE теж «велика»
+])
+def test_is_large_matches_the_boundary_it_replaced(num_pipes, expected):
+    assert NetworkProfile(num_pipes).is_large is expected

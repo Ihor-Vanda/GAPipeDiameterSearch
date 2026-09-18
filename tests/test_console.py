@@ -12,7 +12,7 @@ import sys
 
 import pytest
 
-from console import DualLogger, format_time, silence_warnings
+from pipeopt.console import DualLogger, format_time, silence_warnings
 
 
 # --- формат тривалості -------------------------------------------------
@@ -140,6 +140,133 @@ def test_the_logger_can_stand_in_for_stdout(tmp_path):
 
 
 # --- глушіння попереджень ----------------------------------------------
+
+# --- термінал, який не вміє того, що вміє файл -------------------------
+#
+# Дефект, знайдений прогоном на Windows 15.09.2026. Файл прогону
+# відкривається в UTF-8 і приймає будь-який символ, а консоль працює в
+# кодуванні локалі — в Україні це cp1251. Емодзі з логів солвера (`⚡`,
+# `💎`, `🧬`, `📡`) у cp1251 не існує, тому `terminal.write` кидав
+# `UnicodeEncodeError` на першому ж рядку прогону.
+#
+# Важливо, **коли саме** це спрацьовує. Інтерактивна консоль у Windows
+# часто вміє UTF-8, тому руками прогін ішов нормально. Але
+# `subprocess.run(..., capture_output=True)` робить stdout трубою, і для
+# труби Python бере кодування локалі. Тобто падало саме те, що запускає
+# прогін підпроцесом: `tools/reference_run.py` і перевірка островів —
+# чотири падіння `pytest` з одного кореня.
+
+
+class Cp1251Terminal:
+    """Консоль, яка вміє українську й не вміє емодзі.
+
+    Саме те, що дає Windows у нашій локалі. `io.TextIOWrapper` з
+    `encoding="cp1251"` поводиться так само, тому підміна чесна, а не
+    умовна: цей об'єкт кидає справжній `UnicodeEncodeError` з того самого
+    кодека.
+    """
+
+    encoding = "cp1251"
+
+    def __init__(self, allow_reconfigure=True):
+        self.written = []
+        self.errors = "strict"
+        self._allow_reconfigure = allow_reconfigure
+
+    def reconfigure(self, errors=None, **_):
+        if not self._allow_reconfigure:
+            raise AttributeError("reconfigure")
+        if errors:
+            self.errors = errors
+
+    def write(self, message):
+        self.written.append(message.encode(self.encoding, self.errors)
+                            .decode(self.encoding))
+
+    def flush(self):
+        pass
+
+
+@pytest.fixture
+def cp1251(monkeypatch):
+    def install(allow_reconfigure=True):
+        terminal = Cp1251Terminal(allow_reconfigure)
+        monkeypatch.setattr(sys, "stdout", terminal)
+        return terminal
+    return install
+
+
+def test_an_emoji_does_not_kill_the_run_on_a_windows_console(tmp_path, cp1251):
+    """Головна перевірка: прогін не має падати через символ у лозі.
+
+    Ціна помилки тут непропорційна причині — багатогодинний пошук
+    зупиняється на першому ж рядку виводу через прикрасу в повідомленні.
+    """
+    terminal = cp1251()
+    logger = DualLogger(str(tmp_path / "logs" / "run.txt"))
+
+    logger.write("[AnalyticalSolver] ⚡ Initiating Island Model Search...\n")
+
+    assert terminal.written, "у термінал не потрапило нічого"
+
+
+def test_the_file_keeps_the_emoji_the_console_could_not_show(tmp_path, cp1251):
+    """Файл у UTF-8 і мусить лишитись повним.
+
+    Обрізати його під можливості консолі означало б втратити дані в
+    єдиному місці, де їх потім читають, — у логу прогону.
+    """
+    cp1251()
+    path = tmp_path / "logs" / "run.txt"
+    logger = DualLogger(str(path))
+
+    logger.write("⚡ старт\n")
+    logger.log.flush()
+
+    assert "⚡" in path.read_text(encoding="utf-8")
+
+
+def test_ukrainian_still_prints_correctly(tmp_path, cp1251):
+    """cp1251 добре друкує українську — і мусить друкувати далі.
+
+    Тому кодування терміналу не перевизначається на UTF-8: це полагодило
+    б емодзі ціною всього решти тексту на консолі з іншою кодовою
+    сторінкою. Замінюються лише символи, яких кодування не має.
+    """
+    terminal = cp1251()
+    logger = DualLogger(str(tmp_path / "logs" / "run.txt"))
+
+    logger.write("Задача нерозв'язна: перевірте одиниці\n")
+
+    assert "Задача нерозв'язна" in "".join(terminal.written)
+
+
+def test_a_terminal_without_reconfigure_is_handled_too(tmp_path, cp1251):
+    """Запасний варіант у `write` для потоку, який не вміє `reconfigure`.
+
+    Такий потік — це, наприклад, підміна в тестах або обгортка стороннього
+    інструменту. Покладатись лише на `reconfigure` означало б лагодити
+    дефект для справжньої консолі й лишати його для всіх обгорток.
+    """
+    terminal = cp1251(allow_reconfigure=False)
+    logger = DualLogger(str(tmp_path / "logs" / "run.txt"))
+
+    logger.write("💎 [SWAP] Micro-Optimization\n")
+
+    assert terminal.written
+
+
+def test_what_the_console_shows_instead_of_an_emoji(tmp_path, cp1251):
+    """Символ замінюється, а не ковтається: рядок лишається читабельним."""
+    terminal = cp1251()
+    logger = DualLogger(str(tmp_path / "logs" / "run.txt"))
+
+    logger.write("⚡ Initiating\n")
+
+    shown = "".join(terminal.written)
+    assert "Initiating" in shown
+    assert "⚡" not in shown
+
 
 def test_warnings_are_silenced_when_the_user_asked_for_nothing(monkeypatch):
     monkeypatch.setattr(sys, "warnoptions", [])

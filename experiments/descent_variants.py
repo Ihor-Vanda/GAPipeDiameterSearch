@@ -44,12 +44,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 warnings.filterwarnings("ignore")
 
-from analytical_solver.context import SolverContext  # noqa: E402
-from analytical_solver.local_search import LocalSearch  # noqa: E402
-from config import SolverConfig  # noqa: E402
-from cost_table import load_cost_table  # noqa: E402
+from pipeopt.solver.context import SolverContext  # noqa: E402
+from pipeopt.solver.local_search import LocalSearch  # noqa: E402
+from pipeopt.config import SolverConfig  # noqa: E402
+from pipeopt.reporting.cost_table import load_cost_table  # noqa: E402
 from make_grid_network import build  # noqa: E402
-from water_sim import WaterSimulator  # noqa: E402
+from pipeopt.hydraulics.water_sim import WaterSimulator  # noqa: E402
 
 VARIANTS = ("baseline", "dontlook", "topk", "both")
 BALERMA_COSTS = os.path.join("InputData", "Balerma", "costs.csv")
@@ -151,7 +151,7 @@ def descent(ctx, local_search, start, dyn_bonus, variant, top_k=None,
 
 def reset_cache(ctx):
     """Однаковий холодний старт для кожного варіанту."""
-    from analytical_solver.cache import LRUCache
+    from pipeopt.solver.cache import LRUCache
     ctx.sim_cache = LRUCache(ctx.sim_cache.maxsize)
     ctx.heuristic_cache = LRUCache(ctx.heuristic_cache.maxsize)
 
@@ -197,8 +197,8 @@ def starting_point(ctx, local_search, kind, perturb=2, seed=42):
     # Гідравлічно осмислений старт: та сама нерухома точка, що в
     # `SeedFactory.make_diverse_seeds`, але без поліровки — інакше
     # порівнювати спуски не було б з чого.
-    from analytical_solver.orchestrator import SeedFactory
-    seeder = SeedFactory(ctx, local_search, 1, 5)
+    from pipeopt.solver.seeds import SeedFactory
+    seeder = SeedFactory(ctx, local_search)
     solution = all_max
     for _ in range(10):
         real = [ctx.diameters[i] for i in solution]

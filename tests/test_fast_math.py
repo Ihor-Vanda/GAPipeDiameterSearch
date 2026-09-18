@@ -15,8 +15,8 @@
 import numpy as np
 import pytest
 
-from analytical_solver.fast_math import (
-    fast_avg_hamming, fast_crossover, fast_dijkstra, fast_hamming_distance,
+from pipeopt.solver.fast_math import (
+    fast_avg_hamming, fast_dijkstra, fast_hamming_distance,
 )
 
 
@@ -154,44 +154,6 @@ def test_the_path_starts_at_a_source_and_ends_at_the_target():
     assert result[-1] == 4
     assert len(result) == 5
 
-
-# --- схрещування ------------------------------------------------------
-
-def crossover(a, b, p_mine):
-    return [int(x) for x in fast_crossover(np.array(a, dtype=np.int32),
-                                           np.array(b, dtype=np.int32),
-                                           p_mine)]
-
-
-def test_agreeing_positions_are_kept_whatever_the_probability():
-    """Головна властивість: спільні гени обох батьків не розігруються.
-    Саме через неї схрещування двох схожих рішень майже не створює
-    нового — і саме тому пул тримає дистанцію Гемінга."""
-    a = [1, 7, 3]
-    b = [1, 9, 3]
-    for p in (0.0, 0.5, 1.0):
-        child = crossover(a, b, p)
-        assert child[0] == 1
-        assert child[2] == 3
-
-
-def test_probability_one_takes_everything_from_the_first_parent():
-    assert crossover([1, 2, 3], [4, 5, 6], 1.0) == [1, 2, 3]
-
-
-def test_probability_zero_takes_everything_from_the_second_parent():
-    assert crossover([1, 2, 3], [4, 5, 6], 0.0) == [4, 5, 6]
-
-
-def test_every_gene_comes_from_one_of_the_parents():
-    np.random.seed(7)
-    a, b = [1, 2, 3, 4, 5], [6, 7, 8, 9, 10]
-    child = crossover(a, b, 0.5)
-    assert all(c in (x, y) for c, x, y in zip(child, a, b))
-
-
-def test_the_child_keeps_the_length_and_the_integer_type():
-    child = fast_crossover(np.array([1, 2], dtype=np.int32),
-                           np.array([3, 4], dtype=np.int32), 0.5)
-    assert len(child) == 2
-    assert child.dtype == np.int32
+# Тести `fast_crossover` прибрані разом із самою функцією: її не
+# викликав жоден робочий шлях, і лише ці тести тримали її живою
+# (та створювали враження 100 % покриття `fast_math.py`).

@@ -14,24 +14,24 @@ from datetime import datetime
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-import cost_table
-import netdraw
-import gui_widgets as widgets
-from analytical_solver.worker import clean_temp_root, get_temp_root
-from gui_results import ResultsViewer
-from gui_widgets import GUIStream
-from runner import OptimizationRunner, RunRequest
+from pipeopt.reporting import cost_table
+from pipeopt.reporting import netdraw
+import pipeopt.ui.gui_widgets as widgets
+from pipeopt.solver.worker import claim_temp_root, clean_temp_root
+from pipeopt.ui.gui_results import ResultsViewer
+from pipeopt.ui.gui_widgets import GUIStream
+from pipeopt.runner import OptimizationRunner, RunRequest
 
 # ==========================================
 # 1 КЛАС GUI ТА ПЕРЕНАПРАВЛЕННЯ ЛОГІВ
 # ==========================================
 
 class PipelineOptimizerApp(ctk.CTk):
-    
+
     # ==========================================
     # 2 App Init & Setup
     # ==========================================
-    
+
     def __init__(self):
         super().__init__()
         self.title("Оптимізатор Водопровідних Мереж")
@@ -45,13 +45,14 @@ class PipelineOptimizerApp(ctk.CTk):
 
         self.selected_inp = None
         self.selected_costs = None
-        self.optimization_thread = None
-        self.stop_event = threading.Event()
-        self.progress_queue = multiprocessing.Queue()
-        self.manager = multiprocessing.Manager()
-        self.shared_progress = self.manager.dict()
 
-        self.opt_process = None
+        # Прибрано як залишки від запуску через окремий процес:
+        # `optimization_thread`, `stop_event`, `opt_process` (прогін іде в
+        # потоці, зупинка — через `is_stopped`), а також `progress_queue`
+        # і `manager`/`shared_progress`. Останні два не просто не читались:
+        # `multiprocessing.Manager()` підіймав окремий процес, а
+        # `multiprocessing.Queue()` — потік-фідер, на весь сеанс GUI.
+        # Обміном між воркерами керує `AnalyticalSolver`, а не вікно.
 
         self.history_sims = []
         self.history_costs = []
@@ -64,19 +65,22 @@ class PipelineOptimizerApp(ctk.CTk):
         self.last_run_dir = None
         self.highest_sims = 0
 
-        # Кеш живої карти мережі.
+        # Кеш живої карти мережі. `_last_drawn_sol` прибрано: воно
+        # писалось двічі й не читалось; за «чи перемальовувати» відповідає
+        # `_last_drawn_cost_for_map`. Полотно й вісь карти створюються не
+        # в `__init__`, а у `_draw_basic_topology`, тому оголошені тут —
+        # інакше `_update_live_network_graph` мусить питати `hasattr`.
         self._last_drawn_cost_for_map = None
-        self._last_drawn_sol = None
         self._live_inp_path = None
+        self._live_geometry = None
         self.topo_cb = None
+        self.topo_fig = None
+        self.topo_ax = None
+        self.topo_canvas = None
 
-        # Вікно результатів.
-        self.available_logs = {}
-
-
-        widgets.setup_treeview_style(self) 
+        widgets.setup_treeview_style(self)
         self._setup_ui()
-        
+
     def _setup_ui(self):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
@@ -87,15 +91,15 @@ class PipelineOptimizerApp(ctk.CTk):
 
         header_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         header_frame.grid(row=0, column=0, pady=10, sticky="ew")
-        
+
         ctk.CTkLabel(header_frame, text="Налаштування", font=self.font_title).pack(side="left", padx=10)
-        
+
         ctk.CTkButton(header_frame, text="A-", width=30, font=self.font_bold, command=lambda: self.change_font_size(-1)).pack(side="right", padx=5)
         ctk.CTkButton(header_frame, text="A+", width=30, font=self.font_bold, command=lambda: self.change_font_size(1)).pack(side="right")
 
         self.tabs = ctk.CTkTabview(self.sidebar)
         self.tabs.grid(row=1, column=0, padx=10, pady=5, sticky="nsew")
-        
+
         tab_main = self.tabs.add("Головні")
         tab_algo = self.tabs.add("Алгоритм")
 
@@ -113,7 +117,7 @@ class PipelineOptimizerApp(ctk.CTk):
         self.ent_runs = ctk.CTkEntry(tab_main, font=self.font_main)
         self.ent_runs.insert(0, "1")
         self.ent_runs.pack(fill="x", pady=5)
-        
+
         ctk.CTkLabel(tab_main, text="Мін. тиск hmin (м):", font=self.font_main).pack(anchor="w", pady=(5,0))
         self.ent_hmin = ctk.CTkEntry(tab_main, font=self.font_main)
         self.ent_hmin.insert(0, "30.0")
@@ -129,7 +133,7 @@ class PipelineOptimizerApp(ctk.CTk):
         self.ent_cores = ctk.CTkEntry(tab_algo, font=self.font_main)
         self.ent_cores.insert(0, "5")
         self.ent_cores.pack(fill="x", pady=5)
-        
+
         ctk.CTkLabel(tab_algo, text="Макс симуляцій (max_sims):", font=self.font_main).pack(anchor="w", pady=(5,0))
         self.ent_sims = ctk.CTkEntry(tab_algo, font=self.font_main)
         self.ent_sims.insert(0, "3000000")
@@ -149,7 +153,7 @@ class PipelineOptimizerApp(ctk.CTk):
 
         self.btn_stop = ctk.CTkButton(self.btn_frame, text="ЗУПИНИТИ", fg_color="#b30000", hover_color="#ff3333", state="disabled", height=40, font=self.font_bold, command=self.stop_thread)
         self.btn_stop.grid(row=0, column=1, padx=(5, 0), sticky="ew")
-        
+
         self.btn_open_history = ctk.CTkButton(self.btn_frame, text="Відкрити минулий запуск", font=self.font_main, command=self.open_past_run, fg_color="transparent", border_width=2)
         self.btn_open_history.grid(row=1, column=0, columnspan=2, pady=(10, 0), sticky="ew")
 
@@ -158,13 +162,13 @@ class PipelineOptimizerApp(ctk.CTk):
 
         self.main_view = ctk.CTkFrame(self)
         self.main_view.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
-        self.main_view.grid_rowconfigure(0, weight=3) 
-        self.main_view.grid_rowconfigure(1, weight=2) 
+        self.main_view.grid_rowconfigure(0, weight=3)
+        self.main_view.grid_rowconfigure(1, weight=2)
         self.main_view.grid_columnconfigure(0, weight=1)
 
         self.main_tabs = ctk.CTkTabview(self.main_view)
         self.main_tabs.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
-        
+
         self.tab_convergence = self.main_tabs.add("Графік Збіжності")
         self.tab_topology = self.main_tabs.add("Прев'ю Мережі (INP)")
         self.tab_costs = self.main_tabs.add("Таблиця Цін (CSV)")
@@ -179,7 +183,7 @@ class PipelineOptimizerApp(ctk.CTk):
         self.ax.set_ylabel("Вартість (М$)")
         self.ax.grid(True, color='gray', linestyle='--', alpha=0.5)
         self.line, = self.ax.step([], [], color='#00ffcc', linewidth=2, where='post')
-        
+
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.tab_convergence)
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(fill="both", expand=True)
@@ -195,7 +199,7 @@ class PipelineOptimizerApp(ctk.CTk):
         self.dash_frame = ctk.CTkFrame(self.log_frame, fg_color="transparent")
         self.dash_frame.grid(row=0, column=0, sticky="ew", pady=(0, 5))
         self.dash_frame.grid_columnconfigure(1, weight=1)
-        
+
         self.lbl_cost = ctk.CTkLabel(self.dash_frame, text="Найкраща вартість: ---", font=self.font_bold)
         self.lbl_cost.grid(row=0, column=0, sticky="w")
         self.lbl_sims = ctk.CTkLabel(self.dash_frame, text="Симуляцій: 0", font=self.font_main)
@@ -208,21 +212,21 @@ class PipelineOptimizerApp(ctk.CTk):
         self.progress = ctk.CTkProgressBar(self.log_frame)
         self.progress.grid(row=2, column=0, pady=10, sticky="ew")
         self.progress.set(0)
-        
+
 
     def change_font_size(self, delta):
         self.base_font_size += delta
         self.base_font_size = max(10, min(self.base_font_size, 24))
-        
+
         self.font_main.configure(size=self.base_font_size)
         self.font_bold.configure(size=self.base_font_size)
         self.font_title.configure(size=self.base_font_size + 4)
         self.font_mono.configure(size=self.base_font_size)
-        
+
     # ==========================================
     # 3 User Events
     # ==========================================
-    
+
     def select_inp(self):
         file_path = filedialog.askopenfilename(title="Вибрати INP файл", filetypes=[("INP files", "*.inp")])
         if file_path:
@@ -242,17 +246,17 @@ class PipelineOptimizerApp(ctk.CTk):
                 widgets.load_dataframe(self.tree_costs_preview, df)
             except Exception as e:
                 messagebox.showerror("Помилка", f"Не вдалося прочитати CSV: {e}")
-                
+
     def on_mode_change(self, _selected_mode):
         self.lbl_cores.configure(text="Острови (cores, реком. >= 5):")
         if self.ent_cores.get() == "0":
             self.ent_cores.delete(0, "end")
             self.ent_cores.insert(0, "5")
-            
+
     # ==========================================
     # 4 Execution/Threading
     # ==========================================
-    
+
     def stop_thread(self):
         if self.is_stopped: return
         self.is_stopped = True
@@ -270,11 +274,11 @@ class PipelineOptimizerApp(ctk.CTk):
         self.is_stopped = False
         self.highest_sims = 0
         self.txt_logs.delete("1.0", "end")
-        
+
         self.clear_realtime_graph()
-        
+
         sys.stdout = GUIStream(self.txt_logs)
-        
+
         worker = threading.Thread(target=self.run_optimization)
         worker.daemon = True
         worker.start()
@@ -290,8 +294,7 @@ class PipelineOptimizerApp(ctk.CTk):
         base_dir = None
         runner = None
         try:
-            clean_temp_root()
-            os.makedirs(get_temp_root(), exist_ok=True)
+            claim_temp_root()
 
             request = self._collect_request()
 
@@ -375,45 +378,45 @@ class PipelineOptimizerApp(ctk.CTk):
         """Перед кожним прогоном: очистити графік збіжності."""
         self.after(0, self.clear_realtime_graph)
         self.highest_sims = 0
-    
+
     # ==========================================
     # 5 Real-time Updates
     # ==========================================
-    
+
     def _update_dashboard(self, sims, best_cost, best_sol=None):
         if best_cost != float('inf'):
             self.lbl_cost.configure(text=f"Найкраща вартість: {best_cost/1e6:.4f} M$")
-            
+
             if best_sol is not None:
                 self._update_live_network_graph(best_sol, best_cost)
-            
+
         if sims < self.highest_sims:
             sims = self.highest_sims
         else:
             self.highest_sims = sims
-            
+
         self.lbl_sims.configure(text=f"Симуляцій: {sims:,}")
-        
+
         try: max_sims = int(self.ent_sims.get())
         except ValueError: max_sims = 0
-            
+
         if max_sims > 0:
             self.progress.set(min(1.0, sims / max_sims))
-            
+
         if best_cost != float('inf'):
             self.history_sims.append(sims)
             self.history_costs.append(best_cost / 1e6)
-            
+
             sorted_data = sorted(zip(self.history_sims, self.history_costs), key=lambda x: x[0])
             self.history_sims = [x[0] for x in sorted_data]
             self.history_costs = [x[1] for x in sorted_data]
-            
+
             self.line.set_data(self.history_sims, self.history_costs)
             self.ax.relim()
             self.ax.autoscale_view()
             self.canvas.draw()
-        
-            
+
+
     def sync_ui_state(self, sims, best_cost, best_sol=None):
         if self.is_stopped:
             raise KeyboardInterrupt("Виконання перервано користувачем")
@@ -426,32 +429,31 @@ class PipelineOptimizerApp(ctk.CTk):
         self.ax.relim()
         self.ax.autoscale_view()
         self.canvas.draw()
-        
+
     def reset_ui(self):
         self.btn_run.configure(state="normal")
         self.btn_stop.configure(state="disabled")
         self.progress.set(1 if not self.is_stopped else 0)
-        
+
         if self.last_run_dir and os.path.exists(os.path.join(self.last_run_dir, "tables")):
             self.btn_view_results.configure(state="normal")
-            
+
         sys.stdout = sys.__stdout__
-        
+
     def _update_live_network_graph(self, best_sol, current_cost):
         if not self.selected_inp or not best_sol: return
-        
+
         if self._last_drawn_cost_for_map == current_cost:
             return
 
         try:
-            if not hasattr(self, 'topo_canvas') or not self.topo_canvas.get_tk_widget().winfo_exists():
+            if self.topo_canvas is None or not self.topo_canvas.get_tk_widget().winfo_exists():
                 self._draw_basic_topology(self.selected_inp)
-                
-            if not hasattr(self, 'topo_ax') or not hasattr(self, 'topo_canvas'):
+
+            if self.topo_ax is None or self.topo_canvas is None:
                 return
 
             self._last_drawn_cost_for_map = current_cost
-            self._last_drawn_sol = list(best_sol)
 
             # Геометрія мережі кешується, поки не змінився .inp: перечитувати
             # її на кожне оновлення прогресу було б дорожче за саме малювання.
@@ -473,29 +475,24 @@ class PipelineOptimizerApp(ctk.CTk):
             self.topo_canvas.draw()
             self.topo_canvas.flush_events()
             self.tab_topology.update_idletasks()
-                   
+
         except Exception:
             import traceback
             err_msg = traceback.format_exc()
             if hasattr(self, 'txt_logs'):
                 self.txt_logs.insert("end", f"\n❌ [GUI ERROR] Помилка малювання:\n{err_msg}\n")
                 self.txt_logs.see("end")
-        
+
     # ==========================================
     # 6 Utilities
     # ==========================================
-    
 
-            
-
-        
-    
     def _draw_basic_topology(self, inp_path):
         for widget in self.tab_topology.winfo_children(): widget.destroy()
-        
-        if hasattr(self, 'topo_fig'):
-            plt.close(self.topo_fig) 
-            
+
+        if self.topo_fig is not None:
+            plt.close(self.topo_fig)
+
         try:
             geometry = netdraw.NetworkGeometry.load(inp_path)
 
@@ -513,22 +510,22 @@ class PipelineOptimizerApp(ctk.CTk):
             )
 
             self.topo_canvas = FigureCanvasTkAgg(self.topo_fig, master=self.tab_topology)
-            
+
             def on_resize(_event):
                 self.topo_ax.autoscale_view(tight=True)
                 self.topo_fig.canvas.draw_idle()
             self.topo_fig.canvas.mpl_connect('resize_event', on_resize)
-            
+
             self.topo_canvas.get_tk_widget().pack(fill="both", expand=True)
             self.topo_canvas.draw()
-            widgets.enable_mouse_navigation(self.topo_fig, self.topo_ax, self.topo_canvas) 
-            
+            widgets.enable_mouse_navigation(self.topo_fig, self.topo_ax, self.topo_canvas)
+
         except Exception as e:
             import traceback
             err_msg = traceback.format_exc()
             print(err_msg)
             ctk.CTkLabel(self.tab_topology, text=f"Не вдалося побудувати граф:\n{e}", font=self.font_main).pack(pady=20)
-    
+
     # ==========================================
     # 7 Results Viewer
     # ==========================================
@@ -553,21 +550,21 @@ class PipelineOptimizerApp(ctk.CTk):
 
     def open_past_run(self):
         directory = filedialog.askdirectory(title="Оберіть папку експерименту (напр. 2026-04-06_15-36-30)")
-        
+
         if directory:
             has_tables = os.path.exists(os.path.join(directory, "tables"))
             has_runs = os.path.exists(os.path.join(directory, "run_1"))
-            
+
             if has_tables or has_runs:
                 self.open_results_viewer(target_dir=directory)
             else:
                 messagebox.showwarning(
-                    "Невірний формат", 
+                    "Невірний формат",
                     "У цій папці не знайдено результатів оптимізації.\nОберіть папку, яка містить 'tables' або 'run_1'."
                 )
-                
 
-                
+
+
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()

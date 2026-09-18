@@ -9,6 +9,13 @@
 Генерується у одиницях Балерми (мм, h_min = 20 м), тією самою таблицею
 цін, тому мережі порівнянні.
 
+Відбір у вузлі (1.5 л/с) підібраний так, щоб **обмеження тиску було
+тісним**. За початкових 0.35 л/с сітка виявилася виродженою: рішення
+«всі труби найтонші» вже допустиме (p_min = 28.6 м за h_min = 20 м),
+тому оптимум тривіальний — 481×100 м×7.22 = 0.3469 M$, і промінь за
+150 тис. симуляцій не знаходить **жодного** рекорда. Полігон, на
+якому пошуку нема чого робити, нічого не перевіряє.
+
     python experiments/make_grid_network.py --rows 24 --cols 24
 """
 
@@ -16,7 +23,7 @@ import argparse
 import os
 
 
-def build(rows, cols, spacing=100.0, demand_lps=0.35, source_head=95.0,
+def build(rows, cols, spacing=100.0, demand_lps=1.5, source_head=95.0,
           ground_elevation=0.0, roughness=130.0, diameter_mm=200.0):
     """Зібрати .inp сітки rows×cols із одним резервуаром у куті.
 
@@ -90,7 +97,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rows", type=int, default=24)
     parser.add_argument("--cols", type=int, default=24)
-    parser.add_argument("--demand", type=float, default=0.35,
+    parser.add_argument("--demand", type=float, default=1.5,
                         help="Відбір у кожному вузлі, л/с")
     parser.add_argument("--head", type=float, default=95.0,
                         help="Напір у резервуарі, м")

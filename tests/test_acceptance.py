@@ -12,8 +12,8 @@
 
 import pytest
 
-from analytical_solver.acceptance import AcceptancePolicy, Verdict
-from analytical_solver.context import NetworkProfile
+from pipeopt.solver.acceptance import AcceptancePolicy, Verdict
+from pipeopt.solver.context import NetworkProfile
 
 SMALL_NETWORK = NetworkProfile(34)     # Ханої
 LARGE_NETWORK = NetworkProfile(454)    # Балерма

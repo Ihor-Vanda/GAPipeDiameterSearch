@@ -15,7 +15,7 @@ import networkx as nx  # noqa: E402
 import pandas as pd  # noqa: E402
 import pytest  # noqa: E402
 
-import netdraw  # noqa: E402
+from pipeopt.reporting import netdraw  # noqa: E402
 
 
 # --- шкала діаметрів --------------------------------------------------

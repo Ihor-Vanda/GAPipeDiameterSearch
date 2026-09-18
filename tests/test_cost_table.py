@@ -17,8 +17,8 @@ import os
 import pandas as pd
 import pytest
 
-from config import SolverConfig
-from cost_table import diameter_table, load_cost_table, read_cost_table
+from pipeopt.config import SolverConfig
+from pipeopt.reporting.cost_table import diameter_table, load_cost_table, read_cost_table
 
 HANOI_COSTS = os.path.join("InputData", "Hanoi", "costs.csv")
 

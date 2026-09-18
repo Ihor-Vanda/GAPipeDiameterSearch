@@ -24,9 +24,9 @@ import pytest
 
 wntr = pytest.importorskip("wntr", reason="EPANET/wntr недоступний")
 
-from config import SolverConfig  # noqa: E402
-from cost_table import load_cost_table  # noqa: E402
-from water_sim import WaterSimulator  # noqa: E402
+from pipeopt.config import SolverConfig  # noqa: E402
+from pipeopt.reporting.cost_table import load_cost_table  # noqa: E402
+from pipeopt.hydraulics.water_sim import WaterSimulator  # noqa: E402
 
 HANOI_INP = os.path.join("InputData", "Hanoi", "Hanoi.inp")
 HANOI_COSTS = os.path.join("InputData", "Hanoi", "costs.csv")

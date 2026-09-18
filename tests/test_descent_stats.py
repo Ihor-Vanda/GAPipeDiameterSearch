@@ -13,7 +13,7 @@ import random
 
 import pytest
 
-from analytical_solver.local_search import DescentStats, LocalSearch
+from pipeopt.solver.local_search import DescentStats, LocalSearch
 
 
 @pytest.fixture
@@ -83,7 +83,7 @@ def test_snapshot_reports_every_counter(stats):
 # --- лічильники в реальному спуску ------------------------------------
 
 def descend(sim, quick_mode=False):
-    from analytical_solver.context import SolverContext
+    from pipeopt.solver.context import SolverContext
 
     random.seed(1)
     ctx = SolverContext(sim, sim.config.diameters_m, v_opt=1.0)

@@ -10,7 +10,7 @@ import multiprocessing
 
 import pytest
 
-from runner import OptimizationRunner, RunRequest, RunResult
+from pipeopt.runner import OptimizationRunner, RunRequest, RunResult
 
 
 def make_request(**kw):
@@ -224,7 +224,7 @@ class _SpySolver:
 @pytest.fixture
 def spied_runner(monkeypatch, sim):
     """Раннер із підставним солвером і фальшивим симулятором."""
-    import runner as runner_module
+    import pipeopt.runner as runner_module
 
     monkeypatch.setattr(runner_module, "AnalyticalSolver", _SpySolver)
 

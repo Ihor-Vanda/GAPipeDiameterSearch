@@ -5,7 +5,7 @@ import pytest
 
 @pytest.fixture
 def pool(ctx):
-    from analytical_solver.pool import SolutionPool
+    from pipeopt.solver.pool import SolutionPool
 
     return SolutionPool(ctx)
 
@@ -75,8 +75,8 @@ def big_pool():
     """Пул для мережі > 50 труб — там підпис басейну вже не дорівнює вектору."""
     from conftest import FakeConfig, FakeSimulator
 
-    from analytical_solver.context import SolverContext
-    from analytical_solver.pool import SolutionPool
+    from pipeopt.solver.context import SolverContext
+    from pipeopt.solver.pool import SolutionPool
 
     big = FakeSimulator(n_pipes=60, config=FakeConfig())
     return SolutionPool(SolverContext(big, big.config.diameters_m))

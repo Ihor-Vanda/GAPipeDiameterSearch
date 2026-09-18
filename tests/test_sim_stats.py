@@ -1,6 +1,6 @@
 """SimStats — іменований результат симуляції замість кортежу з пасткою."""
 
-from sim_stats import SimStats
+from pipeopt.hydraulics.sim_stats import SimStats
 
 
 def test_unpacks_like_the_old_tuple():

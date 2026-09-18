@@ -40,12 +40,12 @@ warnings.filterwarnings("ignore")
 
 import networkx as nx  # noqa: E402
 
-from analytical_solver.context import SolverContext  # noqa: E402
-from analytical_solver.local_search import LocalSearch  # noqa: E402
-from config import SolverConfig  # noqa: E402
-from cost_table import load_cost_table  # noqa: E402
+from pipeopt.solver.context import SolverContext  # noqa: E402
+from pipeopt.solver.local_search import LocalSearch  # noqa: E402
+from pipeopt.config import SolverConfig  # noqa: E402
+from pipeopt.reporting.cost_table import load_cost_table  # noqa: E402
 from make_grid_network import build  # noqa: E402
-from water_sim import WaterSimulator  # noqa: E402
+from pipeopt.hydraulics.water_sim import WaterSimulator  # noqa: E402
 
 #: Показник Хазена-Вільямса для діаметра.
 DIAMETER_EXPONENT = 4.87
@@ -143,7 +143,7 @@ def spearman(xs, ys):
 
 def evaluate(ctx, local_search, name, h_min, sample_limit, mode="paths"):
     """Порівняти оцінку з фактом на зійшовшомуся розв'язку."""
-    graph = ctx.simulator.wn.get_graph() if hasattr(ctx.simulator, "wn") else None
+    graph = ctx.simulator.wn.to_graph() if hasattr(ctx.simulator, "wn") else None
     loops = (graph.number_of_edges() - graph.number_of_nodes() + 1) if graph else None
 
     start = [ctx.max_d_idx] * ctx.num_pipes

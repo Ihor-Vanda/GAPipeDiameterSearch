@@ -11,7 +11,7 @@ import random
 
 import pytest
 
-from analytical_solver.strategy_selector import StrategySelector
+from pipeopt.solver.strategy_selector import StrategySelector
 
 STRATEGIES = ("SHOCK", "BOTTLENECK", "TRIM", "RUIN_RECREATE")
 

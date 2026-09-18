@@ -33,23 +33,23 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 warnings.filterwarnings("ignore")
 
-from analytical_solver import orchestrator  # noqa: E402
-from analytical_solver.context import (  # noqa: E402
+from pipeopt.solver import island  # noqa: E402
+from pipeopt.solver.context import (  # noqa: E402
     SolverContext, beam_width_for, classify_network,
 )
-from analytical_solver.kick_registry import KICK_REGISTRY  # noqa: E402
-from analytical_solver.kicks import KickStrategies  # noqa: E402
-from analytical_solver.local_search import LocalSearch  # noqa: E402
-from config import SolverConfig  # noqa: E402
-from cost_table import load_cost_table  # noqa: E402
-from water_sim import WaterSimulator  # noqa: E402
+from pipeopt.solver.kick_registry import KICK_REGISTRY  # noqa: E402
+from pipeopt.solver.kicks import KickStrategies  # noqa: E402
+from pipeopt.solver.local_search import LocalSearch  # noqa: E402
+from pipeopt.config import SolverConfig  # noqa: E402
+from pipeopt.reporting.cost_table import load_cost_table  # noqa: E402
+from pipeopt.hydraulics.water_sim import WaterSimulator  # noqa: E402
 
 #: Пороги, які перевіряються: задумані межі фільтра плюс ширші, щоб
 #: побачити, чи розрив узагалі доростає до чогось помітного.
 GAP_THRESHOLDS = (0.05, 0.08, 0.10, 0.15, 0.20)
 
 
-class ProbedWorker(orchestrator.IslandWorker):
+class ProbedWorker(island.IslandWorker):
     """Воркер, який записує склад пулу перед кожним кіком."""
 
     def __init__(self, *args, **kwargs):
@@ -119,8 +119,7 @@ def run_probe(inp_file, cost_file, h_min, max_sims, seed, units):
     network_class = classify_network(ctx.num_pipes)
 
     worker = ProbedWorker(ctx, KickStrategies(ctx, local_search), local_search,
-                          0, 1, max_sims, beam_width_for(network_class),
-                          network_class, [])
+                          0, 1, max_sims, beam_width_for(network_class), [])
     worker.run(float("inf"), float("inf"), None)
     return worker, ctx
 

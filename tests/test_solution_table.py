@@ -14,8 +14,8 @@
 import pandas as pd
 import pytest
 
-import netdraw
-from solution_table import (
+from pipeopt.reporting import netdraw
+from pipeopt.reporting.solution_table import (
     diameter_column, display_name, display_value, for_display, is_index,
     real_diameter, with_real_diameters,
 )

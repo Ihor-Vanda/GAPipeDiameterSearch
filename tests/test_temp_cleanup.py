@@ -6,24 +6,39 @@
 дерево файлів. Помилка в такій функції дорога незалежно від того, чи
 хтось її помітить.
 
-Каталог визначається як `os.path.abspath("_temp_sim_data")`, тобто
-**відносно поточного каталогу**. Це і робить тести можливими без
-підмін: `monkeypatch.chdir(tmp_path)` переносить увесь корінь у
-тимчасове місце.
+Каталог визначається **відносно поточного каталогу**. Це і робить тести
+можливими без підмін: `monkeypatch.chdir(tmp_path)` переносить увесь
+корінь у тимчасове місце.
+
+З етапу 28 корінь у кожного прогону **свій**:
+`_temp_sim_data/run_<pid>`. Доти він був спільний, і два прогони з
+однієї теки зносили файли одне одному — див. блок «два прогони поруч»
+наприкінці файлу, який і є регресією на цей дефект.
 """
 
 import os
 
 import pytest
 
-from analytical_solver.worker import clean_temp_root, get_temp_root
+from pipeopt.solver.worker import (RUN_DIR_ENV, claim_temp_root,
+                                   clean_temp_root, get_temp_root)
+
+
+@pytest.fixture(autouse=True)
+def no_inherited_run_dir(monkeypatch):
+    """Кожен тест рахує корінь сам, а не успадковує чужий.
+
+    Без цього перший тест, який викликає `claim_temp_root`, лишив би
+    змінну середовища всім наступним — і вони б чистили не свій каталог.
+    """
+    monkeypatch.delenv(RUN_DIR_ENV, raising=False)
 
 
 @pytest.fixture
 def temp_root(tmp_path, monkeypatch):
-    """Корінь тимчасових файлів усередині `tmp_path`, із двома воркерами."""
+    """Корінь **цього прогону** всередині `tmp_path`, із двома воркерами."""
     monkeypatch.chdir(tmp_path)
-    root = tmp_path / "_temp_sim_data"
+    root = tmp_path / "_temp_sim_data" / f"run_{os.getpid()}"
 
     for pid in (101, 202):
         worker = root / f"worker_{pid}"
@@ -43,7 +58,8 @@ def temp_root(tmp_path, monkeypatch):
 
 def test_the_root_is_relative_to_the_current_directory(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    assert get_temp_root() == str(tmp_path / "_temp_sim_data")
+    assert get_temp_root() == str(
+        tmp_path / "_temp_sim_data" / f"run_{os.getpid()}")
 
 
 def test_the_root_is_absolute(tmp_path, monkeypatch):
@@ -169,3 +185,98 @@ def test_a_successful_cleanup_says_nothing(temp_root, capsys):
     assert temp_root.exists()
     clean_temp_root()
     assert capsys.readouterr().out == ""
+
+
+# --- два прогони поруч -------------------------------------------------
+
+def test_each_run_gets_its_own_root(tmp_path, monkeypatch):
+    """Корінь містить PID, інакше два прогони писали б в один каталог."""
+    monkeypatch.chdir(tmp_path)
+
+    assert f"run_{os.getpid()}" in get_temp_root()
+
+
+def test_cleaning_one_run_does_not_touch_another(tmp_path, monkeypatch):
+    """Регресія на дефект, через який один прогін убивав інший.
+
+    Раніше `clean_temp_root` зносила **спільний** `_temp_sim_data`, тому
+    прогін, що фінішував першим, забирав файли з-під того, хто ще
+    працював; другий падав на передпольотній перевірці з `No such file or
+    directory`, і це виглядало як помилка вхідних даних.
+    """
+    monkeypatch.chdir(tmp_path)
+    shared = tmp_path / "_temp_sim_data"
+    neighbour = shared / "run_999999"
+    neighbour.mkdir(parents=True)
+    (neighbour / "temp_rpt_1.rpt").write_text("сусід ще працює", encoding="utf-8")
+
+    mine = claim_temp_root()
+    (os.path.join(mine, "temp_rpt_2.rpt"))
+    clean_temp_root()
+
+    assert not os.path.exists(mine), "свій корінь мав зникнути"
+    assert (neighbour / "temp_rpt_1.rpt").exists(), (
+        "чужий прогін не має права постраждати від чужого прибирання")
+
+
+def test_the_shared_root_survives_while_a_neighbour_is_there(tmp_path,
+                                                             monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    shared = tmp_path / "_temp_sim_data"
+    (shared / "run_999999").mkdir(parents=True)
+
+    claim_temp_root()
+    clean_temp_root()
+
+    assert shared.exists(), "спільний корінь ще комусь потрібен"
+
+
+def test_the_shared_root_goes_away_when_it_empties(tmp_path, monkeypatch):
+    """Інакше `_temp_sim_data` лишався б назавжди після кожного прогону."""
+    monkeypatch.chdir(tmp_path)
+
+    claim_temp_root()
+    clean_temp_root()
+
+    assert not (tmp_path / "_temp_sim_data").exists()
+
+
+def test_workers_share_the_root_of_their_run(tmp_path, monkeypatch):
+    """Воркер — окремий процес з іншим PID; корінь він бере зі змінної."""
+    monkeypatch.chdir(tmp_path)
+    mine = claim_temp_root()
+
+    monkeypatch.setattr(os, "getpid", lambda: 4242)
+
+    assert get_temp_root() == mine
+
+
+def test_claiming_wipes_a_leftover_of_a_dead_run_with_the_same_pid(
+        tmp_path, monkeypatch):
+    """PID-и переживають процеси, і каталог міг лишитись від померлого."""
+    monkeypatch.chdir(tmp_path)
+    stale = tmp_path / "_temp_sim_data" / f"run_{os.getpid()}"
+    stale.mkdir(parents=True)
+    (stale / "temp_rpt_old.rpt").write_text("сміття", encoding="utf-8")
+
+    claim_temp_root()
+
+    assert not (stale / "temp_rpt_old.rpt").exists()
+
+
+def test_claiming_twice_keeps_the_files_of_the_running_run(tmp_path,
+                                                           monkeypatch):
+    """`OptimizationRunner.prepare` закріплює корінь удруге.
+
+    Якби другий виклик чистив каталог, він видалив би файли, якими
+    головний процес уже користується.
+    """
+    monkeypatch.chdir(tmp_path)
+    root = claim_temp_root()
+    live = os.path.join(root, "temp_rpt_live.rpt")
+    with open(live, "w", encoding="utf-8") as handle:
+        handle.write("прогін іде")
+
+    claim_temp_root()
+
+    assert os.path.exists(live)

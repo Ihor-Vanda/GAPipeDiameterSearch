@@ -1,0 +1,18 @@
+# Метадані пакета. Потрібні не для публікації, а для `pip install -e .`:
+# після цього `import pipeopt` працює з будь-якого каталогу, і тести та
+# скрипти в `experiments/` перестають залежати від того, звідки їх
+# запустили. Доти кожен такий файл робив `sys.path.insert(0, ROOT)`
+# вручну.
+
+[project]
+name = "pipeopt"
+version = "1.0.0"
+description = "Оптимізація діаметрів труб водопровідної мережі (ILS + острівна модель)"
+requires-python = ">=3.11"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["pipeopt*"]

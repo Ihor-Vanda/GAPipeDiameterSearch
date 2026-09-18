@@ -5,28 +5,31 @@ import os
 import sys
 from datetime import datetime
 
-from analytical_solver.worker import clean_temp_root, get_temp_root
-from console import DualLogger, silence_warnings
-from runner import OptimizationRunner, RunRequest, setup_run_directory
+from pipeopt.solver.worker import claim_temp_root, clean_temp_root
+from pipeopt.console import DualLogger, silence_warnings
+from pipeopt.runner import OptimizationRunner, RunRequest, setup_run_directory
 
 silence_warnings()
 
 
-def main():
-    multiprocessing.freeze_support()
+def build_parser():
+    """Аргументи CLI.
 
+    Винесено з `main()` на етапі 18: доти розбір аргументів не мав жодного
+    тесту, бо перевірити його можна було лише запустивши прогін цілком.
+    """
     parser = argparse.ArgumentParser(description="Analytical Solver for WDN")
-    
+
     parser.add_argument("--config", type=str, default=None, help="Path to JSON config file (overrides other args)")
     parser.add_argument("--max_sims", type=int, default=None, help="Global simulation budget (e.g., 15000000)")
-    
+
     parser.add_argument("--inp", type=str, default="InputData/Hanoi/Hanoi.inp", help="Path to EPANET .inp file")
     parser.add_argument("--costs", type=str, default="InputData/Hanoi/costs.csv", help="Path to cost configuration JSON")
     parser.add_argument("--runs", type=int, default=1, help="Number of independent runs")
     parser.add_argument("--hmin", type=float, default=30.0, help="Minimum allowable head (pressure)")
     parser.add_argument("--units", type=str, choices=["in", "mm"], default="mm", help="Units for pipe diameters")
     parser.add_argument("--cores", type=int, default=0, help="Number of CPU cores (0 = all)")
-    
+
     parser.add_argument("--run_mode", type=str, choices=["fast_analytical", "analytical"], default="analytical", help="Mode: fast analytical or analytical")
     parser.add_argument("--v_opt", type=float, default=1.0, help="Optimal velocity (m/s) for analytical solver")
     parser.add_argument("--seed", type=int, default=None,
@@ -42,15 +45,54 @@ def main():
                              "--max_sims). Default: derived from the calibrated simulator speed, "
                              "which makes the stopping point machine- and load-dependent.")
 
-    args, unknown = parser.parse_known_args()
-    
-    if args.config and os.path.exists(args.config):
-        with open(args.config, 'r', encoding='utf-8') as f:
-            config_data = json.load(f)
-            cli_args_used = [arg.strip('-') for arg in sys.argv if arg.startswith('--')]
-            for key, value in config_data.items():
-                if key not in cli_args_used and hasattr(args, key):
-                    setattr(args, key, value)
+    return parser
+
+
+def apply_config_file(args, argv=None):
+    """Накласти JSON-конфіг на аргументи — не перекриваючи того, що ввели руками.
+
+    Правило саме таке: значення з файлу програє явному прапорцю в
+    командному рядку. Інакше конфіг для серії прогонів мовчки ігнорував би
+    `--seed`, яким цю серію й розрізняють.
+
+    Невідомі ключі у файлі пропускаються: конфіги пишуться руками, і
+    падати через зайвий рядок було б гірше, ніж його не помітити.
+    """
+    if not args.config or not os.path.exists(args.config):
+        return args
+
+    argv = sys.argv if argv is None else argv
+    explicit = {arg.lstrip('-').split('=')[0] for arg in argv if arg.startswith('--')}
+
+    with open(args.config, encoding='utf-8') as f:
+        config_data = json.load(f)
+    for key, value in config_data.items():
+        if key not in explicit and hasattr(args, key):
+            setattr(args, key, value)
+    return args
+
+
+def request_from_args(args):
+    """`RunRequest` із розібраних аргументів.
+
+    Окремо від `main()`, щоб перевірити, що прапорці доходять до запиту
+    без спотворень: `--sequential` і `--time_limit` дають дві похідні
+    величини (`effective_cores`, `solver_time_limit`), і саме там колись
+    губився режим відтворюваності.
+    """
+    return RunRequest(
+        inp_file=os.path.abspath(args.inp), cost_file=os.path.abspath(args.costs),
+        h_min=args.hmin, units=args.units, v_opt=args.v_opt, runs=args.runs,
+        cores=args.cores, max_sims=args.max_sims, run_mode=args.run_mode,
+        time_limit=args.time_limit, sequential=args.sequential,
+    )
+
+
+def main():
+    multiprocessing.freeze_support()
+
+    args, _unknown = build_parser().parse_known_args()
+    apply_config_file(args)
 
     # Порядок обходу множин з рядковими ключами (імена вузлів мережі) залежить
     # від PYTHONHASHSEED, який Python рандомізує на кожен процес. Через це
@@ -66,9 +108,6 @@ def main():
             os.environ["PYTHONHASHSEED"] = "0"
             os.execv(sys.executable, [sys.executable] + sys.argv)
 
-    args.inp = os.path.abspath(args.inp)
-    args.costs = os.path.abspath(args.costs)
-
     # Сіється RNG головного процесу. Від нього залежать:
     #  * `solve_fast` цілком (свіп швидкостей + gradient_squeeze виконуються тут);
     #  * `seed_modifier` в `solve_standalone`, з якого воркери дістають власні seed.
@@ -79,8 +118,11 @@ def main():
         _random.seed(args.seed)
         _np.random.seed(args.seed)
 
-    clean_temp_root()
-    os.makedirs(get_temp_root(), exist_ok=True)
+    # Корінь закріплюється за цим прогоном: `claim_temp_root` створює
+    # `_temp_sim_data/run_<pid>` і передає його воркерам. Раніше тут
+    # стояло `clean_temp_root()`, яке зносило **спільний** корінь — тобто
+    # прогін, стартуючи, вбивав сусідній, що вже працював.
+    claim_temp_root()
 
     base_dir = setup_run_directory()
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -88,14 +130,10 @@ def main():
     sys.stdout = DualLogger(log_file)
     sys.stderr = sys.stdout
 
-    request = RunRequest(
-        inp_file=args.inp, cost_file=args.costs, h_min=args.hmin, units=args.units,
-        v_opt=args.v_opt, runs=args.runs, cores=args.cores, max_sims=args.max_sims,
-        run_mode=args.run_mode, time_limit=args.time_limit, sequential=args.sequential,
-    )
+    request = request_from_args(args)
 
     print("==============================================")
-    print(f"   ANALYTICAL OPTIMIZER: {os.path.basename(args.inp)}")
+    print(f"   ANALYTICAL OPTIMIZER: {os.path.basename(request.inp_file)}")
     print(f"   Mode: {request.run_mode.upper()} | Cores: {request.effective_cores}")
     print(f"   Seed: {args.seed if args.seed is not None else 'random (not reproducible)'}")
     print("==============================================")

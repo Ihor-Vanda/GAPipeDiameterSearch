@@ -5,7 +5,7 @@ import pytest
 
 @pytest.fixture
 def ls(ctx):
-    from analytical_solver.local_search import LocalSearch
+    from pipeopt.solver.local_search import LocalSearch
 
     return LocalSearch(ctx)
 

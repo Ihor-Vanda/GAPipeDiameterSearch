@@ -8,7 +8,7 @@
 
 import pytest
 
-from analytical_solver.adaptive_rates import AdaptiveRates
+from pipeopt.solver.adaptive_rates import AdaptiveRates
 
 
 def test_starts_at_the_documented_defaults():

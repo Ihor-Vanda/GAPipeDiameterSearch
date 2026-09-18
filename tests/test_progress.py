@@ -11,10 +11,10 @@
 
 import pytest
 
-from analytical_solver.context import SolverContext
-from analytical_solver.kicks import KickStrategies
-from analytical_solver.local_search import LocalSearch
-from analytical_solver.orchestrator import IslandWorker
+from pipeopt.solver.context import SolverContext
+from pipeopt.solver.kicks import KickStrategies
+from pipeopt.solver.local_search import LocalSearch
+from pipeopt.solver.island import IslandWorker
 
 INFINITY = float("inf")
 
@@ -25,7 +25,7 @@ def worker_factory(sim):
         ctx = SolverContext(sim, sim.config.diameters_m, v_opt=1.0)
         local_search = LocalSearch(ctx)
         return IslandWorker(ctx, KickStrategies(ctx, local_search), local_search,
-                            0, 1, max_sims, 5, "SMALL", [])
+                            0, 1, max_sims, 5, [])
 
     return make
 

@@ -5,7 +5,7 @@
 детермінізм і якість результату. Виконується за секунди, тому може стояти в
 CI і запускатись після кожного етапу.
 
-Симулятор процесу задається явно через `analytical_solver.worker.set_simulator`.
+Симулятор процесу задається явно через `pipeopt.solver.worker.set_simulator`.
 До етапу 4 тест мусив підсовувати його в `__main__.worker_sim_instance`, бо
 саме звідти його діставав `AnalyticalSolver.worker_task`.
 """
@@ -15,8 +15,8 @@ import random
 import numpy as np
 import pytest
 
-from analytical_solver import AnalyticalSolver
-from analytical_solver.worker import set_simulator
+from pipeopt.solver import AnalyticalSolver
+from pipeopt.solver.worker import set_simulator
 
 pytestmark = pytest.mark.slow
 

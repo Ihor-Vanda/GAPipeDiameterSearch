@@ -7,8 +7,8 @@
 
 import pytest
 
-from analytical_solver.context import beam_width_for, classify_network
-from analytical_solver.worker import (
+from pipeopt.solver.context import beam_width_for, classify_network
+from pipeopt.solver.worker import (
     WorkerResult,
     WorkerTask,
     get_temp_root,

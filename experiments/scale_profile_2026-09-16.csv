@@ -1,0 +1,4 @@
+network,pipes,class,sim_rate,seed_sims,seed_s,seed_pct,beam_sims,beam_pct,rounds,sims_per_round,kick_sims,kick_pct,kicks,sims_to_first_kick,total_sims,wall_s
+Hanoi,34,SMALL,5897.7,792,1.18,0.4,172803,86.0,861,200,23765,11.8,832,3271,200932,35.4
+Foss,58,MEDIUM,3200.3,2407,0.66,1.2,176024,86.8,388,453,20003,9.9,350,35240,202688,57.5
+Balerma,454,LARGE,545.0,14956,28.82,6.4,216045,93.0,10,21604,1350,0.6,1,157579,232351,430.5

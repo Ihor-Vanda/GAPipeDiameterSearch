@@ -16,7 +16,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from sim_stats import SimStats  # noqa: E402
+from pipeopt.hydraulics.sim_stats import SimStats  # noqa: E402
 
 
 @dataclass
@@ -120,6 +120,148 @@ def sim():
 
 @pytest.fixture
 def ctx(sim):
-    from analytical_solver.context import SolverContext
+    from pipeopt.solver.context import SolverContext
 
     return SolverContext(sim, sim.config.diameters_m, v_opt=1.0)
+
+
+class LoopedSimulator(FakeSimulator):
+    """Мережа з двома циклами і периферійною віткою.
+
+    `FakeSimulator` — ланцюг, і цього довго було досить. Але рівно через
+    відсутність циклів **три кіки не перевірялись по суті**: вони
+    виходили на «нічого не знайдено» в перших рядках і повертали
+    `failure()`, тому тест «кік не впав» проходив, нічого не перевіривши:
+
+    * `loop_balancing_kick` — `nx.cycle_basis` на ланцюзі дає порожній
+      список, вихід «No cycles found» (покриття 53 %);
+    * `topological_inversion_kick` — у ланцюзі єдиний шлях до критичного
+      вузла збігається з домінантним, альтернатив немає, вихід
+      «All paths tabu» (покриття 73 %);
+    * `peripheral_trim_kick` — домінантний шлях у ланцюзі проходить
+      **усіма** трубами, тому `get_lazy_periphery` завжди повертає
+      порожній список, вихід «No targets».
+
+    Топологія (R — джерело, G — тупик):
+
+        R --P1-- A --P2-- B --P3-- C
+                 |        |        |
+                P4       P5       P6
+                 |        |        |
+                 D --P7-- E --P8-- F --P9-- G
+
+    Два незалежні цикли (A-B-E-D і B-C-F-E) і тупикова вітка P9, яка
+    гарантує непорожню периферію. 9 труб, 8 вузлів.
+
+    Гідравліка спрощена так само, як у ланцюзі, і з тієї ж причини —
+    тест мусить бути детермінованим і не тягнути EPANET:
+
+    * витрата кожної труби **фіксована** (не залежить від діаметрів) і
+      взята з кореневого дерева обходу: труба несе відбори всіх вузлів
+      під собою. Двом трубам, що замикають цикли, призначено невелику
+      транзитну витрату;
+    * напір у вузлі = напір джерела мінус **найменша** сума втрат серед
+      усіх шляхів до нього. Це та властивість, заради якої існують цикли:
+      розширення труби на будь-якому зі шляхів піднімає напір, а поява
+      дешевого обходу робить цикл корисним. Саме її й перевіряють
+      `LOOP_BALANCE` і `TOPO-INV`.
+    """
+
+    # Підібрано так, щоб межа допустимості пройшла серединою таблиці
+    # діаметрів: [0]*9 і [1]*9 недопустимі за тиском, [2]*9 і [3]*9
+    # допустимі. Інакше `heal_network` у тестах або не мав би що робити,
+    # або мусив би виводити все на максимум.
+    C = 2.0e-2
+
+    #: (ім'я, вузол-початок, вузол-кінець, витрата в частках відбору).
+    #: Частки — розміри піддерев обходу від R; 1.5 у двох трубах, що
+    #: замикають цикли, — транзит, який дерево обходу не описує.
+    TOPOLOGY = (
+        ("P1", "R", "A", 7.0),
+        ("P2", "A", "B", 5.0),
+        ("P3", "B", "C", 3.0),
+        ("P4", "A", "D", 1.0),
+        ("P5", "B", "E", 1.0),
+        ("P6", "C", "F", 2.0),
+        ("P7", "D", "E", 1.5),
+        ("P8", "E", "F", 1.5),
+        ("P9", "F", "G", 1.0),
+    )
+
+    def __init__(self, config=None, source_head=100.0, demand=0.03):
+        super().__init__(n_pipes=len(self.TOPOLOGY), config=config,
+                         source_head=source_head, demand=demand)
+
+        self.component_names = [name for name, _, _, _ in self.TOPOLOGY]
+        self.node_names = ["R", "A", "B", "C", "D", "E", "F", "G"]
+        self.sources = ["R"]
+        self.flow_shares = [share for _, _, _, share in self.TOPOLOGY]
+
+        self.graph = nx.MultiGraph()
+        for name, u, v, _ in self.TOPOLOGY:
+            self.graph.add_edge(u, v, key=name)
+
+    def _flows(self):
+        return [share * self.demand for share in self.flow_shares]
+
+    def _heads(self, indices):
+        """Напір у кожному вузлі: найдешевший за втратами шлях від джерела."""
+        losses = self._losses(indices)
+        weighted = nx.Graph()
+        for pipe_no, (name, u, v, _) in enumerate(self.TOPOLOGY):
+            weighted.add_edge(u, v, weight=losses[pipe_no])
+        drops = nx.single_source_dijkstra_path_length(weighted, "R", weight="weight")
+        return {node: self.source_head - drop for node, drop in drops.items()}
+
+    def get_stats(self, indices):
+        self.sim_count += 1
+        heads = self._heads(indices)
+        junctions = [node for node in self.node_names if node != "R"]
+        pressures = {node: heads[node] for node in junctions}
+        crit_node = min(pressures, key=pressures.get)
+        return SimStats(self._cost(indices), pressures[crit_node],
+                        max(pressures.values()), crit_node)
+
+
+@pytest.fixture
+def looped_sim():
+    return LoopedSimulator()
+
+
+@pytest.fixture
+def looped_ctx(looped_sim):
+    from pipeopt.solver.context import SolverContext
+
+    return SolverContext(looped_sim, looped_sim.config.diameters_m, v_opt=1.0)
+
+
+#: Модулі пакета `pipeopt/solver/island`. Список перевіряється самою
+#: фікстурою — інакше вона тихо перестане сканувати те, що переїхало.
+ISLAND_MODULES = ("__init__.py", "beam.py", "diversification.py",
+                  "exchange.py", "loop.py", "state.py")
+
+
+@pytest.fixture(scope="session")
+def island_source():
+    """Весь текст пакета `island` одним рядком.
+
+    Кілька тестів шукають у вихідному тексті дублювання констант — колись
+    вони брали `inspect.getsource(IslandWorker)`, і це працювало, поки
+    клас був один файл на 1283 рядки. Після розділення на домішки той
+    самий виклик повертає **тільки** тіло зібраного класу, тобто десяток
+    рядків: перевірка проходила б завжди, нічого не перевіряючи.
+
+    Точно так само вже ламалась перевірка контракту кіків після
+    розділення `kicks.py` (етап 20), тому тут список модулів звіряється з
+    диском **усередині фікстури**: розійшовся — падають усі тести, які
+    нею користуються, а не мовчки зеленіють.
+    """
+    package = Path(__file__).resolve().parents[1] / "pipeopt" / "solver" / "island"
+    on_disk = {path.name for path in package.glob("*.py")}
+
+    assert on_disk == set(ISLAND_MODULES), (
+        f"модулі пакета island змінились: на диску {sorted(on_disk)}, "
+        f"скануються {sorted(ISLAND_MODULES)}")
+
+    return "\n".join((package / name).read_text(encoding="utf-8")
+                     for name in ISLAND_MODULES)

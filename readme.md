@@ -2,7 +2,28 @@
 
 > **Платформа:** Python 3.10+, Windows/Linux  
 > **Метод:** Iterated Local Search + UCB1-адаптація + Island Model паралелізм  
-> **Задача:** мінімізація капітальної вартості мережі водопостачання при виконанні обмежень тиску
+> **Задача:** мінімізація капітальної вартості мережі водопостачання при виконанні обмежень тиску  
+> **Звірено з кодом:** 15.09.2026 (етап 20)
+
+---
+
+### Як читати цей документ
+
+До 15.09 він розійшовся з кодом на п'ять місяців і описував речі, яких у
+проєкті вже не було: модулі `ga_*`, епохи, `make_warm_seeds`,
+`baseline_bonus`, функцію штрафу «для GA-режиму». Описаний і неробочий
+механізм гірший за відсутній — на нього спираються, і він підводить у
+найгірший момент.
+
+Тому тепер у документі два види тверджень, і вони розрізняються:
+
+* **як воно працює** — звірено з кодом станом на дату вгорі;
+* **чого тут більше немає** — явні врізки про прибране, з номером етапу.
+  Вони лишаються навмисне: без них наступний читач шукатиме в коді те,
+  що бачив у старій версії документа.
+
+Історія змін із замірами — у `CHANGELOG.md`. Ревізія, з якої почалась
+ця робота, — в `AUDIT_2026-09-14.md`.
 
 ---
 
@@ -29,44 +50,102 @@
 
 ```
 GAPipeDiameterSearch/
-├── main.py                      ← CLI-точка входу
-├── gui.py                       ← GUI (CustomTkinter)
-├── ga_config.py                 ← GAConfig dataclass
-├── ga_data.py                   ← load_config (читання costs.csv)
-├── ga_utils.py                  ← silence_warnings, format_time, DualLogger
-├── water_sim.py                 ← WaterSimulator (EPANET C-API обгортка)
-├── plot.py                      ← export_solution, plot_convergence, plot_network_map
-├── analytical_solver.py         ← монолітна копія (legacy, для сумісності)
+├── main.py                      ← CLI: розбір аргументів, запуск
+├── gui.py                       ← головне вікно (CustomTkinter)
+├── pyproject.toml               ← метадані пакета (pip install -e .)
 │
-└── analytical_solver/           ← модульний пакет (активна версія)
-    ├── __init__.py              ← re-export AnalyticalSolver
-    ├── orchestrator.py          ← SeedFactory, IslandWorker, AnalyticalSolver
-    ├── context.py               ← SolverContext
-    ├── local_search.py          ← LocalSearch
-    ├── kicks.py                 ← KickStrategies
-    ├── pool.py                  ← SolutionPool
-    ├── cache.py                 ← LRUCache
-    └── fast_math.py             ← Numba JIT функції
+├── pipeopt/                     ← увесь код проєкту
+│   ├── runner.py                ← сценарій прогону, спільний для CLI і GUI
+│   ├── config.py                ← SolverConfig
+│   ├── console.py               ← DualLogger, silence_warnings, format_time
+│   │
+│   ├── hydraulics/              ← найнижчий шар: нічого не знає про пошук
+│   │   ├── water_sim.py         ← WaterSimulator (обгортка EPANET C-API)
+│   │   └── sim_stats.py         ← SimStats: результат однієї симуляції
+│   │
+│   ├── reporting/               ← знає про результат, не про пошук
+│   │   ├── plot.py              ← export_solution, plot_convergence, plot_network_map
+│   │   ├── netdraw.py           ← малювання мережі (спільне для GUI і звітів)
+│   │   ├── solution_table.py    ← розбір solution.csv для перегляду
+│   │   └── cost_table.py        ← load_cost_table (читання costs.csv)
+│   │
+│   ├── ui/                      ← найвищий шар: залежить від усіх
+│   │   ├── gui_results.py       ← вікно перегляду минулих прогонів
+│   │   └── gui_widgets.py       ← спільні віджети й перенаправлення логів
+│   │
+│   └── solver/
+│       ├── __init__.py          ← re-export AnalyticalSolver
+│       ├── orchestrator.py      ← AnalyticalSolver: оркестрація островів
+│       ├── island/              ← IslandWorker, розділений на домішки
+│       │   ├── __init__.py      ← re-export IslandWorker
+│       │   ├── loop.py          ← складання домішок + головний цикл run()
+│       │   ├── state.py         ← температура, прогрес, пороги підозри
+│       │   ├── exchange.py      ← IPC, порятунок, міграція, схрещування
+│       │   ├── diversification.py ← диспетчер кіків і розв'язка
+│       │   └── beam.py          ← мутації, промінь, аварійні виходи
+│       ├── seeds.py             ← SeedFactory: початкові рішення
+│       ├── worker.py            ← запуск острова в окремому процесі
+│       ├── context.py           ← SolverContext, NetworkProfile
+│       ├── local_search.py      ← LocalSearch, DescentStats, ConstraintTightness
+│       ├── acceptance.py        ← AcceptancePolicy: правило прийняття
+│       ├── strategy_selector.py ← StrategySelector: UCB1
+│       ├── adaptive_rates.py    ← AdaptiveRates: самонавчання розміру кроку
+│       ├── kick_memory.py       ← KickMemory: коротка пам'ять кіків
+│       ├── kick_registry.py     ← KickArgs, KickResult, KICK_REGISTRY
+│       ├── kicks.py             ← KickStrategies (фасад над трьома групами)
+│       ├── kicks_path.py        ← кіки вздовж домінантного шляху
+│       ├── kicks_structural.py  ← кіки від топології й вартості
+│       ├── kicks_ruin.py        ← «зруйнувати й відбудувати» (самоадаптивні)
+│       ├── pool.py              ← SolutionPool і tabu-пам'ять
+│       ├── cache.py             ← LRUCache
+│       └── fast_math.py         ← ядра Numba JIT
+│
+├── tests/                       ← ~630 тестів
+├── tools/reference_run.py       ← еталонні прогони й перевірка островів
+└── experiments/                 ← заміри, не частина солвера
 ```
+
+**Чого тут більше немає.** `analytical_solver.py` у корені (монолітна
+копія на 1560 рядків) був **недосяжним**: Python завжди обирає пакет
+перед однойменним модулем. Видалений на етапі 1. `ga_config.py`,
+`ga_data.py` і `ga_utils.py` перейменовані на етапі 11 — префікс `ga_`
+лишався від генетичного алгоритму, якого в коді немає.
+
+**Пакет `pipeopt` зібрано 16.09.2026** з тринадцяти окремих файлів у
+корені. Межі підпакетів проведені за **напрямком залежностей**, а не за
+темою: `hydraulics` нічого не знає про пошук, `solver` — про звіти,
+`reporting` — про те, як шукали, а `ui` знає про все й тому лежить
+останнім. Граф нижче читається зверху вниз і не має зворотних стрілок.
 
 ### Граф залежностей між модулями
 
 ```
-main.py / gui.py
+main.py / gui.py                              ← точки входу, поза пакетом
     │
-    ├── GAConfig (ga_config.py) ──► load_config (ga_data.py)
-    ├── WaterSimulator (water_sim.py) ──► EPANET C-API (ENepanet)
-    │
-    └── AnalyticalSolver (orchestrator.py)
-            ├── SolverContext (context.py)
-            │       ├── LRUCache (cache.py)
-            │       └── fast_dijkstra (fast_math.py, Numba JIT)
-            ├── SeedFactory (orchestrator.py)
-            ├── SolutionPool (pool.py)
-            │       └── fast_hamming_distance (fast_math.py, Numba JIT)
-            ├── LocalSearch (local_search.py)
-            └── KickStrategies (kicks.py)
+    └── OptimizationRunner (pipeopt/runner.py)
+            ├── SolverConfig (config.py) ──► load_cost_table (cost_table.py)
+            ├── WaterSimulator (water_sim.py) ──► EPANET C-API (ENepanet)
+            │
+            └── AnalyticalSolver (orchestrator.py)
+                    └── IslandWorker (island/)       ← по одному на процес
+                            ├── SolverContext (context.py)
+                            │       ├── LRUCache (cache.py)
+                            │       └── fast_dijkstra (fast_math.py, Numba)
+                            ├── SeedFactory (seeds.py)
+                            ├── SolutionPool (pool.py)
+                            │       └── fast_hamming_distance (fast_math.py)
+                            ├── LocalSearch (local_search.py)
+                            ├── KickStrategies (kicks*.py)
+                            ├── StrategySelector (strategy_selector.py)
+                            ├── AcceptancePolicy (acceptance.py)
+                            ├── AdaptiveRates (adaptive_rates.py)
+                            └── KickMemory (kick_memory.py)
 ```
+
+Три модулі з'явились як винос відповідальностей з `IslandWorker` на
+етапі 7: рішення про прийняття (`acceptance`), вибір стратегії
+(`strategy_selector`) і самонавчання розміру кроку (`adaptive_rates`).
+До того все це було полями воркера й гілками всередині одного методу.
 
 ---
 
@@ -114,24 +193,49 @@ score(x) = C(x) − p_surplus(x) · dyn_bonus
 
 Знак «мінус» означає: рішення з більшим надлишком тиску (при рівній вартості) отримує **кращий** score. Це запобігає відкиданню рішень, що перевищують `h_min` із запасом — вони більш стабільні.
 
-### Функція штрафу (лише для `evaluate()` — legacy GA mode)
+### Функції штрафу за порушення тиску немає
+
+Раніше тут стояла формула
+`f(x) = C(x) + penalty_factor · Σⱼ max(0, h_min − pⱼ(x))`, яку нібито
+використовував `WaterSimulator.evaluate()` «для сумісності з GA-режимом».
+Ані методу, ані GA-режиму в коді немає — `evaluate()` прибрано на етапі
+12. Недопустимі рішення не штрафуються, а **відкидаються**: у промінь
+вони не потрапляють узагалі (`LocalSearch.evaluate_candidate`), а
+рішення кіка з недобором тиску спершу лікується (`heal_network`) і лише
+потім оцінюється.
+
+### Тіснота обмеження тиску (замір, не механізм)
+
+До версії від 15.09 тут описувався механізм «relaxed-feasibility»: рішення
+з легким порушенням тиску (надлишок від −0.5 м до 0) нібито потрапляли в
+пул зі штрафним score `C(x) + |p_surplus| · dyn_bonus · 50`.
+
+**Механізм не працював і видалений.** Гілка була недосяжна — кандидати
+відсікались раніше, у `evaluate_candidate`, тому формула штрафу не
+виконалась жодного разу. Після оживлення під прапорцем і заміру на трьох
+мережах виявилось, що вона й не окупається (див. `CHANGELOG.md`, 14–15.09):
+
+| мережа | недопустимих кандидатів | медіана недобору | ефект |
+|---|---|---|---|
+| Ханої (34 труби, 4 цикли) | 23.7 % | 0.844 м | немає, p = 0.69 на 20 зернах |
+| Балерма (454 труби, 12 циклів) | 18.7 % | 0.112 м | механізм не спрацьовує |
+| Фосс (58 труб, 23 цикли) | 0 % | — | нічого відсікати |
+
+Головне з цього заміру: **масштаб недобору задає мережа, а не константа**.
+Вікно «−0.5 метра» означає «взяти третину недопустимих» на Ханої, «взяти
+всіх» на Балермі й «не взяти нічого» на Фоссі. Тому замість механізму з
+неперенесеною константою лишився лічильник `LocalSearch.tightness`, який
+цю величину міряє й друкує в кінці прогону рядком `[TIGHTNESS]`:
 
 ```
-f(x) = C(x) + penalty_factor · Σⱼ max(0, h_min − pⱼ(x))
+[TIGHTNESS] Недопустимих ходів: 23.7% (498 з 2102);
+            найменший недобір 0.002 м; <0.05 5%, <0.1 6%, <0.25 10%, ...
 ```
 
-Використовується лише в `WaterSimulator.evaluate()` для зворотньої сумісності з GA-режимом.
-
-### Relaxed-feasibility (epsilon window у beam search)
-
-```
-is_strictly_valid  = p_surplus ≥ 0.0
-is_epsilon_valid   = p_surplus ≥ −0.5 м
-
-score_epsilon = C(x) + |p_surplus| · dyn_bonus · 50.0
-```
-
-Рішення з легким порушенням можуть потрапити у пул, але не оголошуються рекордом.
+Замір безкоштовний — недобір уже обчислений у `evaluate_candidate`, —
+і це одна з величин, потрібних самоадаптивному солверу (§24
+`REFACTORING_PLAN.md`): на мережі з нулем недопустимих ходів спуску нема
+сенсу берегтися тиску, а там, де їх чверть, — навпаки.
 
 ---
 
@@ -255,9 +359,12 @@ path_ids = fast_dijkstra(source_ids → target_id, weights = 100/(x+1))
 → список індексів труб на домінантному шляху
 ```
 
-### `is_ghost_solution(x, cost)`
+### `is_ghost_solution(x)`
 
-Захист від кешових артефактів. Викликається при поліпшенні > 2%:
+Захист від кешових артефактів. Викликається при поліпшенні понад
+`GHOST_SUSPICION_FRACTION` (2 %) — і **лише** тоді, бо сама перевірка
+може коштувати симуляції. Параметр `cost` прибрано на етапі 1: він не
+читався.
 
 ```python
 cached = sim_cache.get(tuple(x))
@@ -273,15 +380,15 @@ return result[1] < h_min - 0.01
 
 10 пробних симуляцій після 3 прогрівальних → `sim_speed` (сим/с). Використовується для обчислення `time_limit_sec` коли `max_sims` заданий.
 
-### `baseline_bonus`
+### Звідки береться `dyn_bonus`
 
 ```python
-avg_cost_diff = mean(|cost[j+1] - cost[j]|)
-avg_length    = mean(Lᵢ)
-baseline_bonus = avg_cost_diff × avg_length × 0.8
+dyn_bonus = min(run_best_cost, global_best_cost) · 0.001 · U(0.95, 1.05)
 ```
 
-Стартовий масштаб для `dyn_bonus`, залежить від конкретного каталогу діаметрів і розмірів труб мережі.
+Перераховується щороунду в `IslandWorker.run`. Поле `baseline_bonus`, яке
+раніше описувалось тут як «стартовий масштаб» і рахувалось від каталогу
+діаметрів, було мертвим — його прибрано на етапі 1.
 
 ---
 
@@ -388,39 +495,14 @@ d_ideal = √(4·|Q| / (π·v))
 
 4 рішення з `x_i ~ Uniform(0, max_d_idx)`, зцілені і грубо оптимізовані. Зберігаються у `self.reserve_pool` воркера для `_emergency_pool_diversity`.
 
-### Warm Seeds та система каст (`make_warm_seeds`)
+### Чого в `SeedFactory` більше немає
 
-На Epoch > 0 кожному воркеру призначається роль залежно від `worker_id % 4`:
-
-| Роль           | Умова                  | Стратегія                                 | Інтенсивність мутацій |
-| -------------- | ---------------------- | ----------------------------------------- | --------------------- |
-| **EXPLOITER**  | `adjusted_id % 4 == 0` | ±1 на `n//10` трубах від `archive[rank]`  | Мала                  |
-| **RELINKER**   | `adjusted_id % 4 == 1` | Greedy Path-Relinking між двома архівними | Середня               |
-| **ARCHITECT**  | `adjusted_id % 4 == 2` | Консенсус топ-3 + ±2 на `n//15` трубах    | Середня               |
-| **EXPLORER**   | `adjusted_id % 4 == 3` | ±2 на `n//5` трубах від `archive[rank]`   | Велика                |
-| **ADVENTURER** | Останній воркер        | Примусово `make_diverse_seeds()`          | Повна                 |
-
-### Greedy Path-Relinking (`greedy_path_relink`)
-
-```
-diff = [i : x_A[i] ≠ x_B[i]]
-random.shuffle(diff)       ← стохастичне впорядкування
-
-current = x_A
-best = x_A;  best_cost = cost(x_A)
-
-for pipe_idx in diff:
-    test = current
-    test[pipe_idx] = x_B[pipe_idx]
-
-    if feasible(test):
-        current = test
-        if cost(test) < best_cost:
-            best_cost = cost(test)
-            best = test
-
-return best   ← найкраща ПРОМІЖНА точка (не обов'язково x_B!)
-```
+* **`make_warm_seeds` і система каст** — «тепле» насіння з глобального
+  архіву для **другої** епохи. Епохи замінила острівна модель із
+  асинхронною міграцією ще на початку проєкту, тому метод (95 рядків,
+  CC 37) був недосяжним; прибраний на етапі 9 разом з рештою слідів епох.
+* **`greedy_path_relink`** — шлях між двома рішеннями по одній трубі за
+  раз. Не викликався ніде, включно з тестами; прибраний на етапі 14.
 
 ---
 
@@ -583,17 +665,26 @@ strat_consecutive_fails = {s: 1.0 for s in all_tracked}
 ### Адаптивні параметри за часом
 
 ```python
-progress_ratio = elapsed / time_budget         # або epoch_sims / max_sims
+progress_ratio = max(sims_used / max_sims, elapsed / time_budget)
 is_late_game   = progress_ratio > 0.5
-stag_limit     = 4 + int(8 × progress_ratio)   # 4 на старті → 12 наприкінці
+stag_limit     = max(4, int(12 × (1 − progress_ratio)))   # 12 на старті → 4 наприкінці
 dyn_bonus      = min(run_best, global_best) × 0.001 × U(0.95, 1.05)
 ```
+
+**Береться максимум із двох часток**, а не «або-або». Доти при заданому
+`max_sims` час не враховувався взагалі, і прогін, обмежений годинником,
+до самого кінця вважав, що щойно почався — а від цієї величини залежать
+одинадцять рішень (§`progress_of`).
 
 ### Температура T — "термометр відчаю"
 
 ```python
+# властивість IslandWorker.temperature
 T = min(1.0, stagnation_counter / (stag_limit × 3.0))
 ```
+
+Формула стояла дослівно у двох місцях під іменами `real_T` і `T`; з
+етапу 16 вона одна.
 
 | T         | Стан               | Наслідки                                  |
 | --------- | ------------------ | ----------------------------------------- |
@@ -837,7 +928,12 @@ target_capacity_idx = mean(x[i] for i in dom_pipes)
 aggressiveness = 0.10 + 0.50 × T
 max_pipes = len(alt_path) × aggressiveness
 Підняти chosen pipes до min(target_capacity_idx, max_d_idx)
+якщо жодна труба не змінилась → failure («вже на рівні магістралі»)
 ```
+
+Останній рядок — етап 20. Труби, ширші за магістраль, не змінює жодна
+гілка присвоєння, тож вибірка з самих таких труб давала «успіх» із
+незміненим рішенням: нагорода UCB1 за нічого й марний цикл поліровки.
 
 #### LOOP_BALANCE (`loop_balancing_kick`)
 
@@ -926,8 +1022,16 @@ for p in cluster_pipes:
   x[p] = max(0, x[p] − random.randint(1, max_drop))
 
 heal(kicked, locked=set())   ← locked=set() для максимальної гнучкості
+якщо healed == x → failure («лікування повернуло вихідне рішення»)
 return (healed, set(), msg, target_pct)
 ```
+
+**`locked=set()` має ціну, і вона виміряна.** Лікування без замків має
+повне право підняти назад саме ті труби, які кік щойно опустив. Замір на
+Ханої (120 тис., зерна 42/1/7): з ~150 викликів R&R за прогін таких
+кругових подорожей **91 / 97 / 78**, тобто близько 60 %. Останній рядок
+(етап 20) робить їх видимими як невдачі; чи варто натомість замикати
+зруйновані труби — окреме питання до заміру на Балермі.
 
 #### BASIN_ESCAPE (`basin_escape`)
 
@@ -1034,12 +1138,14 @@ AnalyticalSolver.solve_standalone()
   │       └── worker_init: WaterSimulator у temp dir кожного процесу
   │
   └── для кожного воркера:
-        mp_pool.apply_async(worker_task, args=(
-            diameters, v_opt, time_budget, global_best, archive,
-            seed, worker_id, shared_progress, log_dir, epoch,
-            max_sims, n_workers
-        ))
+        mp_pool.apply_async(run_island_worker, (WorkerTask(...),))
 ```
+
+`WorkerTask` — dataclass (`pipeopt/solver/worker.py`). До етапу 4 це
+був кортеж на дванадцять позицій із двома `if len(args) > N` на хвості:
+додати параметр означало правити три файли, а переплутати позиції —
+отримати мовчазно неправильний прогін. Поля `epoch` більше немає: епохи
+прибрані на етапі 9.
 
 ### Shared Memory (`multiprocessing.Manager().dict()`)
 
@@ -1095,7 +1201,13 @@ T ∈ [0.3, 0.7):   WARM migration
 T ≥ 0.7:   EXPLORATION SHIELD — ігнорувати global_best
 ```
 
-`spatial_crossover`: epicenter → BFS(radius=2+6T) → `local_pipes` отримують значення від `donor_sol`.
+`spatial_crossover`: epicenter → BFS(radius=2+6T) → `local_pipes`
+отримують значення від `donor_sol`. Труби району шукаються через
+`ctx.edge_to_pipe`, бо `base_G_flow` будується як `add_edge(u, v)` без
+атрибутів: до етапу 20 код шукав номер труби серед атрибутів ребра,
+не знаходив жодної й щоразу падав у запасний варіант — випадкові 15 %
+мережі. Тобто схрещування було не просторовим, а випадковим, а радіус —
+мертвим кодом.
 
 ### `_migration_interval_sims` — адаптивна частота
 
@@ -1105,20 +1217,18 @@ interval = max(1000, (max_sims // 20) × (1 − 0.6 × progress_ratio))
 
 Початок: рідко (кожні ~5% бюджету). Кінець: частіше (кожні ~2%).
 
-### Глобальний архів (`_build_diverse_archive`)
+### Глобальний архів
 
-Після epoch оркестратор збирає топ-6 різноманітних рішень:
+Оркестратор оновлює його в циклі живого моніторингу, приблизно раз на
+`print_interval`: збирає `global_best` і рішення всіх островів, сортує за
+вартістю і лишає до шести **різних** (`AnalyticalSolver._dedup_archive`).
+Архів кладеться в `shared_progress['global_archive']`, звідки воркери
+беруть донорів для `BASIN_ESCAPE` і для заморозки консенсусу.
 
-```python
-archive = sorted_results[:elite_count=2]   # топ-2 за вартістю
-
-min_diff = max(15, min(45, n × 0.08))      # мінімальна Hamming від архіву
-
-for cost, sol in sorted_results[2:]:
-  if min_hamming_to_archive(sol) ≥ min_diff:
-    archive.append(...)
-  if len(archive) == 6: break
-```
+Метод `_build_diverse_archive`, який раніше описувався тут (відбір за
+мінімальною відстанню Хеммінга, 32 рядки), був мертвим — прибраний на
+етапі 1. Дедуплікація тепер іде за точним збігом вектора, а не за
+порогом відстані.
 
 ---
 

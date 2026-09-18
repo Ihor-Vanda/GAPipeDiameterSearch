@@ -29,10 +29,11 @@ from contextlib import redirect_stdout
 import numpy as np
 import pytest
 
-import analytical_solver.orchestrator as orch
-from analytical_solver.context import SolverContext
-from analytical_solver.kicks import KickStrategies
-from analytical_solver.local_search import LocalSearch
+import pipeopt.solver.island as island
+import pipeopt.solver.island.diversification as dispatch
+from pipeopt.solver.context import SolverContext
+from pipeopt.solver.kicks import KickStrategies
+from pipeopt.solver.local_search import LocalSearch
 
 #: Поля воркера, які читаються в тестах як «стан після кіка».
 WATCHED = ("run_best_cost", "run_best_sol", "global_best_cost", "stagnation_counter",
@@ -103,12 +104,18 @@ def apply_kick(monkeypatch):
         sim = FakeSimulator(n_pipes=n_pipes)
         ctx = SolverContext(sim, sim.config.diameters_m, v_opt=1.0)
         local_search = LocalSearch(ctx)
-        worker = orch.IslandWorker(
+        worker = island.IslandWorker(
             ctx, KickStrategies(ctx, local_search), local_search,
-            0, 1, 100_000, 5, "SMALL", archive if archive is not None else [],
+            0, 1, 100_000, 5, archive if archive is not None else [],
         )
 
-        base = [3] * ctx.num_pipes
+        # Не `[3] * n`: на всіх максимальних діаметрах SHOCK не має що
+        # піднімати, тобто кік завжди порожній. Доки він повертав
+        # «успіх» із незміненим рішенням, гілки нижче все одно
+        # досягались — на результаті `gradient_squeeze`, а не кіка. Після
+        # того, як порожній кік став `failure()`, це стало видно: сітка
+        # мусить давати кіку простір для дії.
+        base = [2] * ctx.num_pipes
         reference_cost = sim.get_stats(base).cost
         worker.run_best_sol = base
         worker.run_best_cost = reference_cost * best_mult
@@ -120,7 +127,11 @@ def apply_kick(monkeypatch):
         worker.progress_ratio = progress_ratio
 
         # Один пул стратегій -> вибір детермінований у будь-якій гілці.
-        monkeypatch.setattr(orch, "pool_for", lambda *_a, **_k: [strategy])
+        # Підміна йде в модуль, де `pool_for` **викликається**. До
+        # розділення `island.py` це був один модуль, тепер —
+        # `island.diversification`; підміна на пакеті нічого б не
+        # дала, бо диспетчер бачить своє власне ім'я.
+        monkeypatch.setattr(dispatch, "pool_for", lambda *_a, **_k: [strategy])
 
         before = snapshot(worker)
         buffer = io.StringIO()
@@ -140,10 +151,12 @@ ARCHIVE = [(1.0, [1] * 6), (2.0, [5] * 6), (3.0, [2] * 6)]
 @pytest.mark.parametrize("kind,kwargs", [
     ("RECORD", dict(strategy="SHOCK", stagnation=1, best_mult=1.0)),
     ("ESCAPE", dict(strategy="BASIN_ESCAPE", stagnation=5, best_mult=0.6, archive=ARCHIVE)),
-    ("POOL", dict(strategy="SHOCK", stagnation=12, best_mult=0.6)),
-    ("HAIL_RECORD", dict(strategy="SHOCK", stagnation=12, best_mult=0.55)),
+    # Параметри перебазовані разом зі зміною базового рішення сітки з
+    # `[3]*n` на `[2]*n` (див. фікстуру): відносні розриви вартості інші.
+    ("POOL", dict(strategy="SHOCK", stagnation=3, best_mult=0.60)),
+    ("HAIL_RECORD", dict(strategy="SHOCK", stagnation=12, best_mult=0.70)),
     ("HAIL_POOL", dict(strategy="SMART_PERTURB", stagnation=12, best_mult=0.32)),
-    ("REJECT", dict(strategy="SHOCK", stagnation=1, best_mult=0.30)),
+    ("REJECT", dict(strategy="SHOCK", stagnation=6, best_mult=0.65)),
     ("EXPLOSION", dict(strategy="SHOCK", stagnation=12, best_mult=0.30)),
     ("KICK_FAILED", dict(strategy="BASIN_ESCAPE", stagnation=5, best_mult=1.0)),
 ])
@@ -184,17 +197,17 @@ def test_stagnation_threshold_is_measured_against_the_new_best_not_the_old():
     new_best = 1_000_000.0
     boundary = new_best * 0.005
 
-    assert orch.IslandWorker._stagnation_after_record(boundary * 1.01, new_best, 9) == 0
-    assert orch.IslandWorker._stagnation_after_record(boundary * 0.99, new_best, 9) == 7
+    assert island.IslandWorker._stagnation_after_record(boundary * 1.01, new_best, 9) == 0
+    assert island.IslandWorker._stagnation_after_record(boundary * 0.99, new_best, 9) == 7
     # Старий рекорд був би new + diff, тобто порог вищий; значення в
     # проміжку між двома порогами мусить трактуватись як «малий виграш».
     between = new_best * 0.00502
-    assert orch.IslandWorker._stagnation_after_record(between, new_best, 9) == 0
-    assert orch.IslandWorker._stagnation_after_record(between, new_best + between, 9) == 7
+    assert island.IslandWorker._stagnation_after_record(between, new_best, 9) == 0
+    assert island.IslandWorker._stagnation_after_record(between, new_best + between, 9) == 7
 
 
 def test_stagnation_never_goes_negative():
-    assert orch.IslandWorker._stagnation_after_record(0.0, 1_000_000.0, 1) == 0
+    assert island.IslandWorker._stagnation_after_record(0.0, 1_000_000.0, 1) == 0
 
 
 # --- ESCAPE -----------------------------------------------------------
@@ -255,7 +268,7 @@ def test_pool_accept_stores_a_penalised_score(apply_kick):
 # --- HAIL MARY --------------------------------------------------------
 
 def test_hail_mary_record_updates_the_best(apply_kick):
-    kick = apply_kick("SHOCK", stagnation=12, best_mult=0.55)
+    kick = apply_kick("SHOCK", stagnation=12, best_mult=0.70)
     assert kick.after["run_best_cost"] < kick.before["run_best_cost"]
 
 

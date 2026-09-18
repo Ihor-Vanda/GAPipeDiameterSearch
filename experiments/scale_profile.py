@@ -33,16 +33,16 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 warnings.filterwarnings("ignore")
 
-from analytical_solver import orchestrator  # noqa: E402
-from analytical_solver.context import (  # noqa: E402
+from pipeopt.solver import island  # noqa: E402
+from pipeopt.solver.context import (  # noqa: E402
     SolverContext, beam_width_for, classify_network,
 )
-from analytical_solver.kicks import KickStrategies  # noqa: E402
-from analytical_solver.local_search import LocalSearch  # noqa: E402
+from pipeopt.solver.kicks import KickStrategies  # noqa: E402
+from pipeopt.solver.local_search import LocalSearch  # noqa: E402
 from make_grid_network import build  # noqa: E402
-from config import SolverConfig  # noqa: E402
-from cost_table import load_cost_table  # noqa: E402
-from water_sim import WaterSimulator  # noqa: E402
+from pipeopt.config import SolverConfig  # noqa: E402
+from pipeopt.reporting.cost_table import load_cost_table  # noqa: E402
+from pipeopt.hydraulics.water_sim import WaterSimulator  # noqa: E402
 
 BALERMA_COSTS = os.path.join("InputData", "Balerma", "costs.csv")
 
@@ -51,7 +51,7 @@ class Stop(Exception):
     """Достатньо раундів — далі міряти нічого."""
 
 
-class ProfiledWorker(orchestrator.IslandWorker):
+class ProfiledWorker(island.IslandWorker):
     """Воркер, який записує ціну кожної фази в симуляціях і секундах."""
 
     def __init__(self, *args, wall_cap=180.0, **kwargs):
@@ -143,7 +143,7 @@ def profile(inp_file, cost_file, h_min, units, max_sims, seed, sim_samples,
 
     worker = ProfiledWorker(
         ctx, KickStrategies(ctx, local_search), local_search, 0, 1,
-        max_sims, beam_width_for(network_class), network_class, [],
+        max_sims, beam_width_for(network_class), [],
         wall_cap=wall_cap,
     )
 

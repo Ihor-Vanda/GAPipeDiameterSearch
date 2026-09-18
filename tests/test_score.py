@@ -6,7 +6,7 @@
 
 import pytest
 
-from analytical_solver.context import (
+from pipeopt.solver.context import (
     SURPLUS_DAMPING,
     SURPLUS_KNEE,
     SolverContext,

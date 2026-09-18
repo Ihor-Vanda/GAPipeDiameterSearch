@@ -1,0 +1,41 @@
+{
+  "environment": {
+    "python": "3.11.15",
+    "platform": "Linux-6.18.44-fc-v33-x86_64-with-glibc2.39",
+    "numba": true
+  },
+  "runs": {
+    "analytical/seed42/40k": {
+      "cost": 6.0812,
+      "sims": 40885,
+      "emergency": 2
+    },
+    "analytical/seed7/40k": {
+      "cost": 6.0974,
+      "sims": 41189,
+      "emergency": 4
+    },
+    "analytical/seed42/120k": {
+      "cost": 6.0812,
+      "sims": 120964,
+      "emergency": 8
+    },
+    "fast/seed42": {
+      "cost": 6.8013,
+      "sims": 1852,
+      "emergency": 0
+    }
+  },
+  "confirmed_on": [
+    {
+      "python": "3.11.15",
+      "platform": "Linux-6.18.44-fc-v33-x86_64-with-glibc2.39",
+      "numba": true
+    },
+    {
+      "python": "3.13.3",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "numba": true
+    }
+  ]
+}

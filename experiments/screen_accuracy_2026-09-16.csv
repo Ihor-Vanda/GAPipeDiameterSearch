@@ -1,0 +1,7 @@
+network,mode,pipes,loops,candidates,on_dominant_path,pressure_surplus_m,spearman,sign_accuracy,sign_accuracy_first20,sign_accuracy_first50,screen_rejected,reject_correct,reject_wrong,missed_infeasible,kept_feasible
+Hanoi,dominant,34,3,32,7,0.033,0.198,0.219,0.2,0.219,7,7,0,25,0
+Hanoi,paths,34,3,32,7,0.033,0.896,0.812,0.75,0.812,25,25,0,7,0
+Foss,dominant,58,22,48,7,6.766,-0.216,0.146,0.25,0.146,0,0,0,0,48
+Foss,paths,58,22,48,7,6.766,0.05,0.354,0.3,0.354,3,0,3,0,45
+Balerma,dominant,454,8,179,12,0.02,0.089,0.067,0.05,0.08,12,12,0,166,1
+Balerma,paths,454,8,179,12,0.02,0.63,0.626,0.6,0.68,112,112,0,66,1
